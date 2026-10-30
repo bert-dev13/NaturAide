@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600" role="img" aria-label="NatureAide botanical placeholder">
+  <rect width="800" height="600" fill="#f4f1ea"/>
+  <rect x="28" y="28" width="744" height="544" rx="32" fill="#fbfaf6" stroke="#1f6b4a" stroke-width="3"/>
+  <g fill="none" stroke="#1f6b4a" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M400 430 V250"/>
+    <path d="M400 340 C330 320 300 260 312 200 C370 214 400 270 400 340"/>
+    <path d="M400 310 C470 292 508 230 490 168 C430 186 400 246 400 310"/>
+    <path d="M400 390 C346 378 318 340 322 300"/>
+  </g>
+  <text x="400" y="470" text-anchor="middle" font-family="Georgia, serif" font-size="36" fill="#143d2b">NatureAide</text>
+  <text x="400" y="512" text-anchor="middle" font-family="Georgia, serif" font-size="22" fill="#1f6b4a">Botanical image not yet verified</text>
+</svg>

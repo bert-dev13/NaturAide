@@ -1,0 +1,393 @@
+[
+  {
+    "id": "ascof-lagundi-syrup",
+    "slug": "ascof-lagundi-syrup",
+    "name": "Ascof Lagundi 300mg/5mL Syrup",
+    "brandName": "Ascof Lagundi",
+    "manufacturer": "Pascual Laboratories, Inc.",
+    "productType": "Herbal Medicine (Anti-cough / Anti-asthma)",
+    "productClassification": "HERBAL_MEDICINE",
+    "dosageForm": "Syrup",
+    "dosageStrength": "300 mg/5 mL",
+    "isMultiIngredient": 0,
+    "description": "Standardized herbal syrup derived from Vitex negundo (Lagundi) leaves for the symptomatic relief of cough of diverse etiologies and reversible bronchospasm in mild to moderate asthma.",
+    "intendedUse": "Relief of mild to moderate cough associated with common colds and respiratory tract infections.",
+    "usageInstructions": "Adults: 10 mL (2 teaspoonfuls) 3 to 4 times a day. Children: As recommended by healthcare professional.",
+    "warningsPrecautions": "Consult physician if cough persists for more than 7 days, or if accompanied by high fever or dyspnea.",
+    "registrationNumber": "DR-XY24891",
+    "registrationStatus": "Active Registered OTC Herbal Medicine",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2023-01-15",
+    "expiryDate": "2028-01-15",
+    "plantSlug": "lagundi",
+    "ingredients": [
+      {
+        "name": "Vitex negundo L. (Lagundi Leaf Extract)",
+        "strength": "300 mg/5 mL",
+        "type": "Active Herbal Extract"
+      }
+    ]
+  },
+  {
+    "id": "ascof-forte-lagundi-tablet",
+    "slug": "ascof-forte-lagundi-tablet",
+    "name": "Ascof Forte Lagundi 600mg Tablet",
+    "brandName": "Ascof Forte",
+    "manufacturer": "Pascual Laboratories, Inc.",
+    "productType": "Herbal Medicine (Anti-cough / Anti-asthma)",
+    "productClassification": "HERBAL_MEDICINE",
+    "dosageForm": "Tablet",
+    "dosageStrength": "600 mg",
+    "isMultiIngredient": 0,
+    "description": "High-dose standardized Lagundi leaf formulation in solid oral tablet form for treatment of bronchospasm and productive cough.",
+    "intendedUse": "Relief of cough and reversible bronchospasm in mild to moderate acute bronchitis and bronchial asthma.",
+    "usageInstructions": "Adults and adolescents: 1 tablet 3 to 4 times daily, or as directed by a physician.",
+    "warningsPrecautions": "Do not exceed recommended dose. Consult physician if symptoms persist.",
+    "registrationNumber": "HMRP-52",
+    "registrationStatus": "Active Registered OTC Herbal Medicine",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2025-02-11",
+    "expiryDate": "2030-02-11",
+    "plantSlug": "lagundi",
+    "ingredients": [
+      {
+        "name": "Vitex negundo L. (Lagundi Leaf Powder)",
+        "strength": "600 mg",
+        "type": "Active Herbal Extract"
+      }
+    ]
+  },
+  {
+    "id": "ascof-lagundi-grape-syrup",
+    "slug": "ascof-lagundi-grape-syrup",
+    "name": "Ascof Lagundi 300mg/5mL Syrup (Grape Flavor)",
+    "brandName": "Ascof Lagundi for Kids",
+    "manufacturer": "Pascual Laboratories, Inc.",
+    "productType": "Herbal Medicine (Anti-cough / Anti-asthma)",
+    "productClassification": "HERBAL_MEDICINE",
+    "dosageForm": "Syrup",
+    "dosageStrength": "300 mg/5 mL",
+    "isMultiIngredient": 0,
+    "description": "Flavored pediatric syrup containing standardized Lagundi leaf extract formulated for ease of administration in children.",
+    "intendedUse": "Symptomatic relief of cough due to common colds and bronchial irritation in pediatric patients.",
+    "usageInstructions": "Children 7-12 years: 5 mL (1 tsp) 3 times daily. Children 2-6 years: 2.5 mL (1/2 tsp) 3 times daily.",
+    "warningsPrecautions": "Not recommended for infants under 2 years of age unless directed by a pediatrician.",
+    "registrationNumber": "HMR-93",
+    "registrationStatus": "Active Registered OTC Herbal Medicine",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2022-12-10",
+    "expiryDate": "2027-12-10",
+    "plantSlug": "lagundi",
+    "ingredients": [
+      {
+        "name": "Vitex negundo L. (Lagundi Leaf Extract)",
+        "strength": "300 mg/5 mL",
+        "type": "Active Herbal Extract"
+      }
+    ]
+  },
+  {
+    "id": "ritemed-lagundi-capsule",
+    "slug": "ritemed-lagundi-capsule",
+    "name": "RiteMed Lagundi 600mg Capsule",
+    "brandName": "RiteMed Lagundi",
+    "manufacturer": "Pascual Laboratories, Inc. / RiteMed Phils., Inc.",
+    "productType": "Herbal Medicine (Household Remedy)",
+    "productClassification": "HERBAL_MEDICINE",
+    "dosageForm": "Capsule",
+    "dosageStrength": "600 mg",
+    "isMultiIngredient": 0,
+    "description": "Quality generic herbal medicine capsule containing 600 mg dried Vitex negundo leaf powder for cough and asthma relief.",
+    "intendedUse": "Relief of cough associated with colds, flu, and chronic respiratory disorders.",
+    "usageInstructions": "Adults: 1 capsule 3 times a day after meals, or as advised by a doctor.",
+    "warningsPrecautions": "Take with food or a full glass of water. Keep out of reach of children.",
+    "registrationNumber": "HMRP-21-02",
+    "registrationStatus": "Active Registered Household Remedy (HR)",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2025-05-22",
+    "expiryDate": "2028-10-17",
+    "plantSlug": "lagundi",
+    "ingredients": [
+      {
+        "name": "Vitex negundo L. (Lagundi Leaf)",
+        "strength": "600 mg",
+        "type": "Active Herbal Powder"
+      }
+    ]
+  },
+  {
+    "id": "plemex-forte-lagundi-syrup",
+    "slug": "plemex-forte-lagundi-syrup",
+    "name": "Plemex Forte Lagundi 600mg/5mL Syrup",
+    "brandName": "Plemex Forte",
+    "manufacturer": "Hizon Laboratories, Inc. / Me-P-H",
+    "productType": "Herbal Medicine (Anti-cough / Bronchodilator)",
+    "productClassification": "HERBAL_MEDICINE",
+    "dosageForm": "Syrup",
+    "dosageStrength": "600 mg/5 mL",
+    "isMultiIngredient": 0,
+    "description": "Double strength herbal cough syrup prepared from clean pharmaceutical grade Vitex negundo leaf extract.",
+    "intendedUse": "Treatment of cough of acute and chronic respiratory tract infections and bronchial asthma.",
+    "usageInstructions": "Adults: 5 mL (1 teaspoonful) 3 to 4 times daily.",
+    "warningsPrecautions": "If symptoms do not improve after 1 week, seek medical evaluation.",
+    "registrationNumber": "HMR-42",
+    "registrationStatus": "Active Registered OTC Herbal Medicine",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2024-06-04",
+    "expiryDate": "2029-06-04",
+    "plantSlug": "lagundi",
+    "ingredients": [
+      {
+        "name": "Vitex negundo L. (Lagundi Leaf Extract)",
+        "strength": "600 mg/5 mL",
+        "type": "Active Herbal Extract"
+      }
+    ]
+  },
+  {
+    "id": "plemex-for-kids-lagundi-syrup",
+    "slug": "plemex-for-kids-lagundi-syrup",
+    "name": "Plemex FOR KIDS Lagundi 300mg/5mL Syrup",
+    "brandName": "Plemex FOR KIDS",
+    "manufacturer": "Hizon Laboratories, Inc.",
+    "productType": "Herbal Medicine (Pediatric Cough Relief)",
+    "productClassification": "HERBAL_MEDICINE",
+    "dosageForm": "Syrup",
+    "dosageStrength": "300 mg/5 mL",
+    "isMultiIngredient": 0,
+    "description": "Pediatric-tailored herbal syrup formulation for children experiencing productive and dry cough.",
+    "intendedUse": "Relief of cough and phlegm in children.",
+    "usageInstructions": "Children 7-12 yrs: 5 mL (1 tsp) 3-4 times daily. 2-6 yrs: 2.5 mL (1/2 tsp) 3-4 times daily.",
+    "warningsPrecautions": "Consult a pediatrician if fever is high or breathing becomes rapid.",
+    "registrationNumber": "HMR-90",
+    "registrationStatus": "Active Registered OTC Herbal Medicine",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2022-10-12",
+    "expiryDate": "2027-10-12",
+    "plantSlug": "lagundi",
+    "ingredients": [
+      {
+        "name": "Vitex negundo L. (Lagundi Leaf Extract)",
+        "strength": "300 mg/5 mL",
+        "type": "Active Herbal Extract"
+      }
+    ]
+  },
+  {
+    "id": "nocof-lagundi-strawberry-syrup",
+    "slug": "nocof-lagundi-strawberry-syrup",
+    "name": "Nocof Lagundi 300mg/5mL Syrup (Strawberry Flavor)",
+    "brandName": "Nocof Lagundi",
+    "manufacturer": "Northfield Laboratories, Inc.",
+    "productType": "Herbal Medicine (Household Remedy)",
+    "productClassification": "HERBAL_MEDICINE",
+    "dosageForm": "Syrup",
+    "dosageStrength": "300 mg/5 mL",
+    "isMultiIngredient": 0,
+    "description": "Strawberry-flavored Lagundi leaf extract syrup manufactured by Northfield Laboratories for broad community cough relief.",
+    "intendedUse": "Symptomatic treatment of cough and bronchial discomfort.",
+    "usageInstructions": "Adults: 10 mL 3 times daily. Children: 5 mL 3 times daily.",
+    "warningsPrecautions": "Contains sucrose; diabetic patients should monitor blood glucose levels.",
+    "registrationNumber": "HMR-68",
+    "registrationStatus": "Active Registered OTC Herbal Medicine",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2026-02-08",
+    "expiryDate": "2031-02-08",
+    "plantSlug": "lagundi",
+    "ingredients": [
+      {
+        "name": "Vitex negundo L. (Lagundi Leaf)",
+        "strength": "300 mg/5 mL",
+        "type": "Active Herbal Extract"
+      }
+    ]
+  },
+  {
+    "id": "actimed-lagundi-syrup",
+    "slug": "actimed-lagundi-syrup",
+    "name": "Actimed Lagundi 600mg/5mL Syrup",
+    "brandName": "Actimed Lagundi",
+    "manufacturer": "Northfield Laboratories, Inc. / Actimed, Inc. (Generika Drugstore)",
+    "productType": "Herbal Medicine (Generics)",
+    "productClassification": "HERBAL_MEDICINE",
+    "dosageForm": "Syrup",
+    "dosageStrength": "600 mg/5 mL",
+    "isMultiIngredient": 0,
+    "description": "Affordable community generic Lagundi syrup distributed across Philippine retail drugstores for cough management.",
+    "intendedUse": "Relief of acute and chronic cough symptoms associated with colds and respiratory infection.",
+    "usageInstructions": "Adults: 5 mL 3 times daily.",
+    "warningsPrecautions": "Store below 30°C away from direct sunlight.",
+    "registrationNumber": "HMR-153",
+    "registrationStatus": "Active Registered OTC Herbal Medicine",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2023-03-02",
+    "expiryDate": "2028-03-02",
+    "plantSlug": "lagundi",
+    "ingredients": [
+      {
+        "name": "Vitex negundo L. (Lagundi Leaf)",
+        "strength": "600 mg/5 mL",
+        "type": "Active Herbal Extract"
+      }
+    ]
+  },
+  {
+    "id": "pitahc-lagundi-tablet",
+    "slug": "pitahc-lagundi-tablet",
+    "name": "PITAHC Lagundi 300mg Botanical Tablet",
+    "brandName": "PITAHC Lagundi",
+    "manufacturer": "Philippine Institute of Traditional and Alternative Health Care (PITAHC) Herbal Processing Plant",
+    "productType": "Herbal Medicine (Official Government Formulary)",
+    "productClassification": "HERBAL_MEDICINE",
+    "dosageForm": "Tablet",
+    "dosageStrength": "300 mg",
+    "isMultiIngredient": 0,
+    "description": "Official DOH-PITAHC pharmaceutical tablet formulated under NIRPROMP clinical standards for public health center distribution and retail access.",
+    "intendedUse": "Antitussive and antiasthmatic treatment in accordance with Philippine National Herbal Formulary.",
+    "usageInstructions": "Adults: 1 to 2 tablets 3 times daily, or as prescribed in municipal health centers.",
+    "warningsPrecautions": "Prescribed through national herbal public health programs and certified dispensaries.",
+    "registrationNumber": "HMR-166",
+    "registrationStatus": "Active Registered Botanical Herbal Drug",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2026-07-12",
+    "expiryDate": "2031-07-12",
+    "plantSlug": "lagundi",
+    "ingredients": [
+      {
+        "name": "Vitex negundo L. (Standardized Lagundi Leaf)",
+        "strength": "300 mg",
+        "type": "Active Herbal Powder"
+      }
+    ]
+  },
+  {
+    "id": "ofplemed-forte-lagundi-tablet",
+    "slug": "ofplemed-forte-lagundi-tablet",
+    "name": "Ofplemed Forte Lagundi 600mg Tablet",
+    "brandName": "Ofplemed Forte",
+    "manufacturer": "Azarias Pharmaceutical Laboratories Inc.",
+    "productType": "Herbal Medicine (Household Remedy)",
+    "productClassification": "HERBAL_MEDICINE",
+    "dosageForm": "Tablet",
+    "dosageStrength": "600 mg",
+    "isMultiIngredient": 0,
+    "description": "High potency Lagundi tablet manufactured by Azarias Pharmaceuticals for acute respiratory cough and bronchospasm.",
+    "intendedUse": "Relief of bronchospasm and productive phlegm in mild asthma.",
+    "usageInstructions": "Adults: 1 tablet 3 times daily.",
+    "warningsPrecautions": "Keep in a cool, dry place. Discontinue use if allergic reaction develops.",
+    "registrationNumber": "HMRP-004",
+    "registrationStatus": "Active Registered Household Remedy (HR)",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2022-09-20",
+    "expiryDate": "2027-09-20",
+    "plantSlug": "lagundi",
+    "ingredients": [
+      {
+        "name": "Vitex negundo L. (Lagundi Leaf)",
+        "strength": "600 mg",
+        "type": "Active Herbal Extract"
+      }
+    ]
+  },
+  {
+    "id": "phlemalis-lagundi-food-supplement-capsule",
+    "slug": "phlemalis-lagundi-food-supplement-capsule",
+    "name": "Herbs & Nutripharm Phlemalis Lagundi 500mg Food Supplement Capsule",
+    "brandName": "Herbs and Nutripharm Phlemalis",
+    "manufacturer": "Herbs and Nutri Pharm Laboratories",
+    "productType": "Food Supplement (No Approved Therapeutic Claims)",
+    "productClassification": "FOOD_SUPPLEMENT",
+    "dosageForm": "Capsule",
+    "dosageStrength": "500 mg",
+    "isMultiIngredient": 0,
+    "description": "Encapsulated Lagundi leaf powder registered as a dietary food supplement. NO APPROVED THERAPEUTIC CLAIMS.",
+    "intendedUse": "Nutritional supplement supporting upper respiratory wellness.",
+    "usageInstructions": "Adults: Take 1 capsule once or twice daily with water.",
+    "warningsPrecautions": "FOOD SUPPLEMENT WITH NO APPROVED THERAPEUTIC CLAIMS. Not intended to diagnose, treat, cure, or prevent any disease.",
+    "registrationNumber": "FR-4000010602199",
+    "registrationStatus": "Active Registered Food Supplement",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2023-05-05",
+    "expiryDate": "2028-01-29",
+    "plantSlug": "lagundi",
+    "ingredients": [
+      {
+        "name": "Vitex negundo L. (Dried Leaf Powder)",
+        "strength": "500 mg",
+        "type": "Dietary Ingredient"
+      }
+    ]
+  },
+  {
+    "id": "golden-spoon-lagundi-tea",
+    "slug": "golden-spoon-lagundi-tea",
+    "name": "Golden Spoon Lagundi Herbal Tea",
+    "brandName": "Golden Spoon",
+    "manufacturer": "Seamaxx Corporation",
+    "productType": "Food Supplement Beverage (No Approved Therapeutic Claims)",
+    "productClassification": "FOOD_SUPPLEMENT",
+    "dosageForm": "Tea",
+    "dosageStrength": "2 g per tea bag",
+    "isMultiIngredient": 0,
+    "description": "Traditional loose-cut Lagundi leaf tea bags for daily warm beverage consumption. NO APPROVED THERAPEUTIC CLAIMS.",
+    "intendedUse": "Dietary botanical herbal beverage infusion.",
+    "usageInstructions": "Steep 1 tea bag in a cup of hot water for 3 to 5 minutes before drinking.",
+    "warningsPrecautions": "FOOD SUPPLEMENT WITH NO APPROVED THERAPEUTIC CLAIMS. Not a substitute for prescribed pharmaceutical cough therapy.",
+    "registrationNumber": "FR-4000010569685",
+    "registrationStatus": "Active Registered Food Supplement",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2023-01-25",
+    "expiryDate": "2028-01-25",
+    "plantSlug": "lagundi",
+    "ingredients": [
+      {
+        "name": "Vitex negundo L. (Dried Leaves)",
+        "strength": "2 g",
+        "type": "Botanical Ingredient"
+      }
+    ]
+  },
+  {
+    "id": "hp-lagunmeric-salabat-tea",
+    "slug": "hp-lagunmeric-salabat-tea",
+    "name": "HP Lagunmeric Salabat Instant Herbal Tea",
+    "brandName": "HP Lagunmeric Salabat",
+    "manufacturer": "Greatlab Pharmaceutical",
+    "productType": "Multi-ingredient Food Supplement (No Approved Therapeutic Claims)",
+    "productClassification": "FOOD_SUPPLEMENT",
+    "dosageForm": "Tea",
+    "dosageStrength": "10 g sachet",
+    "isMultiIngredient": 1,
+    "description": "Multi-herbal instant beverage blend combining Lagundi with Turmeric and Ginger. NO APPROVED THERAPEUTIC CLAIMS.",
+    "intendedUse": "Traditional soothing herbal brew for throat warmth and general wellness.",
+    "usageInstructions": "Dissolve 1 sachet into a cup of hot water and stir well.",
+    "warningsPrecautions": "MULTI-INGREDIENT PRODUCT. FOOD SUPPLEMENT WITH NO APPROVED THERAPEUTIC CLAIMS. Contains cane sugar.",
+    "registrationNumber": "FR-4000008975610",
+    "registrationStatus": "Active Registered Food Supplement",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2024-04-22",
+    "expiryDate": "2029-04-22",
+    "plantSlug": "lagundi",
+    "otherPlantSlugs": [
+      "ginger",
+      "turmeric"
+    ],
+    "ingredients": [
+      {
+        "name": "Vitex negundo L. (Lagundi)",
+        "strength": "Variable extract",
+        "type": "Dietary Botanical"
+      },
+      {
+        "name": "Curcuma longa (Turmeric)",
+        "strength": "Variable extract",
+        "type": "Dietary Botanical"
+      },
+      {
+        "name": "Zingiber officinale (Ginger)",
+        "strength": "Variable extract",
+        "type": "Dietary Botanical"
+      }
+    ]
+  }
+]

@@ -1,0 +1,332 @@
+[
+  {
+    "id": "re-leaf-sambong-tablet",
+    "slug": "re-leaf-sambong-tablet",
+    "name": "Re-Leaf Sambong 500mg Tablet",
+    "brandName": "Re-Leaf",
+    "manufacturer": "Pascual Laboratories, Inc. / Natrapharm, Inc.",
+    "productType": "Herbal Medicine (Diuretic / Anti-urolithiasis)",
+    "productClassification": "HERBAL_MEDICINE",
+    "dosageForm": "Tablet",
+    "dosageStrength": "500 mg",
+    "isMultiIngredient": 0,
+    "description": "Standardized herbal diuretic and anti-urolithiasis tablet manufactured from Blumea balsamifera (Sambong) leaves for dissolution and expulsion of urinary stones.",
+    "intendedUse": "Treatment of urinary tract stones (< 5mm) and supportive diuretic therapy in mild edema.",
+    "usageInstructions": "Adults: 1 tablet 3 times a day with plenty of water, or as directed by a physician.",
+    "warningsPrecautions": "Drink at least 2 to 3 liters of water daily while on therapy. Not for acute ureteral obstruction.",
+    "registrationNumber": "DR-XY18542",
+    "registrationStatus": "Active Registered OTC Herbal Medicine",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2024-09-30",
+    "expiryDate": "2029-09-30",
+    "plantSlug": "sambong",
+    "ingredients": [
+      {
+        "name": "Blumea balsamifera L. (Sambong Leaf Powder)",
+        "strength": "500 mg",
+        "type": "Active Herbal Extract"
+      }
+    ]
+  },
+  {
+    "id": "re-leaf-sambong-250mg-tablet",
+    "slug": "re-leaf-sambong-250mg-tablet",
+    "name": "Re-Leaf Sambong 250mg Tablet",
+    "brandName": "Re-Leaf",
+    "manufacturer": "Pascual Laboratories, Inc. / Natrapharm, Inc.",
+    "productType": "Herbal Medicine (Diuretic / Anti-urolithiasis)",
+    "productClassification": "HERBAL_MEDICINE",
+    "dosageForm": "Tablet",
+    "dosageStrength": "250 mg",
+    "isMultiIngredient": 0,
+    "description": "Lower dose standardized Sambong tablet for maintenance anti-urolithiasis management and mild fluid excretion.",
+    "intendedUse": "Supportive anti-urolithic therapy and mild diuresis.",
+    "usageInstructions": "Adults: 2 tablets 3 times daily or as prescribed by a doctor.",
+    "warningsPrecautions": "Maintain high daily hydration. Consult a urologist if flank pain intensifies.",
+    "registrationNumber": "HMR-24",
+    "registrationStatus": "Active Registered OTC Herbal Medicine",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2026-11-14",
+    "expiryDate": "2036-11-14",
+    "plantSlug": "sambong",
+    "ingredients": [
+      {
+        "name": "Blumea balsamifera L. (Sambong Leaf)",
+        "strength": "250 mg",
+        "type": "Active Herbal Extract"
+      }
+    ]
+  },
+  {
+    "id": "uricare-sambong-250mg-tablet",
+    "slug": "uricare-sambong-250mg-tablet",
+    "name": "Uricare Sambong 250mg Tablet",
+    "brandName": "Uricare",
+    "manufacturer": "Northfield Laboratories, Inc.",
+    "productType": "Herbal Medicine (Diuretic)",
+    "productClassification": "HERBAL_MEDICINE",
+    "dosageForm": "Tablet",
+    "dosageStrength": "250 mg",
+    "isMultiIngredient": 0,
+    "description": "Solid oral formulation of purified Sambong leaf powder for renal flushing and prevention of calcium oxalate stone recurrence.",
+    "intendedUse": "Diuretic support and management of urinary tract micro-calculi.",
+    "usageInstructions": "Adults: 1 to 2 tablets 3 times daily with full glasses of water.",
+    "warningsPrecautions": "Do not use if suffering from kidney failure or severe renal impairment.",
+    "registrationNumber": "HMR-59",
+    "registrationStatus": "Active Registered OTC Herbal Medicine",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2025-11-15",
+    "expiryDate": "2030-11-15",
+    "plantSlug": "sambong",
+    "ingredients": [
+      {
+        "name": "Blumea balsamifera L. (Sambong Leaf)",
+        "strength": "250 mg",
+        "type": "Active Herbal Extract"
+      }
+    ]
+  },
+  {
+    "id": "urisam-sambong-500mg-tablet",
+    "slug": "urisam-sambong-500mg-tablet",
+    "name": "Urisam Sambong 500mg Tablet",
+    "brandName": "Urisam",
+    "manufacturer": "Northfield Laboratories, Inc.",
+    "productType": "Herbal Medicine (Anti-urolithiasis)",
+    "productClassification": "HERBAL_MEDICINE",
+    "dosageForm": "Tablet",
+    "dosageStrength": "500 mg",
+    "isMultiIngredient": 0,
+    "description": "Full therapeutic strength 500mg Sambong tablet for dissolution and elimination of small calcium oxalate stones.",
+    "intendedUse": "Anti-urolithiasis in patients with documented urinary calculi (< 5mm).",
+    "usageInstructions": "Adults: 1 tablet 3 times daily with ample fluids.",
+    "warningsPrecautions": "Periodic urinalysis and renal ultrasound recommended during prolonged treatment.",
+    "registrationNumber": "HMR-69",
+    "registrationStatus": "Active Registered OTC Herbal Medicine",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2026-02-24",
+    "expiryDate": "2031-02-24",
+    "plantSlug": "sambong",
+    "ingredients": [
+      {
+        "name": "Blumea balsamifera L. (Sambong Leaf)",
+        "strength": "500 mg",
+        "type": "Active Herbal Extract"
+      }
+    ]
+  },
+  {
+    "id": "kidneygen-forte-sambong-500mg-tablet",
+    "slug": "kidneygen-forte-sambong-500mg-tablet",
+    "name": "Kidneygen Forte Sambong 500mg Tablet",
+    "brandName": "Kidneygen Forte",
+    "manufacturer": "Azarias Pharmaceutical Laboratories, Inc. / EBA Generisch Trading Inc.",
+    "productType": "Herbal Medicine (Household Remedy)",
+    "productClassification": "HERBAL_MEDICINE",
+    "dosageForm": "Tablet",
+    "dosageStrength": "500 mg",
+    "isMultiIngredient": 0,
+    "description": "Standardized 500mg Sambong leaf tablet produced by Azarias Pharmaceuticals for kidney health and urinary flow.",
+    "intendedUse": "Symptomatic diuresis and dissolution of micro-calculi.",
+    "usageInstructions": "Adults: 1 tablet 3 times a day after meals.",
+    "warningsPrecautions": "Take with large amounts of drinking water.",
+    "registrationNumber": "HMRP-3-02",
+    "registrationStatus": "Active Registered Household Remedy (HR)",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2022-05-19",
+    "expiryDate": "2027-05-19",
+    "plantSlug": "sambong",
+    "ingredients": [
+      {
+        "name": "Blumea balsamifera (L.) DC (Sambong Leaf)",
+        "strength": "500 mg",
+        "type": "Active Herbal Extract"
+      }
+    ]
+  },
+  {
+    "id": "herbakid-sambong-250mg-tablet",
+    "slug": "herbakid-sambong-250mg-tablet",
+    "name": "Herbakid Sambong 250mg Tablet",
+    "brandName": "Herbakid",
+    "manufacturer": "Azarias Pharmaceutical Laboratories Inc. / St. Raphael Archangel",
+    "productType": "Herbal Medicine (Household Remedy)",
+    "productClassification": "HERBAL_MEDICINE",
+    "dosageForm": "Tablet",
+    "dosageStrength": "250 mg",
+    "isMultiIngredient": 0,
+    "description": "Gentle diuretic tablet formulation containing 250 mg dried Blumea balsamifera leaf powder.",
+    "intendedUse": "Mild diuretic therapy for fluid retention.",
+    "usageInstructions": "Adults: 1 tablet 3 times a day.",
+    "warningsPrecautions": "Consult a healthcare provider before use if pregnant or nursing.",
+    "registrationNumber": "HMRP-2-01",
+    "registrationStatus": "Active Registered Household Remedy (HR)",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2022-05-19",
+    "expiryDate": "2027-05-19",
+    "plantSlug": "sambong",
+    "ingredients": [
+      {
+        "name": "Blumea balsamifera (L.) DC (Sambong Leaf)",
+        "strength": "250 mg",
+        "type": "Active Herbal Extract"
+      }
+    ]
+  },
+  {
+    "id": "rhenalaid-sambong-500mg-tablet",
+    "slug": "rhenalaid-sambong-500mg-tablet",
+    "name": "Rhenalaid Sambong 500mg Tablet",
+    "brandName": "Rhenalaid",
+    "manufacturer": "Northfield Laboratories, Inc. / Unified Generics Pharmacy, Inc.",
+    "productType": "Herbal Medicine (Generics)",
+    "productClassification": "HERBAL_MEDICINE",
+    "dosageForm": "Tablet",
+    "dosageStrength": "500 mg",
+    "isMultiIngredient": 0,
+    "description": "Quality generic retail Sambong tablet distributed through unified community pharmacy networks.",
+    "intendedUse": "Assistance in the excretion of kidney gravel and relief of mild edema.",
+    "usageInstructions": "Adults: 1 tablet 3 times a day with meals.",
+    "warningsPrecautions": "Keep bottle tightly closed and stored away from moisture.",
+    "registrationNumber": "HMR-162",
+    "registrationStatus": "Active Registered OTC Herbal Medicine",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2025-01-20",
+    "expiryDate": "2030-01-20",
+    "plantSlug": "sambong",
+    "ingredients": [
+      {
+        "name": "Blumea balsamifera L. (Sambong Leaf)",
+        "strength": "500 mg",
+        "type": "Active Herbal Extract"
+      }
+    ]
+  },
+  {
+    "id": "super-leaf-sambong-500mg-tablet",
+    "slug": "super-leaf-sambong-500mg-tablet",
+    "name": "Super Leaf Sambong 500mg Tablet",
+    "brandName": "Super Leaf",
+    "manufacturer": "Pascual Laboratories, Inc. / Pascual Medica Rx, Inc.",
+    "productType": "Herbal Medicine (Diuretic)",
+    "productClassification": "HERBAL_MEDICINE",
+    "dosageForm": "Tablet",
+    "dosageStrength": "500 mg",
+    "isMultiIngredient": 0,
+    "description": "Clinical-grade Sambong formulation manufactured by Pascual Laboratories for institutional and retail healthcare sectors.",
+    "intendedUse": "Facilitation of kidney stone passage (< 5mm) and diuretic management.",
+    "usageInstructions": "Adults: 1 tablet 3 times a day with plenty of water.",
+    "warningsPrecautions": "Discontinue if acute severe back pain or hematuria develops and consult a physician.",
+    "registrationNumber": "HMRP-27-01",
+    "registrationStatus": "Active Registered Household Remedy (HR)",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2023-09-17",
+    "expiryDate": "2028-09-17",
+    "plantSlug": "sambong",
+    "ingredients": [
+      {
+        "name": "Blumea balsamifera L. (Sambong Leaf)",
+        "strength": "500 mg",
+        "type": "Active Herbal Extract"
+      }
+    ]
+  },
+  {
+    "id": "pitahc-sambong-tablet",
+    "slug": "pitahc-sambong-tablet",
+    "name": "PITAHC Sambong 500mg Botanical Tablet",
+    "brandName": "PITAHC Sambong",
+    "manufacturer": "Philippine Institute of Traditional and Alternative Health Care (PITAHC) Herbal Processing Plant",
+    "productType": "Herbal Medicine (Official Government Formulary)",
+    "productClassification": "HERBAL_MEDICINE",
+    "dosageForm": "Tablet",
+    "dosageStrength": "500 mg",
+    "isMultiIngredient": 0,
+    "description": "Standardized botanical pharmaceutical tablet produced directly in government PITAHC facilities following NIRPROMP clinical trials.",
+    "intendedUse": "Antiurolithiasis and diuretic therapy under the Philippine National Drug Formulary.",
+    "usageInstructions": "Adults: 1 tablet 3 times daily with generous hydration.",
+    "warningsPrecautions": "Distributed through government rural health units and certified herbal dispensaries.",
+    "registrationNumber": "DR-XY14201",
+    "registrationStatus": "Active Registered Botanical Herbal Drug",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2024-01-01",
+    "expiryDate": "2029-01-01",
+    "plantSlug": "sambong",
+    "ingredients": [
+      {
+        "name": "Blumea balsamifera (Standardized Sambong Leaf)",
+        "strength": "500 mg",
+        "type": "Active Herbal Powder"
+      }
+    ]
+  },
+  {
+    "id": "naturemed-sambong-food-supplement-capsule",
+    "slug": "naturemed-sambong-food-supplement-capsule",
+    "name": "Naturemed Sambong Food Supplement Capsule",
+    "brandName": "Naturemed",
+    "manufacturer": "Naturemed Wellness Products Trading",
+    "productType": "Food Supplement (No Approved Therapeutic Claims)",
+    "productClassification": "FOOD_SUPPLEMENT",
+    "dosageForm": "Capsule",
+    "dosageStrength": "500 mg",
+    "isMultiIngredient": 0,
+    "description": "Encapsulated whole Sambong leaf powder registered as a dietary food supplement. NO APPROVED THERAPEUTIC CLAIMS.",
+    "intendedUse": "Botanical dietary supplement for fluid balance and wellness.",
+    "usageInstructions": "Adults: Take 1 capsule 1 to 2 times daily with meals.",
+    "warningsPrecautions": "FOOD SUPPLEMENT WITH NO APPROVED THERAPEUTIC CLAIMS. Not intended for the treatment or cure of medical kidney conditions.",
+    "registrationNumber": "FR-4000013854001",
+    "registrationStatus": "Active Registered Food Supplement",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2022-02-17",
+    "expiryDate": "2027-02-17",
+    "plantSlug": "sambong",
+    "ingredients": [
+      {
+        "name": "Blumea balsamifera (Dried Leaf Powder)",
+        "strength": "500 mg",
+        "type": "Dietary Ingredient"
+      }
+    ]
+  },
+  {
+    "id": "dok-natural-banaba-sambong-drops",
+    "slug": "dok-natural-banaba-sambong-drops",
+    "name": "Dok Natural Banaba, Sambong & Stevia Leaf Extract Drops",
+    "brandName": "Dok Natural",
+    "manufacturer": "PRDGM Mugen Trading Corp.",
+    "productType": "Multi-ingredient Food Supplement (No Approved Therapeutic Claims)",
+    "productClassification": "FOOD_SUPPLEMENT",
+    "dosageForm": "Liquid Oral Drops",
+    "dosageStrength": "30 mL dropper bottle",
+    "isMultiIngredient": 1,
+    "description": "Multi-herbal liquid extract formulation blending Sambong with Banaba and Stevia. NO APPROVED THERAPEUTIC CLAIMS.",
+    "intendedUse": "Dietary botanical wellness drops taken with water.",
+    "usageInstructions": "Add 5 to 10 drops into a glass of drinking water, 2 times daily.",
+    "warningsPrecautions": "MULTI-INGREDIENT PRODUCT. FOOD SUPPLEMENT WITH NO APPROVED THERAPEUTIC CLAIMS. Not a cure for metabolic or renal ailments.",
+    "registrationNumber": "FR-4000015204257",
+    "registrationStatus": "Active Registered Food Supplement",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2022-11-24",
+    "expiryDate": "2027-11-24",
+    "plantSlug": "sambong",
+    "otherPlantSlugs": [],
+    "ingredients": [
+      {
+        "name": "Blumea balsamifera (Sambong Leaf Extract)",
+        "strength": "Variable extract",
+        "type": "Dietary Botanical"
+      },
+      {
+        "name": "Lagerstroemia speciosa (Banaba Leaf Extract)",
+        "strength": "Variable extract",
+        "type": "Dietary Botanical"
+      },
+      {
+        "name": "Stevia rebaudiana (Stevia Leaf Extract)",
+        "strength": "Sweetener / Botanical",
+        "type": "Dietary Botanical"
+      }
+    ]
+  }
+]

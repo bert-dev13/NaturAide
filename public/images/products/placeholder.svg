@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600" role="img" aria-label="Product Image Not Available">
+  <rect width="800" height="600" fill="#f7f4ee"/>
+  <rect x="28" y="28" width="744" height="544" rx="32" fill="#fbfaf6" stroke="#1f6b4a" stroke-width="3"/>
+  <g fill="none" stroke="#1f6b4a" stroke-width="7" stroke-linejoin="round" stroke-linecap="round">
+    <rect x="330" y="150" width="140" height="190" rx="14"/>
+    <path d="M330 200 H470"/>
+    <path d="M365 150 V130 H435 V150"/>
+    <!-- Minimal botanical leaf symbol on packaging -->
+    <path d="M400 240 Q425 255 420 280 Q395 285 400 240 Z" fill="#1f6b4a" opacity="0.25"/>
+    <path d="M400 240 L410 280"/>
+  </g>
+  <text x="400" y="395" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-weight="800" font-size="28" fill="#143d2b">Product Image Not Available</text>
+  <text x="400" y="435" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-weight="600" font-size="18" fill="#1f6b4a">NatureAide Verified Reference</text>
+  <text x="400" y="470" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="14" fill="#52796f">Only authentic, verified commercial package images are displayed</text>
+</svg>

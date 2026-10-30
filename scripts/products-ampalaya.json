@@ -1,0 +1,237 @@
+[
+  {
+    "id": "charantia-ampalaya-capsule",
+    "slug": "charantia-ampalaya-capsule",
+    "name": "Charantia Ampalaya 500mg Food Supplement Capsule",
+    "brandName": "Charantia",
+    "manufacturer": "Herbcare Corporation",
+    "productType": "Food Supplement (No Approved Therapeutic Claims)",
+    "productClassification": "FOOD_SUPPLEMENT",
+    "dosageForm": "Capsule",
+    "dosageStrength": "500 mg",
+    "isMultiIngredient": 0,
+    "description": "Standardized 500mg Momordica charantia (Ampalaya) whole fruit and leaf powder food supplement capsule for dietary blood sugar support.",
+    "intendedUse": "Nutritional dietary supplement for adults seeking adjunct botanical support. NO APPROVED THERAPEUTIC CLAIMS.",
+    "usageInstructions": "Adults: Take 1 capsule 2 to 3 times daily before or with meals.",
+    "warningsPrecautions": "FOOD SUPPLEMENT WITH NO APPROVED THERAPEUTIC CLAIMS. Not a substitute for prescribed antidiabetic medications or insulin.",
+    "registrationNumber": "FR-39266",
+    "registrationStatus": "Active Registered Food Supplement",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2023-01-10",
+    "expiryDate": "2028-01-10",
+    "plantSlug": "ampalaya",
+    "ingredients": [
+      {
+        "name": "Momordica charantia (Ampalaya Fruit and Leaf Powder)",
+        "strength": "500 mg",
+        "type": "Botanical Dietary Ingredient"
+      }
+    ]
+  },
+  {
+    "id": "charantia-ampalaya-tea",
+    "slug": "charantia-ampalaya-tea",
+    "name": "Charantia Ampalaya Herbal Tea",
+    "brandName": "Charantia",
+    "manufacturer": "Herbcare Corporation",
+    "productType": "Food Supplement Beverage (No Approved Therapeutic Claims)",
+    "productClassification": "FOOD_SUPPLEMENT",
+    "dosageForm": "Tea",
+    "dosageStrength": "2.5 g per tea bag",
+    "isMultiIngredient": 0,
+    "description": "Pure dried Ampalaya (Momordica charantia) leaves, flowers, and young fruits cut into infusion bags for hot brewing.",
+    "intendedUse": "Traditional bitter melon botanical tea for mealtime dietary accompaniment.",
+    "usageInstructions": "Place 1 tea bag in a cup of boiling water. Steep for 3 to 5 minutes.",
+    "warningsPrecautions": "FOOD SUPPLEMENT WITH NO APPROVED THERAPEUTIC CLAIMS. Diabetic patients must regularly monitor blood sugar.",
+    "registrationNumber": "FR-4000002194812",
+    "registrationStatus": "Active Registered Food Supplement",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2023-06-15",
+    "expiryDate": "2028-06-15",
+    "plantSlug": "ampalaya",
+    "ingredients": [
+      {
+        "name": "Momordica charantia (Dried Leaves and Fruit)",
+        "strength": "2.5 g",
+        "type": "Botanical Dietary Ingredient"
+      }
+    ]
+  },
+  {
+    "id": "bitteractive-ampalaya-capsule",
+    "slug": "bitteractive-ampalaya-capsule",
+    "name": "Bitteractive Ampalaya 660mg Food Supplement Capsule",
+    "brandName": "Bitteractive",
+    "manufacturer": "AMB HK Enterprises Inc.",
+    "productType": "Food Supplement (No Approved Therapeutic Claims)",
+    "productClassification": "FOOD_SUPPLEMENT",
+    "dosageForm": "Capsule",
+    "dosageStrength": "660 mg",
+    "isMultiIngredient": 0,
+    "description": "High-dose 660mg powdered Momordica charantia dietary supplement registered with the Philippine FDA.",
+    "intendedUse": "Dietary supplement supporting healthy lifestyle and metabolic maintenance.",
+    "usageInstructions": "Take 1 capsule daily after a meal.",
+    "warningsPrecautions": "FOOD SUPPLEMENT WITH NO APPROVED THERAPEUTIC CLAIMS. Discontinue use if gastrointestinal discomfort occurs.",
+    "registrationNumber": "FR-4000010609145",
+    "registrationStatus": "Active Registered Food Supplement",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2023-03-21",
+    "expiryDate": "2028-03-21",
+    "plantSlug": "ampalaya",
+    "ingredients": [
+      {
+        "name": "Momordica charantia (Ampalaya Powder)",
+        "strength": "660 mg",
+        "type": "Botanical Dietary Ingredient"
+      }
+    ]
+  },
+  {
+    "id": "better-ampalaya-500-capsule",
+    "slug": "better-ampalaya-500-capsule",
+    "name": "Better Ampalaya-500 500mg Food Supplement Capsule",
+    "brandName": "Better Ampalaya-500",
+    "manufacturer": "St. Barachiel the Archangel Food Industries Inc.",
+    "productType": "Food Supplement (No Approved Therapeutic Claims)",
+    "productClassification": "FOOD_SUPPLEMENT",
+    "dosageForm": "Capsule",
+    "dosageStrength": "500 mg",
+    "isMultiIngredient": 0,
+    "description": "Natural pulverized bitter melon fruit and leaf enclosed in vegetable capsules for daily dietary integration.",
+    "intendedUse": "Botanical food supplement for general nutritional balance.",
+    "usageInstructions": "Adults: 1 capsule twice daily with meals.",
+    "warningsPrecautions": "FOOD SUPPLEMENT WITH NO APPROVED THERAPEUTIC CLAIMS. Not intended for pregnant or nursing women.",
+    "registrationNumber": "FR-4000012488625",
+    "registrationStatus": "Active Registered Food Supplement",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2024-08-22",
+    "expiryDate": "2029-08-22",
+    "plantSlug": "ampalaya",
+    "ingredients": [
+      {
+        "name": "Momordica charantia (Ampalaya Powder)",
+        "strength": "500 mg",
+        "type": "Botanical Dietary Ingredient"
+      }
+    ]
+  },
+  {
+    "id": "akita-ampalaya-tea",
+    "slug": "akita-ampalaya-tea",
+    "name": "Akita Ampalaya Herbal Tea",
+    "brandName": "Akita",
+    "manufacturer": "Akita Herbal Products",
+    "productType": "Food Supplement Beverage (No Approved Therapeutic Claims)",
+    "productClassification": "FOOD_SUPPLEMENT",
+    "dosageForm": "Tea",
+    "dosageStrength": "2 g per sachet",
+    "isMultiIngredient": 0,
+    "description": "Pure organically harvested Philippine Ampalaya tea bags for traditional bitter hot beverage infusion.",
+    "intendedUse": "Traditional herbal tea beverage for digestive and wellness support.",
+    "usageInstructions": "Steep 1 tea bag in 200 mL of hot water for 5 minutes.",
+    "warningsPrecautions": "FOOD SUPPLEMENT WITH NO APPROVED THERAPEUTIC CLAIMS.",
+    "registrationNumber": "FR-4000013866226",
+    "registrationStatus": "Active Registered Food Supplement",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2026-03-19",
+    "expiryDate": "2031-03-19",
+    "plantSlug": "ampalaya",
+    "ingredients": [
+      {
+        "name": "Momordica charantia (Dried Leaves and Stems)",
+        "strength": "2 g",
+        "type": "Botanical Dietary Ingredient"
+      }
+    ]
+  },
+  {
+    "id": "diavit-herbs-ampalaya-banaba-turmeric-capsule",
+    "slug": "diavit-herbs-ampalaya-banaba-turmeric-capsule",
+    "name": "Diavit Herbs Ampalaya + Banaba & Turmeric Food Supplement Capsule",
+    "brandName": "Diavit Herbs",
+    "manufacturer": "Logistics for Retail Express Corp.",
+    "productType": "Multi-ingredient Food Supplement (No Approved Therapeutic Claims)",
+    "productClassification": "FOOD_SUPPLEMENT",
+    "dosageForm": "Capsule",
+    "dosageStrength": "500 mg",
+    "isMultiIngredient": 1,
+    "description": "Multi-botanical dietary combination of Ampalaya, Banaba, and Turmeric powders registered under FDA food regulations.",
+    "intendedUse": "Dietary botanical supplement for metabolic maintenance accompaniment.",
+    "usageInstructions": "Take 1 capsule daily after breakfast.",
+    "warningsPrecautions": "MULTI-INGREDIENT PRODUCT. FOOD SUPPLEMENT WITH NO APPROVED THERAPEUTIC CLAIMS. Never discontinue prescribed medications without physician guidance.",
+    "registrationNumber": "FR-4000009736180",
+    "registrationStatus": "Active Registered Food Supplement",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2025-07-14",
+    "expiryDate": "2030-07-14",
+    "plantSlug": "ampalaya",
+    "otherPlantSlugs": [
+      "turmeric"
+    ],
+    "ingredients": [
+      {
+        "name": "Momordica charantia (Ampalaya)",
+        "strength": "Variable",
+        "type": "Dietary Botanical"
+      },
+      {
+        "name": "Lagerstroemia speciosa (Banaba)",
+        "strength": "Variable",
+        "type": "Dietary Botanical"
+      },
+      {
+        "name": "Curcuma longa (Turmeric)",
+        "strength": "Variable",
+        "type": "Dietary Botanical"
+      }
+    ]
+  },
+  {
+    "id": "docteurs-choice-ampalaya-banaba-turmeric-garlic-capsule",
+    "slug": "docteurs-choice-ampalaya-banaba-turmeric-garlic-capsule",
+    "name": "Docteur's Choice Ampalaya + Banaba + Luyang Dilaw + Bawang Food Supplement Capsule",
+    "brandName": "Docteur's Choice",
+    "manufacturer": "Docteur's Choice Corp.",
+    "productType": "Multi-ingredient Food Supplement (No Approved Therapeutic Claims)",
+    "productClassification": "FOOD_SUPPLEMENT",
+    "dosageForm": "Capsule",
+    "dosageStrength": "500 mg",
+    "isMultiIngredient": 1,
+    "description": "Synergistic botanical food supplement containing four traditional Philippine herbs: Ampalaya, Banaba, Turmeric, and Garlic.",
+    "intendedUse": "Botanical dietary supplement for general adult nutritional supplementation.",
+    "usageInstructions": "Adults: 1 capsule daily before meals.",
+    "warningsPrecautions": "MULTI-INGREDIENT PRODUCT. FOOD SUPPLEMENT WITH NO APPROVED THERAPEUTIC CLAIMS. Contains Bawang (Garlic) which may have mild anticoagulant properties.",
+    "registrationNumber": "FR-4000012878378",
+    "registrationStatus": "Active Registered Food Supplement",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2024-06-03",
+    "expiryDate": "2029-06-03",
+    "plantSlug": "ampalaya",
+    "otherPlantSlugs": [
+      "bawang",
+      "turmeric"
+    ],
+    "ingredients": [
+      {
+        "name": "Momordica charantia (Ampalaya)",
+        "strength": "Variable",
+        "type": "Dietary Botanical"
+      },
+      {
+        "name": "Lagerstroemia speciosa (Banaba)",
+        "strength": "Variable",
+        "type": "Dietary Botanical"
+      },
+      {
+        "name": "Curcuma longa (Luyang Dilaw / Turmeric)",
+        "strength": "Variable",
+        "type": "Dietary Botanical"
+      },
+      {
+        "name": "Allium sativum (Bawang / Garlic)",
+        "strength": "Variable",
+        "type": "Dietary Botanical"
+      }
+    ]
+  }
+]

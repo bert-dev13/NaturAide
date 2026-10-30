@@ -1,0 +1,641 @@
+[
+  {
+    "id": "nirpromp-akapulko-lotion",
+    "slug": "nirpromp-akapulko-lotion",
+    "name": "NIRPROMP Akapulko 50% Botanical Antifungal Lotion",
+    "brandName": "NIRPROMP Akapulko",
+    "manufacturer": "DOST-PCHRD / UP Manila NIH NIRPROMP",
+    "productType": "Botanical Medicine / Standardized Topical Herbal Drug",
+    "productClassification": "HERBAL_MEDICINE",
+    "dosageForm": "Lotion",
+    "dosageStrength": "50% Botanical Extract",
+    "isMultiIngredient": 0,
+    "description": "Clinically validated topical antifungal lotion formulated with standardized Senna alata (Akapulko) leaf extract for fungal skin infections.",
+    "intendedUse": "Topical treatment of tinea infections including ringworm (buni), tinea versicolor (an-an), and athlete's foot (alipunga).",
+    "usageInstructions": "Apply a thin layer over thoroughly cleansed and dried affected skin area 2 times daily for 1 to 2 weeks.",
+    "warningsPrecautions": "For external topical dermatological use only. Avoid contact with eyes and mucous membranes.",
+    "registrationNumber": "NIRPROMP-PCHRD-AKA-01",
+    "registrationStatus": "Active Registered Botanical Herbal Drug",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2023-01-01",
+    "expiryDate": "2028-01-01",
+    "plantSlug": "akapulko",
+    "ingredients": [
+      {
+        "name": "Senna alata (L.) Roxb. (Akapulko Leaf Extract)",
+        "strength": "50% w/w",
+        "type": "Active Herbal Extract"
+      }
+    ]
+  },
+  {
+    "id": "nutra-heal-akapulko-lotion",
+    "slug": "nutra-heal-akapulko-lotion",
+    "name": "Nutra Heal Cassia alata (Acapulco) 10% Antifungal Lotion",
+    "brandName": "Nutra Heal",
+    "manufacturer": "La Croesus Pharma, Inc. / Fanfreluche Enterprises, Inc.",
+    "productType": "Over-the-Counter Regulated Topical Antifungal",
+    "productClassification": "OTHER_REGULATED_PRODUCT",
+    "dosageForm": "Lotion",
+    "dosageStrength": "100 mg/g (10%)",
+    "isMultiIngredient": 0,
+    "description": "Topical antimicrobial and antifungal lotion containing 10% Senna (Cassia) alata extract manufactured by La Croesus Pharma.",
+    "intendedUse": "Topical treatment of surface skin fungal dermatoses and ringworm lesions.",
+    "usageInstructions": "Apply twice daily on affected skin after cleansing.",
+    "warningsPrecautions": "External use only. Keep away from eyes and open wounds.",
+    "registrationNumber": "VR-3877",
+    "registrationStatus": "Active Registered OTC Topical Drug",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2024-09-15",
+    "expiryDate": "2029-09-03",
+    "plantSlug": "akapulko",
+    "ingredients": [
+      {
+        "name": "Cassia alata (Acapulco Leaves Extract)",
+        "strength": "100 mg/g (10%)",
+        "type": "Active Herbal Extract"
+      }
+    ]
+  },
+  {
+    "id": "lakapulko-antifungal-lotion",
+    "slug": "lakapulko-antifungal-lotion",
+    "name": "Lakapulko Cassia alata 10% Topical Lotion",
+    "brandName": "Lakapulko",
+    "manufacturer": "La Croesus Pharma, Inc. / Lakpue Drug, Inc.",
+    "productType": "Over-the-Counter Regulated Topical Antifungal",
+    "productClassification": "OTHER_REGULATED_PRODUCT",
+    "dosageForm": "Lotion",
+    "dosageStrength": "100 mg/g (10%)",
+    "isMultiIngredient": 0,
+    "description": "Standardized herbal dermatological lotion manufactured from fresh Cassia alata leaf extracts.",
+    "intendedUse": "Antifungal and antibacterial topical care for cutaneous lesions.",
+    "usageInstructions": "Apply directly to affected skin twice daily.",
+    "warningsPrecautions": "Do not ingest. Wash hands thoroughly after application.",
+    "registrationNumber": "VR-3928",
+    "registrationStatus": "Active Registered OTC Topical Drug",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2024-09-15",
+    "expiryDate": "2029-09-03",
+    "plantSlug": "akapulko",
+    "ingredients": [
+      {
+        "name": "Cassia alata (Acapulco Leaves Extract)",
+        "strength": "100 mg/g (10%)",
+        "type": "Active Herbal Extract"
+      }
+    ]
+  },
+  {
+    "id": "pitahc-akapulko-soap",
+    "slug": "pitahc-akapulko-soap",
+    "name": "PITAHC Akapulko Antifungal Herbal Soap",
+    "brandName": "PITAHC Katanda",
+    "manufacturer": "PITAHC Herbal Processing Plant / Certified Community Enterprises",
+    "productType": "Cosmetic Herbal Product / Traditional Cleanser",
+    "productClassification": "COSMETIC_HERBAL_PRODUCT",
+    "dosageForm": "Soap",
+    "dosageStrength": "100 g bar",
+    "isMultiIngredient": 0,
+    "description": "Handcrafted botanical bath and skin cleanser bar soap infused with pure Senna alata (Akapulko) leaf decoction.",
+    "intendedUse": "Daily skin hygiene and supportive fungal-preventive cleansing for sensitive skin.",
+    "usageInstructions": "Lather onto damp skin, allow to sit for 1 to 2 minutes, then rinse thoroughly with clean water.",
+    "warningsPrecautions": "Cosmetic herbal cleansing bar. Avoid contact with eyes.",
+    "registrationNumber": "NN-1000005128914",
+    "registrationStatus": "Active Cosmetic Notification",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2023-08-01",
+    "expiryDate": "2028-08-01",
+    "plantSlug": "akapulko",
+    "ingredients": [
+      {
+        "name": "Senna alata (Akapulko Leaf Extract)",
+        "strength": "Natural saponified extract",
+        "type": "Botanical Cosmetic Extract"
+      }
+    ]
+  },
+  {
+    "id": "guavidone-bayabas-antiseptic-solution",
+    "slug": "guavidone-bayabas-antiseptic-solution",
+    "name": "Guavidone Povidone Iodine + Psidium guajava (Guava) Leaf Topical Solution",
+    "brandName": "Guavidone",
+    "manufacturer": "La Croesus Pharma, Inc.",
+    "productType": "Household Remedy (Topical Antiseptic)",
+    "productClassification": "TRADITIONALLY_USED_HERBAL_PRODUCT",
+    "dosageForm": "Topical Solution",
+    "dosageStrength": "100 mg / 100 mg per mL",
+    "isMultiIngredient": 1,
+    "description": "Registered household remedy combining antibacterial Povidone Iodine with traditional Psidium guajava (Guava) leaf extract.",
+    "intendedUse": "Antiseptic cleansing for minor skin cuts, abrasions, post-partum perineal wash, and superficial wound management.",
+    "usageInstructions": "Apply full strength with cotton ball or dilute as directed for cleansing rinse.",
+    "warningsPrecautions": "MULTI-INGREDIENT PRODUCT. External use only. Do not apply on extensive, deep, or severe puncture wounds.",
+    "registrationNumber": "DRHR-2064",
+    "registrationStatus": "Active Registered Household Remedy (HR)",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2026-10-15",
+    "expiryDate": "2031-10-15",
+    "plantSlug": "bayabas",
+    "ingredients": [
+      {
+        "name": "Povidone Iodine",
+        "strength": "100 mg/mL",
+        "type": "Active Antiseptic"
+      },
+      {
+        "name": "Psidium guajava L. (Guava Leaf Extract)",
+        "strength": "100 mg/mL",
+        "type": "Active Botanical Astringent"
+      }
+    ]
+  },
+  {
+    "id": "wilson-bayabas-tea",
+    "slug": "wilson-bayabas-tea",
+    "name": "Wilson Bayabas Herbal Tea",
+    "brandName": "Wilson",
+    "manufacturer": "Premier Natural Products Corporation",
+    "productType": "Food Supplement Beverage (No Approved Therapeutic Claims)",
+    "productClassification": "FOOD_SUPPLEMENT",
+    "dosageForm": "Tea",
+    "dosageStrength": "2 g per tea bag",
+    "isMultiIngredient": 0,
+    "description": "Pure dried Guava (Psidium guajava) leaf tea bags registered under Philippine FDA food supplement regulations.",
+    "intendedUse": "Traditional warm botanical astringent tea for dietary wellness. NO APPROVED THERAPEUTIC CLAIMS.",
+    "usageInstructions": "Steep 1 tea bag in a cup of boiling water for 3 to 5 minutes.",
+    "warningsPrecautions": "FOOD SUPPLEMENT WITH NO APPROVED THERAPEUTIC CLAIMS. Not intended for treatment of acute bacterial diarrhea.",
+    "registrationNumber": "FR-4000009136791",
+    "registrationStatus": "Active Registered Food Supplement",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2022-02-14",
+    "expiryDate": "2027-02-14",
+    "plantSlug": "bayabas",
+    "ingredients": [
+      {
+        "name": "Psidium guajava L. (Guava Dried Leaves)",
+        "strength": "2 g",
+        "type": "Botanical Dietary Ingredient"
+      }
+    ]
+  },
+  {
+    "id": "pitahc-bayabas-soap",
+    "slug": "pitahc-bayabas-soap",
+    "name": "PITAHC Bayabas Antiseptic Herbal Soap",
+    "brandName": "PITAHC Bayabas",
+    "manufacturer": "PITAHC Herbal Processing Plant",
+    "productType": "Cosmetic Herbal Product / Traditional Cleanser",
+    "productClassification": "COSMETIC_HERBAL_PRODUCT",
+    "dosageForm": "Soap",
+    "dosageStrength": "90 g bar",
+    "isMultiIngredient": 0,
+    "description": "Botanical hygiene bar soap prepared from boiled fresh Psidium guajava leaf astringent principles for daily skin cleanliness.",
+    "intendedUse": "Skin astringent cleansing and deodorant bath care.",
+    "usageInstructions": "Use as daily bath soap. Lather gently over skin and rinse with water.",
+    "warningsPrecautions": "Cosmetic cleansing product for external skin wash only.",
+    "registrationNumber": "NN-1000006219481",
+    "registrationStatus": "Active Cosmetic Notification",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2023-04-10",
+    "expiryDate": "2028-04-10",
+    "plantSlug": "bayabas",
+    "ingredients": [
+      {
+        "name": "Psidium guajava (Guava Leaf Extract)",
+        "strength": "Natural saponified decoction",
+        "type": "Botanical Cosmetic Extract"
+      }
+    ]
+  },
+  {
+    "id": "propan-fit-garlic-capsule",
+    "slug": "propan-fit-garlic-capsule",
+    "name": "Propan Fit Multivitamins + Minerals + Korean Ginseng + Garlic Extract Softgel Capsule",
+    "brandName": "Propan Fit",
+    "manufacturer": "Daewon Pharm. Co., Ltd. / ADP Pharma Corporation",
+    "productType": "Over-the-Counter Regulated Multivitamin & Herbal Medicine",
+    "productClassification": "OTHER_REGULATED_PRODUCT",
+    "dosageForm": "Capsule",
+    "dosageStrength": "Standardized Garlic Extract + Multivitamins",
+    "isMultiIngredient": 1,
+    "description": "FDA registered OTC softgel capsule containing standardized Allium sativum (Garlic) bulb extract combined with Korean Ginseng, vitamins, and minerals.",
+    "intendedUse": "Nutritional and vitality support, physical endurance enhancement, and supportive cardiovascular well-being.",
+    "usageInstructions": "Adults: 1 softgel capsule daily, preferably after breakfast.",
+    "warningsPrecautions": "MULTI-INGREDIENT PRODUCT. Contains Garlic extract; patients taking anticoagulant therapies (e.g. Warfarin, Aspirin) should consult a physician.",
+    "registrationNumber": "DR-XY44162",
+    "registrationStatus": "Active Registered OTC Drug",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2024-10-20",
+    "expiryDate": "2030-02-17",
+    "plantSlug": "bawang",
+    "ingredients": [
+      {
+        "name": "Allium sativum (Garlic Extract)",
+        "strength": "Standardized extract",
+        "type": "Active Botanical"
+      },
+      {
+        "name": "Panax ginseng (Korean Ginseng)",
+        "strength": "Standardized extract",
+        "type": "Active Botanical"
+      },
+      {
+        "name": "Multivitamins and Minerals",
+        "strength": "Therapeutic standard",
+        "type": "Active Micronutrients"
+      }
+    ]
+  },
+  {
+    "id": "atc-garlic-oil-capsule",
+    "slug": "atc-garlic-oil-capsule",
+    "name": "ATC Garlic Oil 500mg Softgel Capsule",
+    "brandName": "ATC Garlic Oil",
+    "manufacturer": "ATC Healthcare International Corporation",
+    "productType": "Food Supplement (No Approved Therapeutic Claims)",
+    "productClassification": "FOOD_SUPPLEMENT",
+    "dosageForm": "Capsule",
+    "dosageStrength": "500 mg",
+    "isMultiIngredient": 0,
+    "description": "Pure Allium sativum (Garlic) oil concentrated into soft gelatin capsules for odor-reduced dietary supplementation.",
+    "intendedUse": "Dietary food supplement for circulatory wellness. NO APPROVED THERAPEUTIC CLAIMS.",
+    "usageInstructions": "Take 1 softgel capsule daily with water after meals.",
+    "warningsPrecautions": "FOOD SUPPLEMENT WITH NO APPROVED THERAPEUTIC CLAIMS. Not a prescription antihypertensive or hypolipidemic treatment.",
+    "registrationNumber": "FR-4000003189201",
+    "registrationStatus": "Active Registered Food Supplement",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2023-04-12",
+    "expiryDate": "2028-04-12",
+    "plantSlug": "bawang",
+    "ingredients": [
+      {
+        "name": "Allium sativum (Garlic Oil)",
+        "strength": "500 mg",
+        "type": "Botanical Dietary Ingredient"
+      }
+    ]
+  },
+  {
+    "id": "docteurs-choice-bawang-capsule",
+    "slug": "docteurs-choice-bawang-capsule",
+    "name": "Docteur's Choice Bawang + Ampalaya + Banaba + Luyang Dilaw Capsule",
+    "brandName": "Docteur's Choice",
+    "manufacturer": "Docteur's Choice Corp.",
+    "productType": "Multi-ingredient Food Supplement (No Approved Therapeutic Claims)",
+    "productClassification": "FOOD_SUPPLEMENT",
+    "dosageForm": "Capsule",
+    "dosageStrength": "500 mg",
+    "isMultiIngredient": 1,
+    "description": "Traditional Philippine botanical blend of Allium sativum (Bawang) with Ampalaya, Banaba, and Luyang Dilaw.",
+    "intendedUse": "Botanical dietary supplementation. NO APPROVED THERAPEUTIC CLAIMS.",
+    "usageInstructions": "Take 1 capsule daily before meals.",
+    "warningsPrecautions": "MULTI-INGREDIENT PRODUCT. FOOD SUPPLEMENT WITH NO APPROVED THERAPEUTIC CLAIMS.",
+    "registrationNumber": "FR-4000012878378",
+    "registrationStatus": "Active Registered Food Supplement",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2024-06-03",
+    "expiryDate": "2029-06-03",
+    "plantSlug": "bawang",
+    "otherPlantSlugs": [
+      "ampalaya",
+      "turmeric"
+    ],
+    "ingredients": [
+      {
+        "name": "Allium sativum (Bawang)",
+        "strength": "Variable",
+        "type": "Dietary Botanical"
+      },
+      {
+        "name": "Momordica charantia (Ampalaya)",
+        "strength": "Variable",
+        "type": "Dietary Botanical"
+      },
+      {
+        "name": "Curcuma longa (Luyang Dilaw)",
+        "strength": "Variable",
+        "type": "Dietary Botanical"
+      },
+      {
+        "name": "Lagerstroemia speciosa (Banaba)",
+        "strength": "Variable",
+        "type": "Dietary Botanical"
+      }
+    ]
+  },
+  {
+    "id": "nirpromp-tsaang-gubat-tablet",
+    "slug": "nirpromp-tsaang-gubat-tablet",
+    "name": "NIRPROMP Tsaang Gubat 500mg Botanical Tablet",
+    "brandName": "NIRPROMP Tsaang Gubat",
+    "manufacturer": "DOST-PCHRD / UP Manila NIRPROMP",
+    "productType": "Botanical Antispasmodic Medicine",
+    "productClassification": "HERBAL_MEDICINE",
+    "dosageForm": "Tablet",
+    "dosageStrength": "500 mg",
+    "isMultiIngredient": 0,
+    "description": "Standardized Carmona retusa (Tsaang Gubat) leaf formulation developed through clinical trials for stomach cramps and intestinal colic.",
+    "intendedUse": "Relief of abdominal pain, gastrointestinal colic, and stomach spasms.",
+    "usageInstructions": "Adults: 1 tablet every 4 hours as needed for stomach pain.",
+    "warningsPrecautions": "Do not use in acute surgical abdomen, suspected appendicitis, or bowel obstruction.",
+    "registrationNumber": "NIRPROMP-PCHRD-TG-01",
+    "registrationStatus": "Active Registered Botanical Herbal Drug",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2023-01-01",
+    "expiryDate": "2028-01-01",
+    "plantSlug": "tsaang-gubat",
+    "ingredients": [
+      {
+        "name": "Carmona retusa (Vahl) Masam. (Tsaang Gubat Leaf)",
+        "strength": "500 mg",
+        "type": "Active Herbal Extract"
+      }
+    ]
+  },
+  {
+    "id": "pitahc-tsaang-gubat-tablet",
+    "slug": "pitahc-tsaang-gubat-tablet",
+    "name": "PITAHC Tsaang Gubat 500mg Tablet",
+    "brandName": "PITAHC Tsaang Gubat",
+    "manufacturer": "Philippine Institute of Traditional and Alternative Health Care (PITAHC)",
+    "productType": "Herbal Medicine (Official Government Formulary)",
+    "productClassification": "HERBAL_MEDICINE",
+    "dosageForm": "Tablet",
+    "dosageStrength": "500 mg",
+    "isMultiIngredient": 0,
+    "description": "Official DOH-PITAHC pharmaceutical tablet formulated under NIRPROMP antispasmodic clinical monographs.",
+    "intendedUse": "Symptomatic relief of abdominal colic and diarrhea in national public health programs.",
+    "usageInstructions": "Adults: 1 tablet 3 times a day as needed.",
+    "warningsPrecautions": "Consult a doctor if abdominal pain persists beyond 24 hours.",
+    "registrationNumber": "DR-XY16012",
+    "registrationStatus": "Active Registered Botanical Herbal Drug",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2024-01-01",
+    "expiryDate": "2029-01-01",
+    "plantSlug": "tsaang-gubat",
+    "ingredients": [
+      {
+        "name": "Carmona retusa (Standardized Tsaang Gubat Leaf)",
+        "strength": "500 mg",
+        "type": "Active Herbal Powder"
+      }
+    ]
+  },
+  {
+    "id": "triherbgi-tsaang-gubat-capsule",
+    "slug": "triherbgi-tsaang-gubat-capsule",
+    "name": "Triherbgi Allium sativum + Mimosa pudica + Ehretia microphylla Food Supplement Capsule",
+    "brandName": "Triherbgi",
+    "manufacturer": "The Globaleader Inc.",
+    "productType": "Multi-ingredient Food Supplement (No Approved Therapeutic Claims)",
+    "productClassification": "FOOD_SUPPLEMENT",
+    "dosageForm": "Capsule",
+    "dosageStrength": "500 mg",
+    "isMultiIngredient": 1,
+    "description": "Multi-herb dietary capsule blending Ehretia microphylla (Tsaang Gubat), Allium sativum (Garlic), and Mimosa pudica (Makahiya).",
+    "intendedUse": "Botanical dietary supplementation for digestive balance. NO APPROVED THERAPEUTIC CLAIMS.",
+    "usageInstructions": "Take 1 capsule daily after a meal.",
+    "warningsPrecautions": "MULTI-INGREDIENT PRODUCT. FOOD SUPPLEMENT WITH NO APPROVED THERAPEUTIC CLAIMS.",
+    "registrationNumber": "FR-2631607",
+    "registrationStatus": "Active Registered Food Supplement",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2023-10-15",
+    "expiryDate": "2028-10-15",
+    "plantSlug": "tsaang-gubat",
+    "otherPlantSlugs": [
+      "bawang"
+    ],
+    "ingredients": [
+      {
+        "name": "Ehretia microphylla (Tsaang Gubat)",
+        "strength": "Variable",
+        "type": "Dietary Botanical"
+      },
+      {
+        "name": "Allium sativum (Bawang)",
+        "strength": "Variable",
+        "type": "Dietary Botanical"
+      },
+      {
+        "name": "Mimosa pudica (Makahiya)",
+        "strength": "Variable",
+        "type": "Dietary Botanical"
+      }
+    ]
+  },
+  {
+    "id": "bellevine-pansit-pansitan-capsule",
+    "slug": "bellevine-pansit-pansitan-capsule",
+    "name": "BelleVine Pansit-pansitan (Peperomia pellucida) 500mg Herbal Food Supplement Capsule",
+    "brandName": "BelleVine",
+    "manufacturer": "Majesticline Mftg. Corp.",
+    "productType": "Food Supplement (No Approved Therapeutic Claims)",
+    "productClassification": "FOOD_SUPPLEMENT",
+    "dosageForm": "Capsule",
+    "dosageStrength": "500 mg",
+    "isMultiIngredient": 0,
+    "description": "Pure dried and pulverized Peperomia pellucida (Ulasimang Bato / Pansit-pansitan) herb powder in oral capsules.",
+    "intendedUse": "Dietary supplement traditionally used by adults to support healthy uric acid levels. NO APPROVED THERAPEUTIC CLAIMS.",
+    "usageInstructions": "Take 1 capsule twice daily with a full glass of water.",
+    "warningsPrecautions": "FOOD SUPPLEMENT WITH NO APPROVED THERAPEUTIC CLAIMS. Not a substitute for medical allopurinol or febuxostat in acute gout flare-ups.",
+    "registrationNumber": "FR-4000015555687",
+    "registrationStatus": "Active Registered Food Supplement",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2023-02-23",
+    "expiryDate": "2028-02-23",
+    "plantSlug": "ulasimang-bato",
+    "ingredients": [
+      {
+        "name": "Peperomia pellucida (Pansit-pansitan Whole Herb)",
+        "strength": "500 mg",
+        "type": "Botanical Dietary Ingredient"
+      }
+    ]
+  },
+  {
+    "id": "adelle-pansit-pansitan-coffee-mix",
+    "slug": "adelle-pansit-pansitan-coffee-mix",
+    "name": "Adelle Pansit-pansitan Herbal Coffee Mix",
+    "brandName": "Adelle",
+    "manufacturer": "Northfield Laboratories, Inc.",
+    "productType": "Food Supplement Beverage (No Approved Therapeutic Claims)",
+    "productClassification": "FOOD_SUPPLEMENT",
+    "dosageForm": "Tea",
+    "dosageStrength": "20 g sachet",
+    "isMultiIngredient": 1,
+    "description": "Botanical herbal coffee beverage blend combining instant coffee with Peperomia pellucida (Pansit-pansitan) extract.",
+    "intendedUse": "Daily botanical beverage. NO APPROVED THERAPEUTIC CLAIMS.",
+    "usageInstructions": "Pour contents into a cup, add 150 mL hot water, stir well.",
+    "warningsPrecautions": "MULTI-INGREDIENT PRODUCT. FOOD SUPPLEMENT WITH NO APPROVED THERAPEUTIC CLAIMS. Contains caffeine.",
+    "registrationNumber": "FR-4000015589220",
+    "registrationStatus": "Active Registered Food Supplement",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2024-05-11",
+    "expiryDate": "2029-05-11",
+    "plantSlug": "ulasimang-bato",
+    "ingredients": [
+      {
+        "name": "Peperomia pellucida (Pansit-pansitan Extract)",
+        "strength": "Standardized extract",
+        "type": "Dietary Botanical"
+      },
+      {
+        "name": "Coffee Powder and Non-dairy creamer",
+        "strength": "Beverage base",
+        "type": "Beverage Ingredient"
+      }
+    ]
+  },
+  {
+    "id": "nirpromp-yerba-buena-infusion",
+    "slug": "nirpromp-yerba-buena-infusion",
+    "name": "NIRPROMP Traditional Yerba Buena Leaf Infusion",
+    "brandName": "NIRPROMP Yerba Buena",
+    "manufacturer": "DOST-PCHRD / UP Manila NIRPROMP",
+    "productType": "Standardized Botanical Analgesic Preparation",
+    "productClassification": "TRADITIONALLY_USED_HERBAL_PRODUCT",
+    "dosageForm": "Tea",
+    "dosageStrength": "Standardized Infusion",
+    "isMultiIngredient": 0,
+    "description": "Standardized botanical monograph tea infusion formulated from Mentha cordifolia (Yerba Buena) leaves for relief of headache, toothache, and muscle pain.",
+    "intendedUse": "Traditional analgesic relief of mild headaches, postoperative pain, and dental pain.",
+    "usageInstructions": "Steep 1 packet in 1 cup of boiling water for 5 minutes. Drink 1 cup every 4 to 6 hours as needed.",
+    "warningsPrecautions": "Do not exceed 4 cups daily. Consult a physician if pain is severe or prolonged.",
+    "registrationNumber": "PCHRD-NIRPROMP-YB01",
+    "registrationStatus": "Active Registered Botanical Preparation",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2023-01-01",
+    "expiryDate": "2028-01-01",
+    "plantSlug": "yerba-buena",
+    "ingredients": [
+      {
+        "name": "Mentha cordifolia Opiz (Yerba Buena Dried Leaf)",
+        "strength": "Standardized botanical",
+        "type": "Active Botanical"
+      }
+    ]
+  },
+  {
+    "id": "pitahc-yerba-buena-tablet",
+    "slug": "pitahc-yerba-buena-tablet",
+    "name": "PITAHC Yerba Buena 500mg Tablet",
+    "brandName": "PITAHC Yerba Buena",
+    "manufacturer": "Philippine Institute of Traditional and Alternative Health Care (PITAHC)",
+    "productType": "Herbal Medicine (Official Government Formulary)",
+    "productClassification": "HERBAL_MEDICINE",
+    "dosageForm": "Tablet",
+    "dosageStrength": "500 mg",
+    "isMultiIngredient": 0,
+    "description": "Standardized analgesic herbal medicine tablet manufactured in PITAHC processing centers for community pain relief programs.",
+    "intendedUse": "Analgesic relief of mild to moderate musculoskeletal ache, headache, and menstrual cramps.",
+    "usageInstructions": "Adults: 1 to 2 tablets every 4 to 6 hours as needed.",
+    "warningsPrecautions": "Prescribed through certified municipal traditional herbal dispensaries.",
+    "registrationNumber": "DR-XY15109",
+    "registrationStatus": "Active Registered Botanical Herbal Drug",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2024-01-01",
+    "expiryDate": "2029-01-01",
+    "plantSlug": "yerba-buena",
+    "ingredients": [
+      {
+        "name": "Mentha cordifolia (Standardized Yerba Buena Leaf)",
+        "strength": "500 mg",
+        "type": "Active Herbal Powder"
+      }
+    ]
+  },
+  {
+    "id": "flavonpro-yerba-buena-caplets",
+    "slug": "flavonpro-yerba-buena-caplets",
+    "name": "Flavonpro Yerba Buena + Malunggay + Lagundi & Sodium Ascorbate Food Supplement Caplets",
+    "brandName": "Flavonpro",
+    "manufacturer": "ROQS Int'l Consumer Health Corporation",
+    "productType": "Multi-ingredient Food Supplement (No Approved Therapeutic Claims)",
+    "productClassification": "FOOD_SUPPLEMENT",
+    "dosageForm": "Caplet",
+    "dosageStrength": "500 mg",
+    "isMultiIngredient": 1,
+    "description": "Multivitamins and traditional botanical combination caplet including Yerba Buena, Lagundi, Malunggay, and Vitamin C.",
+    "intendedUse": "Dietary botanical food supplement for wellness. NO APPROVED THERAPEUTIC CLAIMS.",
+    "usageInstructions": "Adults: 1 caplet daily with water.",
+    "warningsPrecautions": "MULTI-INGREDIENT PRODUCT. FOOD SUPPLEMENT WITH NO APPROVED THERAPEUTIC CLAIMS.",
+    "registrationNumber": "FR-4000010502053",
+    "registrationStatus": "Active Registered Food Supplement",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2025-01-28",
+    "expiryDate": "2030-01-28",
+    "plantSlug": "yerba-buena",
+    "otherPlantSlugs": [
+      "lagundi"
+    ],
+    "ingredients": [
+      {
+        "name": "Mentha cordifolia (Yerba Buena)",
+        "strength": "Variable",
+        "type": "Dietary Botanical"
+      },
+      {
+        "name": "Vitex negundo (Lagundi)",
+        "strength": "Variable",
+        "type": "Dietary Botanical"
+      },
+      {
+        "name": "Moringa oleifera (Malunggay)",
+        "strength": "Variable",
+        "type": "Dietary Botanical"
+      },
+      {
+        "name": "Sodium Ascorbate (Vitamin C)",
+        "strength": "Standardized",
+        "type": "Nutritional Vitamin"
+      }
+    ]
+  },
+  {
+    "id": "total-wellness-immuna-yerba-buena-capsule",
+    "slug": "total-wellness-immuna-yerba-buena-capsule",
+    "name": "Total Wellness Immuna Malunggay + Lagundi with Yerba Buena, Beta-Glucan, Vitamin C and Zinc",
+    "brandName": "Total Wellness Immuna",
+    "manufacturer": "Total Wellness Pharma Inc. / Pharmatree Inc.",
+    "productType": "Multi-ingredient Food Supplement (No Approved Therapeutic Claims)",
+    "productClassification": "FOOD_SUPPLEMENT",
+    "dosageForm": "Capsule",
+    "dosageStrength": "500 mg",
+    "isMultiIngredient": 1,
+    "description": "Complex botanical immune support formula integrating Philippine medicinal herbs with micronutrients. Registered with the Philippine FDA.",
+    "intendedUse": "Dietary immune support supplement. NO APPROVED THERAPEUTIC CLAIMS.",
+    "usageInstructions": "Adults: 1 capsule daily after a meal.",
+    "warningsPrecautions": "MULTI-INGREDIENT PRODUCT. FOOD SUPPLEMENT WITH NO APPROVED THERAPEUTIC CLAIMS.",
+    "registrationNumber": "FR-4000009360398",
+    "registrationStatus": "Active Registered Food Supplement",
+    "statusEnum": "ACTIVE",
+    "issuanceDate": "2024-07-31",
+    "expiryDate": "2029-07-31",
+    "plantSlug": "yerba-buena",
+    "otherPlantSlugs": [
+      "lagundi"
+    ],
+    "ingredients": [
+      {
+        "name": "Mentha cordifolia (Yerba Buena)",
+        "strength": "Variable",
+        "type": "Dietary Botanical"
+      },
+      {
+        "name": "Vitex negundo (Lagundi)",
+        "strength": "Variable",
+        "type": "Dietary Botanical"
+      },
+      {
+        "name": "Moringa oleifera (Malunggay)",
+        "strength": "Variable",
+        "type": "Dietary Botanical"
+      },
+      {
+        "name": "Beta-Glucan, Vitamin C and Zinc",
+        "strength": "Standardized",
+        "type": "Nutritional Additives"
+      }
+    ]
+  }
+]

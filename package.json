@@ -1,0 +1,43 @@
+{
+  "name": "natureaide",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --port 3000",
+    "tunnel": "node scripts/tunnel.mjs",
+    "dev:share": "node scripts/dev-share.mjs",
+    "dev:local": "next dev --port 3000",
+    "build": "next build",
+    "start": "next start --port 3000",
+    "lint": "eslint",
+    "sync:product-images": "npx tsx scripts/sync-product-images.ts",
+    "discover:products": "npx tsx scripts/discover-plant-products.ts",
+    "discover": "npx tsx scripts/discover-plant-products.ts"
+  },
+  "dependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/leaflet": "^1.9.22",
+    "bcryptjs": "^3.0.3",
+    "clsx": "^2.1.1",
+    "framer-motion": "^14.1.0",
+    "jose": "^6.2.13",
+    "leaflet": "^1.9.4",
+    "lucide-react": "^1.55.0",
+    "mysql2": "^3.24.6",
+    "next": "16.4.3",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "tailwind-merge": "^3.7.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/turbopack": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.4.3",
+    "tailwindcss": "^4",
+    "typescript": "^5",
+    "@ngrok/ngrok": "^1.7.0"
+  }
+}

@@ -1,0 +1,123 @@
+@import "tailwindcss";
+
+:root {
+  --background: #faf9f5;
+  --foreground: #131b17;
+
+  /* Custom Color Tokens */
+  --forest-950: #091a13;
+  --forest-900: #0f2c20;
+  --forest-800: #164533;
+  --forest-700: #1e5c44;
+  --forest-600: #297a5b;
+  --forest-500: #359d76;
+
+  --sage-50: #f6f8f6;
+  --sage-100: #edf2ee;
+  --sage-200: #dde6df;
+  --sage-300: #c4d4c7;
+  --sage-400: #9cb5a1;
+  --sage-500: #78997f;
+
+  --teal-50: #f0fdfa;
+  --teal-100: #ccfbf1;
+  --teal-500: #14b8a6;
+  --teal-600: #0d9488;
+  --teal-700: #0f766e;
+  --teal-800: #115e59;
+
+  --warm-beige-50: #fdfcf9;
+  --warm-beige-100: #faf6ee;
+  --warm-beige-200: #f4ece0;
+  --warm-beige-300: #ecdecc;
+
+  --charcoal-900: #121815;
+  --charcoal-800: #1d2521;
+  --charcoal-700: #2f3a35;
+  --charcoal-600: #475550;
+  --charcoal-500: #6b7c76;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-dm-sans), system-ui, -apple-system, sans-serif;
+  background-color: var(--background);
+  color: var(--foreground);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Edge/Chromium draws its own native reveal icon inside password inputs. 
+   Disable browser native password reveal and clear buttons across all password fields so only custom buttons are active. */
+input::-ms-reveal,
+input::-ms-clear,
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear,
+ .password-field::-ms-reveal,
+ .password-field::-ms-clear {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+h1, h2, h3, h4, h5, h6, .font-heading {
+  font-family: var(--font-manrope), system-ui, -apple-system, sans-serif;
+}
+
+/* Glassmorphism & Custom Elements */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(221, 230, 223, 0.8);
+}
+
+.glass-panel-warm {
+  background: rgba(253, 252, 249, 0.88);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(236, 222, 204, 0.6);
+}
+
+.glass-panel-dark {
+  background: rgba(15, 44, 32, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(41, 122, 91, 0.25);
+}
+
+.botanical-glow {
+  box-shadow: 0 16px 36px -12px rgba(15, 44, 32, 0.12), 0 4px 10px -4px rgba(15, 44, 32, 0.05);
+}
+
+.teal-glow {
+  box-shadow: 0 14px 34px -10px rgba(13, 148, 136, 0.22);
+}
+
+.molecular-grid {
+  background-image: radial-gradient(rgba(22, 69, 51, 0.08) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Custom slim scrollbar for sidebars and panels */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(52, 211, 153, 0.25);
+  border-radius: 9999px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(52, 211, 153, 0.45);
+}
+
