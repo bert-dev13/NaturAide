@@ -21,7 +21,11 @@ Before cloning, install the following required tools on the new Windows laptop:
 1. **Node.js LTS (v20+ or v22+)**: Download from [nodejs.org](https://nodejs.org/). (Includes `npm`).
 2. **Git for Windows**: Download from [git-scm.com](https://git-scm.com/).
 3. **XAMPP for Windows (8.1+ / 8.2+)**: Download from [apachefriends.org](https://www.apachefriends.org/). (Default path: `C:\xampp`).
-4. **Python 3.10+ / 3.11+**: Download from [python.org](https://www.python.org/downloads/). *(Check "Add python.exe to PATH" during installation)*.
+4. **Python 3.11 (Required for Molecular Docking)**: Download from [python.org Python 3.11](https://www.python.org/downloads/release/python-3119/) or run:
+   ```cmd
+   winget install Python.Python.3.11
+   ```
+   *(Important: Check "Add python.exe to PATH" during installation. Do not use Python 3.14+ as precompiled scientific wheels like RDKit are not yet supported on 3.14)*.
 
 ---
 

@@ -15,14 +15,20 @@ echo.
 powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$env:SETUP_BAT_DIR='%~dp0'; [ScriptBlock]::Create((Get-Content -LiteralPath '%~f0' -Raw)).Invoke()"
 set "PS_CODE=%ERRORLEVEL%"
 if %PS_CODE% neq 0 (
+    echo.
     echo [ERROR] Setup encountered an issue ^(Exit code: %PS_CODE%^).
 )
+echo.
 echo Press any key to exit.
 pause >nul
 exit /b %PS_CODE%
 #>
 
-$ErrorActionPreference = "Stop"
+# Use Continue so external tool warnings/errors do not throw ActionPreferenceStopException
+$ErrorActionPreference = "Continue"
+
+try {
+
 $ScriptDir = $env:SETUP_BAT_DIR
 if (-not $ScriptDir) { $ScriptDir = (Get-Location).Path }
 $ScriptDir = $ScriptDir.TrimEnd('\')
@@ -112,13 +118,13 @@ Write-Host "Operating System: Windows ($([System.Environment]::OSVersion.Version
 
 # Verify we are in the NatureAide project root
 if (-not (Test-Path (Join-Path $ScriptDir "package.json"))) {
-    Write-FatalError -Message "package.json not found in $ScriptDir." -HelpText "Make sure setup.bat is located and run inside the cloned NatureAide repository root."
+    Write-FatalError -Message "package.json not found in $ScriptDir." -HelpText "Make sure setup.bat is run inside the root of the NatureAide project folder."
 }
 
 # ==============================================================================
-# STEP 1: Verify Core Tools (Node.js, npm, Python)
+# STEP 1: Verify Core Tools (Node.js & npm)
 # ==============================================================================
-Write-Step -StepNum "1/6" -Title "Verifying Core Runtimes (Node.js, npm, Python)"
+Write-Step -StepNum "1/6" -Title "Verifying Core JavaScript Runtime (Node.js & npm)"
 
 # 1.1 Node.js
 $nodeCandidates = @(
@@ -148,25 +154,6 @@ if (-not $npmBin) {
 }
 $npmVer = (& $npmBin -v).Trim()
 Write-Success "npm: v$npmVer ($npmBin)"
-
-# 1.3 Python
-$pythonCandidates = @(
-    "C:\Python311\python.exe",
-    "C:\Python312\python.exe",
-    "C:\Python314\python.exe",
-    "$env:LOCALAPPDATA\Programs\Python\Python311\python.exe",
-    "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe",
-    "$env:LOCALAPPDATA\Programs\Python\Python314\python.exe"
-)
-$pythonBin = Find-Executable "python" $pythonCandidates
-if (-not $pythonBin) { $pythonBin = Find-Executable "py" }
-if ($pythonBin) {
-    $pyVer = (& $pythonBin --version 2>&1).Trim()
-    Write-Success "Python: $pyVer ($pythonBin)"
-} else {
-    Write-WarningMsg "Python is not installed. Stage 3 in-silico molecular docking requires Python 3.10+."
-    Write-WarningMsg "Download Python from https://www.python.org/downloads/ (check 'Add python.exe to PATH' during install)."
-}
 
 # ==============================================================================
 # STEP 2: Verify MySQL Connectivity Only (Read-Only)
@@ -203,7 +190,7 @@ if (-not $mysqlPortOpen) {
                 $numTables = [int]($countCheck.Trim())
                 Write-Success "Database 'natureaide_db' exists in MySQL ($numTables tables found)."
             } else {
-                Write-Info "Database 'natureaide_db' not created yet. Remember to create/import it via phpMyAdmin."
+                Write-Info "Database 'natureaide_db' not detected yet. Remember to create/import it via phpMyAdmin."
             }
         } catch {
             Write-Info "Could not query MySQL schema names (authentication or access restriction). Connectivity verified."
@@ -214,32 +201,41 @@ if (-not $mysqlPortOpen) {
 # ==============================================================================
 # STEP 3: Install Node Dependencies (npm install)
 # ==============================================================================
-Write-Step -StepNum "3/6" -Title "Installing Node Dependencies (npm install)"
+Write-Step -StepNum "3/6" -Title "Checking & Installing Node Dependencies"
 
-if (-not (Test-Path (Join-Path $ScriptDir "node_modules"))) {
-    Write-Info "node_modules not found. Running 'npm install'..."
-} else {
-    Write-Info "Verifying existing node_modules packages..."
-}
+$nodeModulesDir = Join-Path $ScriptDir "node_modules"
+$packageLockFile = Join-Path $ScriptDir "package-lock.json"
+$needsNpmInstall = $true
 
-$npmCmd = if ($npmBin) { $npmBin } else { "npm" }
-$npmProcess = Start-Process -FilePath $npmCmd -ArgumentList "install" -WorkingDirectory $ScriptDir -Wait -PassThru -NoNewWindow
-
-if ($npmProcess.ExitCode -ne 0) {
-    Write-WarningMsg "Standard npm install encountered peer dependency warnings. Auto-fixing with --legacy-peer-deps..."
-    $npmProcess2 = Start-Process -FilePath $npmCmd -ArgumentList "install --legacy-peer-deps" -WorkingDirectory $ScriptDir -Wait -PassThru -NoNewWindow
-    if ($npmProcess2.ExitCode -ne 0) {
-        Write-FatalError -Message "npm install failed." -HelpText "Check your internet connection and Node version ($nodeVer)."
+if (Test-Path $nodeModulesDir) {
+    # Check if a critical dependency (e.g. next) is present
+    if (Test-Path (Join-Path $nodeModulesDir "next\package.json")) {
+        Write-Success "node_modules already exists and appears valid. Skipping full reinstall."
+        $needsNpmInstall = $false
     }
 }
-Write-Success "Node dependencies are installed and up to date."
+
+if ($needsNpmInstall) {
+    Write-Info "Running 'npm install'..."
+    $npmCmd = if ($npmBin) { $npmBin } else { "npm" }
+    $npmProcess = Start-Process -FilePath $npmCmd -ArgumentList "install" -WorkingDirectory $ScriptDir -Wait -PassThru -NoNewWindow
+    
+    if ($npmProcess.ExitCode -ne 0) {
+        Write-WarningMsg "Standard npm install reported peer dependency warnings. Auto-fixing with --legacy-peer-deps..."
+        $npmProcess2 = Start-Process -FilePath $npmCmd -ArgumentList "install --legacy-peer-deps" -WorkingDirectory $ScriptDir -Wait -PassThru -NoNewWindow
+        if ($npmProcess2.ExitCode -ne 0) {
+            Write-FatalError -Message "npm install failed." -HelpText "Check your internet connection and Node version ($nodeVer)."
+        }
+    }
+    Write-Success "Node dependencies successfully installed."
+}
 
 # ==============================================================================
-# STEP 4: Setup AutoDock Vina & Python Docking Environment
+# STEP 4: Python 3.11 Detection & Docking Toolchain Setup
 # ==============================================================================
-Write-Step -StepNum "4/6" -Title "Configuring AutoDock Vina & Docking Environment"
+Write-Step -StepNum "4/6" -Title "Setting Up Python 3.11 & Molecular Docking Toolchain"
 
-# 4.1 Artifacts directory
+# 4.1 Artifacts Directory
 $dockingArtifactsDir = Join-Path $ScriptDir ".docking-artifacts"
 if (-not (Test-Path $dockingArtifactsDir)) {
     New-Item -ItemType Directory -Path $dockingArtifactsDir -Force | Out-Null
@@ -283,43 +279,206 @@ if (Test-Path $vinaBin) {
     Write-WarningMsg "AutoDock Vina executable is missing. Download from https://github.com/forlilab/AutoDock-Vina/releases and place at tools\vina\vina.exe."
 }
 
-# 4.3 Python Virtual Environment & Packages
+# 4.3 Detect Installed Python Versions & Specifically Target Python 3.11
+Write-Info "Scanning installed Python runtimes on Windows..."
+
+$python311Bin = $null
+$detectedPythons = @()
+
+# Check Windows Python Launcher (py -0p)
+$pyLauncher = Get-Command py -ErrorAction SilentlyContinue
+if ($pyLauncher) {
+    try {
+        $pyList = & py -0p 2>$null
+        if ($pyList) {
+            foreach ($line in $pyList) {
+                $trimmed = $line.Trim()
+                if ($trimmed) {
+                    $detectedPythons += $trimmed
+                }
+                # Look specifically for Python 3.11
+                if ($line -match '3\.11\s+\*?\s*(?<exe>[A-Za-z]:\\[^\s]+\.exe)') {
+                    $candidate = $Matches['exe'].Trim()
+                    if (Test-Path $candidate) {
+                        $python311Bin = $candidate
+                    }
+                }
+            }
+        }
+    } catch {}
+
+    # Also test `py -3.11` invocation directly if not yet found
+    if (-not $python311Bin) {
+        try {
+            $directCheck = (& py -3.11 -c "import sys; print(sys.executable)" 2>$null)
+            if ($directCheck -and (Test-Path $directCheck.Trim())) {
+                $python311Bin = $directCheck.Trim()
+            }
+        } catch {}
+    }
+}
+
+# Check standard installation directories for Python 3.11
+if (-not $python311Bin) {
+    $standard311Paths = @(
+        "$env:LOCALAPPDATA\Programs\Python\Python311\python.exe",
+        "C:\Python311\python.exe",
+        "C:\Program Files\Python311\python.exe",
+        "C:\Program Files (x86)\Python311\python.exe"
+    )
+    foreach ($p in $standard311Paths) {
+        if (Test-Path $p) {
+            try {
+                $ver = (& $p --version 2>&1).Trim()
+                if ($ver -match "3\.11") {
+                    $python311Bin = $p
+                    break
+                }
+            } catch {}
+        }
+    }
+}
+
+# Check default python executable in PATH
+if (-not $python311Bin) {
+    $stdPy = Get-Command python -ErrorAction SilentlyContinue
+    if ($stdPy) {
+        try {
+            $ver = (& python --version 2>&1).Trim()
+            $detectedPythons += "Default PATH: $ver ($($stdPy.Source))"
+            if ($ver -match "3\.11") {
+                $python311Bin = $stdPy.Source
+            }
+        } catch {}
+    }
+}
+
+if ($detectedPythons.Count -gt 0) {
+    Write-Info "Detected Python versions on system:"
+    foreach ($item in $detectedPythons) {
+        Write-Host "      $item" -ForegroundColor DarkGray
+    }
+}
+
+# 4.4 Process Python 3.11 Decision
 $venvDir = Join-Path $ScriptDir ".docking-venv"
 $venvPython = Join-Path $venvDir "Scripts\python.exe"
+$dockingEnvironmentReady = $false
 
-if ($pythonBin) {
-    if (-not (Test-Path $venvPython)) {
-        Write-Info "Creating Python virtual environment in .docking-venv..."
-        & $pythonBin -m venv $venvDir
-    }
+if ($python311Bin) {
+    Write-Success "Target Python 3.11 selected: $python311Bin"
     
+    # Check existing virtual environment version
+    $needsRebuild = $false
     if (Test-Path $venvPython) {
-        Write-Info "Checking cheminformatics packages (rdkit, meeko, scipy, gemmi, openbabel-wheel)..."
-        $checkScript = "import rdkit, meeko, scipy, gemmi, openbabel; print('OK')"
-        $installed = $false
         try {
-            $res = (& $venvPython -c $checkScript 2>&1).Trim()
-            if ($res -eq "OK") { $installed = $true }
-        } catch { $installed = $false }
-        
-        if (-not $installed) {
-            Write-Info "Installing missing cheminformatics packages into .docking-venv..."
-            & $venvPython -m pip install --quiet rdkit meeko scipy gemmi openbabel-wheel
+            $currVenvVer = (& $venvPython -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>$null)
+            $currVenvVer = if ($currVenvVer) { $currVenvVer.Trim() } else { "" }
+            if ($currVenvVer -ne "3.11") {
+                Write-WarningMsg "Existing .docking-venv was built with Python $currVenvVer. Rebuilding with Python 3.11..."
+                $needsRebuild = $true
+            } else {
+                Write-Success "Existing .docking-venv is verified as Python 3.11."
+            }
+        } catch {
+            $needsRebuild = $true
         }
-        
-        # Verify with NatureAide's worker.py tools
+    } else {
+        $needsRebuild = $true
+    }
+
+    if ($needsRebuild) {
+        if (Test-Path $venvDir) {
+            Write-Info "Removing old virtual environment directory..."
+            Remove-Item -Path $venvDir -Recurse -Force -ErrorAction SilentlyContinue
+        }
+        Write-Info "Creating fresh Python 3.11 virtual environment in .docking-venv..."
+        & $python311Bin -m venv $venvDir
+    }
+
+    if (Test-Path $venvPython) {
+        # Upgrade pip safely without failing on warnings
+        Write-Info "Ensuring pip is up to date in virtual environment..."
+        & $venvPython -m pip install --quiet --upgrade pip 2>$null
+
+        # Install and verify each docking package individually
+        $packagesToVerify = @(
+            @{ Name = "rdkit"; Import = "rdkit" },
+            @{ Name = "meeko"; Import = "meeko" },
+            @{ Name = "scipy"; Import = "scipy" },
+            @{ Name = "gemmi"; Import = "gemmi" },
+            @{ Name = "openbabel-wheel"; Import = "openbabel" }
+        )
+
+        $allPkgsOk = $true
+        foreach ($pkgInfo in $packagesToVerify) {
+            $pkgName = $pkgInfo.Name
+            $importMod = $pkgInfo.Import
+
+            # Check if package is already working
+            $testOutput = & $venvPython -c "import $importMod; print('OK')" 2>$null
+            $alreadyOk = ($testOutput -and ($testOutput.ToString().Trim() -eq "OK"))
+
+            if ($alreadyOk) {
+                Write-Success "Package '$pkgName': Ready and verified."
+            } else {
+                Write-Info "Installing '$pkgName' via pip..."
+                $pipResult = & $venvPython -m pip install $pkgName 2>&1
+                if ($LASTEXITCODE -ne 0) {
+                    Write-WarningMsg "Failed to install package '$pkgName'!"
+                    Write-Host "    --- pip error output start ---" -ForegroundColor DarkRed
+                    $pipResult | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkRed }
+                    Write-Host "    --- pip error output end ---" -ForegroundColor DarkRed
+                    $allPkgsOk = $false
+                } else {
+                    # Verify import
+                    $verifyOut = & $venvPython -c "import $importMod; print('OK')" 2>$null
+                    if ($verifyOut -and ($verifyOut.ToString().Trim() -eq "OK")) {
+                        Write-Success "Package '$pkgName': Installed and verified."
+                    } else {
+                        Write-WarningMsg "Package '$pkgName': Installed via pip but import '$importMod' failed."
+                        $allPkgsOk = $false
+                    }
+                }
+            }
+        }
+
+        # Verify docking worker
         $workerScript = Join-Path $ScriptDir "services\docking\worker.py"
         if (Test-Path $workerScript) {
             try {
                 $toolsJson = (& $venvPython $workerScript tools 2>&1).Trim()
-                Write-Success "Docking worker verified: $toolsJson"
+                if ($toolsJson -match '"ok":\s*true') {
+                    Write-Success "Docking worker verified: $toolsJson"
+                    $dockingEnvironmentReady = $true
+                } else {
+                    Write-WarningMsg "Docking worker reported missing components: $toolsJson"
+                }
             } catch {
-                Write-WarningMsg "Docking worker returned error during tools inspection: $_"
+                Write-WarningMsg "Docking worker could not be tested: $_"
             }
         }
     }
 } else {
-    Write-WarningMsg "Skipped Python virtual environment setup (Python is not installed)."
+    Write-Host ""
+    Write-Host "===============================================================================" -ForegroundColor Yellow
+    Write-Host "  [NOTICE] Python 3.11 is required for Stage 3 Molecular Docking" -ForegroundColor Yellow
+    Write-Host "===============================================================================" -ForegroundColor Yellow
+    Write-Host "  NatureAide's cheminformatics toolchain (RDKit, Meeko, OpenBabel) requires" -ForegroundColor White
+    Write-Host "  Python 3.11. Precompiled scientific wheels are not available for newer" -ForegroundColor White
+    Write-Host "  experimental versions like Python 3.14." -ForegroundColor White
+    Write-Host ""
+    Write-Host "  To enable molecular docking, install Python 3.11:" -ForegroundColor Cyan
+    Write-Host "    Option A (Windows Package Manager):" -ForegroundColor White
+    Write-Host "      winget install Python.Python.3.11" -ForegroundColor Yellow
+    Write-Host "    Option B (Official Installer):" -ForegroundColor White
+    Write-Host "      https://www.python.org/downloads/release/python-3119/" -ForegroundColor Yellow
+    Write-Host "      (Be sure to check 'Add python.exe to PATH' during installation)" -ForegroundColor DarkGray
+    Write-Host ""
+    Write-Host "  Setup will continue with remaining tasks. You can install Python 3.11" -ForegroundColor White
+    Write-Host "  at any time and simply rerun setup.bat to activate docking." -ForegroundColor White
+    Write-Host "===============================================================================" -ForegroundColor Yellow
+    Write-Host ""
 }
 
 # ==============================================================================
@@ -327,6 +486,9 @@ if ($pythonBin) {
 # ==============================================================================
 Write-Step -StepNum "5/6" -Title "Checking Environment Configuration (.env.local)"
 $envFile = Join-Path $ScriptDir ".env.local"
+
+$defaultVinaPath = if (Test-Path $vinaBin) { $vinaBin } else { Join-Path $ScriptDir "tools\vina\vina.exe" }
+$targetPyPath = if (Test-Path $venvPython) { $venvPython } else { "" }
 
 if (-not (Test-Path $envFile)) {
     Write-Info ".env.local does not exist. Creating default template with secure AUTH_SECRET..."
@@ -336,9 +498,6 @@ if (-not (Test-Path $envFile)) {
     $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
     $rng.GetBytes($randomBytes)
     $generatedSecret = [Convert]::ToBase64String($randomBytes) -replace '[^a-zA-Z0-9]', ''
-    
-    $defaultVinaPath = if (Test-Path $vinaBin) { $vinaBin } else { Join-Path $ScriptDir "tools\vina\vina.exe" }
-    $defaultPyPath = if (Test-Path $venvPython) { $venvPython } else { Join-Path $ScriptDir ".docking-venv\Scripts\python.exe" }
 
     $lines = @(
         "# NatureAide Environment Configuration",
@@ -359,7 +518,7 @@ if (-not (Test-Path $envFile)) {
         "XAI_BASE_URL=https://api.x.ai/v1",
         "XAI_MODEL=grok-4.7",
         "VINA_BIN=$defaultVinaPath",
-        "DOCKING_PYTHON=$defaultPyPath",
+        "DOCKING_PYTHON=$targetPyPath",
         "DOCKING_ARTIFACT_DIR=$dockingArtifactsDir",
         "DOCKING_TIMEOUT_SECONDS=900"
     )
@@ -371,7 +530,7 @@ if (-not (Test-Path $envFile)) {
     # Safely audit required keys without printing any secret values
     $envRaw = Get-Content $envFile -Raw
     
-    function Audit-Key {
+    function Test-EnvKey {
         param([string]$KeyName, [bool]$Required = $true)
         if ($envRaw -match "(?m)^$KeyName=(.*)$") {
             $val = $matches[1].Trim()
@@ -396,15 +555,30 @@ if (-not (Test-Path $envFile)) {
         }
     }
     
-    Audit-Key "DB_HOST" $true | Out-Null
-    Audit-Key "DB_PORT" $true | Out-Null
-    Audit-Key "DB_NAME" $true | Out-Null
-    Audit-Key "AUTH_SECRET" $true | Out-Null
-    Audit-Key "VINA_BIN" $false | Out-Null
-    Audit-Key "DOCKING_PYTHON" $false | Out-Null
-    Audit-Key "TOGETHER_API_KEY" $false | Out-Null
-    Audit-Key "XAI_API_KEY" $false | Out-Null
+    Test-EnvKey "DB_HOST" $true | Out-Null
+    Test-EnvKey "DB_PORT" $true | Out-Null
+    Test-EnvKey "DB_NAME" $true | Out-Null
+    Test-EnvKey "AUTH_SECRET" $true | Out-Null
+    Test-EnvKey "VINA_BIN" $false | Out-Null
+    Test-EnvKey "DOCKING_PYTHON" $false | Out-Null
+    Test-EnvKey "TOGETHER_API_KEY" $false | Out-Null
+    Test-EnvKey "XAI_API_KEY" $false | Out-Null
     
+    # Update DOCKING_PYTHON if .docking-venv python exists and differs
+    if ($targetPyPath -and (Test-Path $targetPyPath)) {
+        if ($envRaw -match "(?m)^DOCKING_PYTHON=(.*)$") {
+            $currentDockingPy = $matches[1].Trim()
+            if ($currentDockingPy -ne $targetPyPath) {
+                $envRaw = $envRaw -replace "(?m)^DOCKING_PYTHON=.*$", "DOCKING_PYTHON=$targetPyPath"
+                [System.IO.File]::WriteAllText($envFile, $envRaw, [System.Text.Encoding]::UTF8)
+                Write-Success "Updated DOCKING_PYTHON path in .env.local to point to .docking-venv."
+            }
+        } else {
+            Add-Content -Path $envFile -Value "`nDOCKING_PYTHON=$targetPyPath`n"
+            Write-Success "Added DOCKING_PYTHON path to .env.local."
+        }
+    }
+
     # Ensure AUTH_SECRET has minimum 32 chars
     if ($envRaw -match "(?m)^AUTH_SECRET=(.*)$") {
         $sec = $matches[1].Trim()
@@ -421,10 +595,30 @@ Write-Step -StepNum "6/6" -Title "Complete Environment Verification Summary"
 
 Write-Success "Node.js: $nodeVer"
 Write-Success "npm: v$npmVer"
-if ($pythonBin) { Write-Success "Python: $pyVer" } else { Write-WarningMsg "Python: Not installed (optional for web app, required for docking)" }
-if (Test-Path $vinaBin) { Write-Success "AutoDock Vina: Installed ($vinaBin)" } else { Write-WarningMsg "AutoDock Vina: Not installed (Stage 3 docking disabled)" }
-if (Test-Path $venvPython) { Write-Success "Python Docking Environment: Verified ($venvPython)" } else { Write-WarningMsg "Python Docking Environment: Missing" }
-if ($mysqlPortOpen) { Write-Success "MySQL Server: Reachable on localhost:3306" } else { Write-WarningMsg "MySQL Server: Not running on port 3306" }
+if ($python311Bin) {
+    Write-Success "Python 3.11 Runtime: Detected ($python311Bin)"
+} else {
+    Write-WarningMsg "Python 3.11 Runtime: Not installed (docking toolchain disabled)"
+}
+
+if (Test-Path $vinaBin) {
+    Write-Success "AutoDock Vina: Installed ($vinaBin)"
+} else {
+    Write-WarningMsg "AutoDock Vina: Not installed"
+}
+
+if ($dockingEnvironmentReady) {
+    Write-Success "Docking Environment (.docking-venv): Ready and verified with Python 3.11"
+} else {
+    Write-WarningMsg "Docking Environment (.docking-venv): Incomplete or missing Python 3.11"
+}
+
+if ($mysqlPortOpen) {
+    Write-Success "MySQL Server: Reachable on localhost:3306"
+} else {
+    Write-WarningMsg "MySQL Server: Not running on port 3306"
+}
+
 Write-Success "Environment File: .env.local verified"
 
 # ==============================================================================
@@ -468,3 +662,13 @@ Write-Host "  Community : community@natureaide.test  |  NatureAide123!" -Foregro
 Write-Host "  Researcher: researcher@natureaide.test |  NatureAide123!" -ForegroundColor White
 Write-Host "  Reviewer  : reviewer@natureaide.test   |  NatureAide123!" -ForegroundColor White
 Write-Host ""
+
+} catch {
+    Write-Host ""
+    Write-Host "===============================================================================" -ForegroundColor Red
+    Write-Host "  SETUP ENCOUNTERED AN UNEXPECTED ERROR" -ForegroundColor Red
+    Write-Host "  Message: $($_.Exception.Message)" -ForegroundColor Yellow
+    Write-Host "===============================================================================" -ForegroundColor Red
+    Write-Host ""
+    exit 1
+}
