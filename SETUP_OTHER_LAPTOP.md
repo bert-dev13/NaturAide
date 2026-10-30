@@ -4,95 +4,107 @@ A step-by-step guide for setting up and running the complete **NatureAide** bota
 
 ---
 
-## ⚡ Fast Track: One-Command Automated Setup
+## ⚡ Setup Workflow
 
-For a fresh Windows laptop, use the included **automated installer** (`setup.bat` or `setup.ps1`). It handles detecting, installing, and configuring all core and scientific dependencies automatically.
-
-### The 4-Step Setup Flow
+Follow this clean 6-step setup sequence:
 
 ```text
-Step 1: Run Installer  ──>  Step 2: Import Database  ──>  Step 3: Add API Secrets  ──>  Step 4: Run NatureAide
-     (setup.bat)                (Backup .sql file)             (.env.local)                (npm run dev)
+[1] Install Software ──> [2] Git Clone ──> [3] Run setup.bat ──> [4] Import DB (phpMyAdmin) ──> [5] Edit .env.local ──> [6] npm run dev
 ```
-
-### How to Run the Automated Installer
-
-1. Transfer the `natureaide` folder to the new laptop (e.g. `C:\projects\natureaide`).
-2. Double-click **`setup.bat`** (or open PowerShell as Administrator and run `.\setup.ps1`).
-3. The installer automatically:
-   - Detects and installs **Git for Windows** (via winget if missing).
-   - Detects and installs **Node.js LTS** (v20+ / v24) and **npm** (via winget if missing).
-   - Detects and installs **Python 3.11** (via winget if missing).
-   - Checks **XAMPP & MySQL**, verifies port 3306, and creates the `natureaide_db` database.
-   - Runs **`npm install`** for all application packages.
-   - Downloads official **AutoDock Vina** (`tools\vina\vina.exe`).
-   - Sets up the Python virtual environment (`.docking-venv`) with `rdkit`, `meeko`, `scipy`, `gemmi`, and `openbabel-wheel`.
-   - Generates `.env.local` with a secure 64-character `AUTH_SECRET` and local paths.
-   - Runs preflight verification across all subsystems.
 
 ---
 
-## Table of Contents
+## Step 1: Install Required Software (On New Laptop)
 
-1. [Fast Track: One-Command Automated Setup](#-fast-track-one-command-automated-setup)
-2. [Manual Steps Required After Installer](#manual-steps-required-after-installer)
-3. [System & Software Prerequisites (Manual Reference)](#1-system--software-prerequisites)
-4. [Project Transfer (Clone or Copy)](#2-project-transfer-clone-or-copy)
-5. [Installing Project Dependencies](#3-installing-project-dependencies)
-6. [Setting Up XAMPP & MySQL](#4-setting-up-xampp--mysql)
-7. [Database Migration & Initialization](#5-database-migration--initialization)
-   - [Method A: Export & Import Existing Database (Recommended)](#method-a-export--import-existing-database-recommended)
-   - [Method B: Clean Re-initialization via Scripts (Alternative)](#method-b-clean-re-initialization-via-scripts-alternative)
-8. [Configuring Environment Variables (`.env.local`)](#6-configuring-environment-variables-envlocal)
-9. [Optional Scientific Toolchain (AutoDock Vina & Python)](#7-optional-scientific-toolchain-autodock-vina--python)
-10. [Running the Application](#8-running-the-application)
-11. [Testing All Major Features & Verification](#9-testing-all-major-features--verification)
-12. [Production Build & Deployment Check](#10-production-build--deployment-check)
-13. [Troubleshooting & Common Errors](#11-troubleshooting--common-errors)
+Before cloning, install the following required tools on the new Windows laptop:
+
+1. **Node.js LTS (v20+ or v22+)**: Download from [nodejs.org](https://nodejs.org/). (Includes `npm`).
+2. **Git for Windows**: Download from [git-scm.com](https://git-scm.com/).
+3. **XAMPP for Windows (8.1+ / 8.2+)**: Download from [apachefriends.org](https://www.apachefriends.org/). (Default path: `C:\xampp`).
+4. **Python 3.10+ / 3.11+**: Download from [python.org](https://www.python.org/downloads/). *(Check "Add python.exe to PATH" during installation)*.
 
 ---
 
-## Manual Steps Required After Installer
+## Step 2: Clone the Repository
 
-The automated installer configures all software, runtimes, and schemas, but keeps **database backup data** and **external API credentials manual** for data safety and security.
+Open Command Prompt (CMD) or PowerShell and clone the project:
 
-### Manual Step 1: Import Your Database Backup
-
-If you have a backup (`natureaide_backup.sql`) from the old laptop:
-
-**PowerShell:**
-```powershell
-cd C:\projects\natureaide
-cmd /c '""C:\xampp\mysql\bin\mysql.exe"" -u root natureaide_db < natureaide_backup.sql'
-```
-
-**CMD:**
 ```cmd
-cd C:\projects\natureaide
-"C:\xampp\mysql\bin\mysql.exe" -u root natureaide_db < natureaide_backup.sql
+cd C:\projects
+git clone https://github.com/bert-dev13/NaturAide.git
+cd NaturAide
 ```
 
-*(If starting fresh without a previous backup, run `npx tsx scripts/init-db.ts` instead).*
+---
 
-### Manual Step 2: Add Secret API Keys (Optional)
+## Step 3: Run `setup.bat` (Single Automated Setup)
 
-Open `C:\projects\natureaide\.env.local` and paste your private API keys if using external AI services:
+Simply double-click **`setup.bat`** in File Explorer, or run in terminal:
 
-```ini
-TOGETHER_API_KEY=tgp_v1_your_actual_together_key_here
-XAI_API_KEY=xai-your_actual_grok_key_here
-NCBI_API_KEY=your_ncbi_key_if_available
+```cmd
+setup.bat
 ```
 
-*(All public botanical, community, screening, formulation, and docking features work locally even without external AI keys).*
+The script automatically:
+- Verifies Node.js, npm, Python, XAMPP/MySQL, and AutoDock Vina.
+- Runs `npm install` (with automatic `--legacy-peer-deps` fallback for React 19).
+- Downloads official **AutoDock Vina** (`tools\vina\vina.exe`) if missing.
+- Sets up the `.docking-venv` Python virtual environment and installs `rdkit`, `meeko`, `scipy`, `gemmi`, and `openbabel-wheel`.
+- Prepares local paths and `.docking-artifacts` for molecular docking.
+- Checks `.env.local` safely and generates a secure `AUTH_SECRET` if missing without exposing or overwriting secrets.
+- Verifies MySQL server connectivity on port 3306 without modifying the database.
+- Displays `SETUP COMPLETE` with clear next steps.
 
-### Manual Step 3: Start NatureAide
+---
 
-```powershell
+## Step 4: Manually Import Database via phpMyAdmin
+
+> **Note:** `setup.bat` intentionally does **not** create, modify, or seed the database, keeping all database operations manual for data safety.
+
+1. Open **XAMPP Control Panel** (`C:\xampp\xampp-control.exe`) and start both **Apache** and **MySQL**.
+2. Open your browser to: **`http://localhost/phpmyadmin`**
+3. In the left sidebar, click **New**.
+4. Enter Database name: **`natureaide_db`**
+5. Select Collation: **`utf8mb4_unicode_ci`** -> Click **Create**.
+6. Select the newly created `natureaide_db` in the left sidebar.
+7. Click the **Import** tab at the top.
+8. Under *File to import*, click **Choose File** and select your `natureaide_backup.sql` file.
+9. Scroll down and click **Import**.
+10. Verify all 96 tables appear under `natureaide_db`.
+
+---
+
+## Step 5: Configure `.env.local`
+
+Open `C:\projects\NaturAide\.env.local` in Notepad or VS Code:
+- Verify that `DB_HOST=localhost`, `DB_PORT=3306`, and `DB_NAME=natureaide_db`.
+- (Optional) If you use external AI services, paste your API keys:
+  ```ini
+  TOGETHER_API_KEY=tgp_v1_...
+  XAI_API_KEY=xai-...
+  NCBI_API_KEY=
+  ```
+  *(All core plant catalogs, community guides, health screening, formulations, and molecular docking work locally even without external AI keys).*
+
+---
+
+## Step 6: Start NatureAide
+
+In terminal, run:
+
+```cmd
 npm run dev
 ```
 
-Open your browser to: **`http://localhost:3000`**
+Open your browser to: 👉 **`http://localhost:3000`**
+
+### Default Test Logins:
+
+| Role | Email | Password | Landing Portal |
+| :--- | :--- | :--- | :--- |
+| **Community** | `community@natureaide.test` | `NatureAide123!` | `/community` |
+| **Researcher** | `researcher@natureaide.test` | `NatureAide123!` | `/researcher` |
+| **Reviewer** | `reviewer@natureaide.test` | `NatureAide123!` | `/reviewer` |
 
 ---
 
