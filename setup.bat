@@ -73,12 +73,6 @@ function Write-FatalError {
     exit 1
 }
 
-function Refresh-EnvPath {
-    $machinePath = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
-    $userPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
-    $env:Path = "$machinePath;$userPath"
-}
-
 function Find-Executable {
     param(
         [string]$CommandName,
