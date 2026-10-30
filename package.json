@@ -10,6 +10,8 @@
     "build": "next build",
     "start": "next start --port 3000",
     "lint": "eslint",
+    "db:migrate": "npx tsx scripts/migrate.ts",
+    "db:migrate:status": "npx tsx scripts/migrate.ts --status",
     "sync:product-images": "npx tsx scripts/sync-product-images.ts",
     "discover:products": "npx tsx scripts/discover-plant-products.ts",
     "discover": "npx tsx scripts/discover-plant-products.ts"

@@ -346,6 +346,36 @@ Expected result:
 
 ---
 
+### Multi-Laptop Schema Synchronization via GitHub
+
+NatureAide includes a centralized, domain-grouped migration system that synchronizes all database schema updates across laptops through Git:
+
+```text
+LAPTOP A (Development / Schema Change)
+  1. Add/update table, column, index in a new migration in migrations/
+  2. Test with: npm run db:migrate
+  3. git add . && git commit -m "Add new migration" && git push
+
+LAPTOP B (Sync)
+  1. git pull
+  2. .\setup.bat   (or: npm run db:migrate)
+  3. npm run dev
+```
+
+#### Migration Commands
+
+```bash
+# Check status of all migrations across all 4 domains (Community, Researcher, Reviewer, Shared)
+npm run db:migrate:status
+
+# Apply any pending migrations safely without modifying existing records
+npm run db:migrate
+```
+
+All migrations are tracked in the `schema_migrations` table and are strictly idempotent (safe to re-run anytime).
+
+---
+
 ### Method B: Clean Re-initialization via Scripts (Alternative)
 
 If you do not have a database dump and want to generate all tables and default seed data from scratch, run the built-in migration and seed scripts in sequence:

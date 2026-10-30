@@ -124,7 +124,7 @@ if (-not (Test-Path (Join-Path $ScriptDir "package.json"))) {
 # ==============================================================================
 # STEP 1: Verify Core Tools (Node.js & npm)
 # ==============================================================================
-Write-Step -StepNum "1/6" -Title "Verifying Core JavaScript Runtime (Node.js & npm)"
+Write-Step -StepNum "1/7" -Title "Verifying Core JavaScript Runtime (Node.js & npm)"
 
 # 1.1 Node.js
 $nodeCandidates = @(
@@ -158,7 +158,7 @@ Write-Success "npm: v$npmVer ($npmBin)"
 # ==============================================================================
 # STEP 2: Verify MySQL Connectivity Only (Read-Only)
 # ==============================================================================
-Write-Step -StepNum "2/6" -Title "Verifying MySQL Server Connectivity (Read-Only Check)"
+Write-Step -StepNum "2/7" -Title "Verifying MySQL Server Connectivity (Read-Only Check)"
 Write-Info "Checking MySQL connection on localhost:3306..."
 
 $mysqlPortOpen = Test-PortOpen -Port 3306
@@ -201,7 +201,7 @@ if (-not $mysqlPortOpen) {
 # ==============================================================================
 # STEP 3: Install Node Dependencies (npm install)
 # ==============================================================================
-Write-Step -StepNum "3/6" -Title "Checking & Installing Node Dependencies"
+Write-Step -StepNum "3/7" -Title "Checking & Installing Node Dependencies"
 
 $nodeModulesDir = Join-Path $ScriptDir "node_modules"
 $packageLockFile = Join-Path $ScriptDir "package-lock.json"
@@ -231,9 +231,49 @@ if ($needsNpmInstall) {
 }
 
 # ==============================================================================
-# STEP 4: Python 3.11 Detection & Docking Toolchain Setup
+# STEP 4: Synchronize Database Migrations (Community, Researcher, Reviewer, Shared)
 # ==============================================================================
-Write-Step -StepNum "4/6" -Title "Setting Up Python 3.11 & Molecular Docking Toolchain"
+Write-Step -StepNum "4/7" -Title "Synchronizing Database Migrations"
+
+if ($mysqlPortOpen) {
+    $canMigrate = $false
+    if ($mysqlBin) {
+        try {
+            $dbCheck = & $mysqlBin -u root -N -e "SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'natureaide_db';" 2>$null
+            if ($dbCheck -and $dbCheck.Trim() -eq "natureaide_db") {
+                $canMigrate = $true
+            }
+        } catch {}
+    } else {
+        $canMigrate = $true
+    }
+
+    if ($canMigrate) {
+        Write-Info "Executing pending migrations across Community, Researcher, Reviewer, and Shared..."
+        Write-Host ""
+        try {
+            cmd.exe /c npx tsx scripts/migrate.ts
+            if ($LASTEXITCODE -ne 0) {
+                Write-WarningMsg "Some database migrations could not be automatically applied."
+                Write-Info "Run 'npm run db:migrate' to review details."
+            }
+        } catch {
+            Write-WarningMsg "Could not run migrations automatically: $_"
+        }
+        Write-Host ""
+    } else {
+        Write-Info "Database 'natureaide_db' is not initialized yet. Skipping automatic migrations."
+        Write-Info "After creating/importing 'natureaide_db' in phpMyAdmin, run 'npm run db:migrate' to apply pending migrations."
+    }
+} else {
+    Write-Info "MySQL server is not running on port 3306. Skipping migrations for now."
+    Write-Info "Start MySQL in XAMPP and run 'npm run db:migrate' when ready."
+}
+
+# ==============================================================================
+# STEP 5: Python 3.11 Detection & Docking Toolchain Setup
+# ==============================================================================
+Write-Step -StepNum "5/7" -Title "Setting Up Python 3.11 & Molecular Docking Toolchain"
 
 # 4.1 Artifacts Directory
 $dockingArtifactsDir = Join-Path $ScriptDir ".docking-artifacts"
@@ -482,9 +522,9 @@ if ($python311Bin) {
 }
 
 # ==============================================================================
-# STEP 5: Check & Configure .env.local (Safe, Non-Destructive)
+# STEP 6: Check & Configure .env.local (Safe, Non-Destructive)
 # ==============================================================================
-Write-Step -StepNum "5/6" -Title "Checking Environment Configuration (.env.local)"
+Write-Step -StepNum "6/7" -Title "Checking Environment Configuration (.env.local)"
 $envFile = Join-Path $ScriptDir ".env.local"
 
 $defaultVinaPath = if (Test-Path $vinaBin) { $vinaBin } else { Join-Path $ScriptDir "tools\vina\vina.exe" }
@@ -589,9 +629,9 @@ if (-not (Test-Path $envFile)) {
 }
 
 # ==============================================================================
-# STEP 6: NatureAide Environment Summary
+# STEP 7: NatureAide Environment Summary
 # ==============================================================================
-Write-Step -StepNum "6/6" -Title "Complete Environment Verification Summary"
+Write-Step -StepNum "7/7" -Title "Complete Environment Verification Summary"
 
 Write-Success "Node.js: $nodeVer"
 Write-Success "npm: v$npmVer"
@@ -615,6 +655,7 @@ if ($dockingEnvironmentReady) {
 
 if ($mysqlPortOpen) {
     Write-Success "MySQL Server: Reachable on localhost:3306"
+    Write-Success "Database Schema: Migrations checked & up to date (npm run db:migrate)"
 } else {
     Write-WarningMsg "MySQL Server: Not running on port 3306"
 }
