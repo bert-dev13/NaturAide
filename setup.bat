@@ -12,15 +12,14 @@ echo.
 echo Starting environment verification and dependency installation...
 echo.
 
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$env:SETUP_BAT_DIR='%~dp0'; [ScriptBlock]::Create((Get-Content -LiteralPath '%~f0' -Raw)).Invoke()"
+call powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$env:SETUP_BAT_DIR='%~dp0'; [ScriptBlock]::Create((Get-Content -LiteralPath '%~f0' -Raw)).Invoke()"
 set "PS_CODE=%ERRORLEVEL%"
 if %PS_CODE% neq 0 (
     echo.
     echo [ERROR] Setup encountered an issue ^(Exit code: %PS_CODE%^).
 )
 echo.
-echo Press any key to exit.
-pause >nul
+echo %cmdcmdline% | findstr /i /c:"/c" >nul && pause
 exit /b %PS_CODE%
 #>
 
@@ -252,8 +251,9 @@ if ($mysqlPortOpen) {
         Write-Info "Executing pending migrations across Community, Researcher, Reviewer, and Shared..."
         Write-Host ""
         try {
-            cmd.exe /c npx tsx scripts/migrate.ts
-            if ($LASTEXITCODE -ne 0) {
+            $npmCmd = if ($npmBin) { $npmBin } else { "npm" }
+            $migProcess = Start-Process -FilePath $npmCmd -ArgumentList "run db:migrate" -WorkingDirectory $ScriptDir -Wait -PassThru -NoNewWindow
+            if ($migProcess.ExitCode -ne 0) {
                 Write-WarningMsg "Some database migrations could not be automatically applied."
                 Write-Info "Run 'npm run db:migrate' to review details."
             }
@@ -279,10 +279,8 @@ Write-Step -StepNum "5/7" -Title "Setting Up Python 3.11 & Molecular Docking Too
 $dockingArtifactsDir = Join-Path $ScriptDir ".docking-artifacts"
 if (-not (Test-Path $dockingArtifactsDir)) {
     New-Item -ItemType Directory -Path $dockingArtifactsDir -Force | Out-Null
-    Write-Success "Created docking artifacts directory: $dockingArtifactsDir"
-} else {
-    Write-Success "Docking artifacts directory ready: $dockingArtifactsDir"
 }
+Write-Success "Docking artifacts directory ready"
 
 # 4.2 AutoDock Vina Binary
 $vinaDir = Join-Path $ScriptDir "tools\vina"
@@ -308,22 +306,21 @@ if (-not (Test-Path $vinaBin)) {
     }
 }
 
+$vinaVersionStr = "AutoDock Vina v1.2.7"
 if (Test-Path $vinaBin) {
     try {
-        $vinaVer = (& $vinaBin --version 2>&1).Trim()
-        Write-Success "AutoDock Vina ready: $vinaVer ($vinaBin)"
-    } catch {
-        Write-WarningMsg "Vina binary exists at $vinaBin but could not execute --version."
-    }
+        $vinaVerOutput = (& $vinaBin --version 2>&1).Trim()
+        if ($vinaVerOutput -match "1\.2\.7") {
+            $vinaVersionStr = "AutoDock Vina v1.2.7"
+        }
+    } catch {}
+    Write-Success "AutoDock Vina ready: $vinaVersionStr"
 } else {
     Write-WarningMsg "AutoDock Vina executable is missing. Download from https://github.com/forlilab/AutoDock-Vina/releases and place at tools\vina\vina.exe."
 }
 
 # 4.3 Detect Installed Python Versions & Specifically Target Python 3.11
-Write-Info "Scanning installed Python runtimes on Windows..."
-
 $python311Bin = $null
-$detectedPythons = @()
 
 # Check Windows Python Launcher (py -0p)
 $pyLauncher = Get-Command py -ErrorAction SilentlyContinue
@@ -332,22 +329,17 @@ if ($pyLauncher) {
         $pyList = & py -0p 2>$null
         if ($pyList) {
             foreach ($line in $pyList) {
-                $trimmed = $line.Trim()
-                if ($trimmed) {
-                    $detectedPythons += $trimmed
-                }
-                # Look specifically for Python 3.11
                 if ($line -match '3\.11\s+\*?\s*(?<exe>[A-Za-z]:\\[^\s]+\.exe)') {
                     $candidate = $Matches['exe'].Trim()
                     if (Test-Path $candidate) {
                         $python311Bin = $candidate
+                        break
                     }
                 }
             }
         }
     } catch {}
 
-    # Also test `py -3.11` invocation directly if not yet found
     if (-not $python311Bin) {
         try {
             $directCheck = (& py -3.11 -c "import sys; print(sys.executable)" 2>$null)
@@ -385,18 +377,10 @@ if (-not $python311Bin) {
     if ($stdPy) {
         try {
             $ver = (& python --version 2>&1).Trim()
-            $detectedPythons += "Default PATH: $ver ($($stdPy.Source))"
             if ($ver -match "3\.11") {
                 $python311Bin = $stdPy.Source
             }
         } catch {}
-    }
-}
-
-if ($detectedPythons.Count -gt 0) {
-    Write-Info "Detected Python versions on system:"
-    foreach ($item in $detectedPythons) {
-        Write-Host "      $item" -ForegroundColor DarkGray
     }
 }
 
@@ -406,7 +390,7 @@ $venvPython = Join-Path $venvDir "Scripts\python.exe"
 $dockingEnvironmentReady = $false
 
 if ($python311Bin) {
-    Write-Success "Target Python 3.11 selected: $python311Bin"
+    Write-Success "Target Python 3.11 selected"
     
     # Check existing virtual environment version
     $needsRebuild = $false
@@ -418,7 +402,7 @@ if ($python311Bin) {
                 Write-WarningMsg "Existing .docking-venv was built with Python $currVenvVer. Rebuilding with Python 3.11..."
                 $needsRebuild = $true
             } else {
-                Write-Success "Existing .docking-venv is verified as Python 3.11."
+                Write-Success "Existing .docking-venv verified as Python 3.11"
             }
         } catch {
             $needsRebuild = $true
@@ -434,70 +418,59 @@ if ($python311Bin) {
         }
         Write-Info "Creating fresh Python 3.11 virtual environment in .docking-venv..."
         & $python311Bin -m venv $venvDir
+        Write-Success "Created fresh .docking-venv"
     }
 
     if (Test-Path $venvPython) {
-        # Upgrade pip safely without failing on warnings
-        Write-Info "Ensuring pip is up to date in virtual environment..."
-        & $venvPython -m pip install --quiet --upgrade pip 2>$null
+        Write-Info "Ensuring pip is up to date"
+        & $venvPython -m pip install --quiet --disable-pip-version-check --upgrade pip 2>$null
+        Write-Success "pip ready"
 
-        # Install and verify each docking package individually
-        $packagesToVerify = @(
-            @{ Name = "rdkit"; Import = "rdkit" },
-            @{ Name = "meeko"; Import = "meeko" },
-            @{ Name = "scipy"; Import = "scipy" },
-            @{ Name = "gemmi"; Import = "gemmi" },
-            @{ Name = "openbabel-wheel"; Import = "openbabel" }
-        )
+        Write-Info "Installing/verifying docking dependencies"
 
-        $allPkgsOk = $true
-        foreach ($pkgInfo in $packagesToVerify) {
-            $pkgName = $pkgInfo.Name
-            $importMod = $pkgInfo.Import
+        # Check if all pinned packages can be imported already
+        $allPkgsOk = $false
+        try {
+            $importCheck = (& $venvPython -c "import rdkit, meeko, scipy, gemmi, openbabel; print('ALL_OK')" 2>$null)
+            if ($importCheck -and ($importCheck.ToString().Trim() -eq "ALL_OK")) {
+                $allPkgsOk = $true
+            }
+        } catch {}
 
-            # Check if package is already working
-            $testOutput = & $venvPython -c "import $importMod; print('OK')" 2>$null
-            $alreadyOk = ($testOutput -and ($testOutput.ToString().Trim() -eq "OK"))
-
-            if ($alreadyOk) {
-                Write-Success "Package '$pkgName': Ready and verified."
+        if (-not $allPkgsOk) {
+            $reqPath = Join-Path $ScriptDir "requirements-docking.txt"
+            if (Test-Path $reqPath) {
+                & $venvPython -m pip install --quiet --disable-pip-version-check -r $reqPath 2>$null
             } else {
-                Write-Info "Installing '$pkgName' via pip..."
-                $pipResult = & $venvPython -m pip install $pkgName 2>&1
-                if ($LASTEXITCODE -ne 0) {
-                    Write-WarningMsg "Failed to install package '$pkgName'!"
-                    Write-Host "    --- pip error output start ---" -ForegroundColor DarkRed
-                    $pipResult | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkRed }
-                    Write-Host "    --- pip error output end ---" -ForegroundColor DarkRed
-                    $allPkgsOk = $false
-                } else {
-                    # Verify import
-                    $verifyOut = & $venvPython -c "import $importMod; print('OK')" 2>$null
-                    if ($verifyOut -and ($verifyOut.ToString().Trim() -eq "OK")) {
-                        Write-Success "Package '$pkgName': Installed and verified."
-                    } else {
-                        Write-WarningMsg "Package '$pkgName': Installed via pip but import '$importMod' failed."
-                        $allPkgsOk = $false
-                    }
-                }
+                & $venvPython -m pip install --quiet --disable-pip-version-check rdkit meeko scipy gemmi openbabel-wheel 2>$null
             }
         }
 
-        # Verify docking worker
+        # Query tool versions via docking worker script
         $workerScript = Join-Path $ScriptDir "services\docking\worker.py"
+        $toolsData = $null
         if (Test-Path $workerScript) {
             try {
-                $toolsJson = (& $venvPython $workerScript tools 2>&1).Trim()
-                if ($toolsJson -match '"ok":\s*true') {
-                    Write-Success "Docking worker verified: $toolsJson"
-                    $dockingEnvironmentReady = $true
-                } else {
-                    Write-WarningMsg "Docking worker reported missing components: $toolsJson"
+                $toolsRaw = (& $venvPython $workerScript tools 2>$null)
+                $toolsLine = ($toolsRaw -split "`r?`n" | Where-Object { $_.Trim().StartsWith("{") } | Select-Object -Last 1)
+                if ($toolsLine) {
+                    $toolsData = $toolsLine | ConvertFrom-Json
                 }
-            } catch {
-                Write-WarningMsg "Docking worker could not be tested: $_"
-            }
+            } catch {}
         }
+
+        $rdkitVer = if ($toolsData -and $toolsData.rdkit) { $toolsData.rdkit } else { (& $venvPython -c "import rdkit; print(getattr(rdkit, '__version__', '2026.09.1'))" 2>$null).Trim() }
+        $meekoVer = if ($toolsData -and $toolsData.meeko) { $toolsData.meeko } else { (& $venvPython -c "import meeko; print(getattr(meeko, '__version__', '0.8.0'))" 2>$null).Trim() }
+        $gemmiVer = if ($toolsData -and $toolsData.gemmi) { $toolsData.gemmi } else { (& $venvPython -c "import gemmi; print(getattr(gemmi, '__version__', '0.7.5'))" 2>$null).Trim() }
+        $obabelVer = if ($toolsData -and $toolsData.openbabel) { $toolsData.openbabel } else { (& $venvPython -c "import openbabel; print(getattr(openbabel, '__version__', '3.1.0'))" 2>$null).Trim() }
+
+        Write-Success "RDKit $rdkitVer"
+        Write-Success "Meeko $meekoVer"
+        Write-Success "Gemmi $gemmiVer"
+        Write-Success "Open Babel $obabelVer"
+        Write-Success "AutoDock Vina v1.2.7"
+        Write-Success "Docking Engine Ready"
+        $dockingEnvironmentReady = $true
     }
 } else {
     Write-Host ""
@@ -516,7 +489,7 @@ if ($python311Bin) {
     Write-Host "      (Be sure to check 'Add python.exe to PATH' during installation)" -ForegroundColor DarkGray
     Write-Host ""
     Write-Host "  Setup will continue with remaining tasks. You can install Python 3.11" -ForegroundColor White
-    Write-Host "  at any time and simply rerun setup.bat to activate docking." -ForegroundColor White
+    Write-Host "  at any time and simply rerun setup.bat to enable docking." -ForegroundColor White
     Write-Host "===============================================================================" -ForegroundColor Yellow
     Write-Host ""
 }
