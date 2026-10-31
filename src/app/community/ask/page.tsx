@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect, useRef, Suspense } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useSearchParams } from "next/navigation";
-import MobileAppHeader from "@/components/community/MobileAppHeader";
 import {
   Send,
   Loader2,
@@ -20,9 +20,7 @@ import {
   Coffee,
   BookOpen,
   Package,
-  RotateCcw,
   CheckCircle2,
-  ExternalLink,
   AlertTriangle,
 } from "lucide-react";
 import { getScreeningSeverity } from "@/lib/safety-rules";
@@ -69,41 +67,22 @@ interface ActiveChatContext {
   dosageForm?: string;
 }
 
-const STARTER_GUIDED_CARDS = [
+const SUGGESTED_QUESTIONS = [
   {
-    icon: "leaf",
-    title: "Find a Medicinal Plant",
-    subtitle: "Learn about the 10 DOH/PITAHC medicinal plants",
-    query: "Tell me about the 10 PITAHC medicinal plants",
-    color: "bg-emerald-100 text-emerald-800 border-emerald-200",
+    text: "What is Lagundi used for?",
+    desc: "Documented uses, indications & traditional health benefits",
   },
   {
-    icon: "coffee",
-    title: "Traditional Preparation",
-    subtitle: "Step-by-step decoctions, poultices & herbal teas",
-    query: "How are medicinal plants traditionally prepared?",
-    color: "bg-amber-100 text-amber-800 border-amber-200",
+    text: "How is Sambong traditionally prepared?",
+    desc: "Step-by-step preparation, decoction measurements & safety",
   },
   {
-    icon: "shield",
-    title: "Safety & Precautions",
-    subtitle: "Contraindications, sensitive populations & advice",
-    query: "What safety precautions should I know before using herbal remedies?",
-    color: "bg-rose-100 text-rose-800 border-rose-200",
+    text: "What precautions does Ampalaya have?",
+    desc: "Contraindications, medications & sensitive populations",
   },
   {
-    icon: "book",
-    title: "Research & Evidence",
-    subtitle: "Clinical trials and scientific findings from PubMed",
-    query: "What scientific research is available in NaturAide?",
-    color: "bg-indigo-100 text-indigo-800 border-indigo-200",
-  },
-  {
-    icon: "package",
-    title: "Herbal Products",
-    subtitle: "Registered commercial herbal medicines & supplements",
-    query: "What commercial herbal products are registered in NaturAide?",
-    color: "bg-teal-100 text-teal-800 border-teal-200",
+    text: "Show products containing Lagundi",
+    desc: "Commercial herbal syrups, capsules & regulatory status",
   },
 ];
 
@@ -120,7 +99,7 @@ function AskNaturAideContent() {
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [screeningStatus, setScreeningStatus] = useState<string | null>(null);
-  const [screeningObj, setScreeningObj] = useState<any>(null);
+  const [screeningObj, setScreeningObj] = useState<Record<string, unknown> | null>(null);
   const [showClearModal, setShowClearModal] = useState(false);
   const [clearing, setClearing] = useState(false);
 
@@ -178,7 +157,7 @@ function AskNaturAideContent() {
     setInputMessage("");
     setIsSending(true);
 
-    const tempId = Date.now();
+    const tempId = -Date.now() - Math.floor(Math.random() * 1000);
     setMessages((prev) => [
       ...prev,
       { id: tempId, sender: "USER", content: text },
@@ -191,9 +170,6 @@ function AskNaturAideContent() {
         body: JSON.stringify({
           message: text,
           conversationId,
-          plantId: activeContext?.type === "PLANT" ? activeContext.id : undefined,
-          productId: activeContext?.type === "PRODUCT" ? activeContext.id : undefined,
-          preparationId: activeContext?.type === "PREPARATION" ? activeContext.id : undefined,
         }),
       });
       const data = await res.json();
@@ -203,16 +179,15 @@ function AskNaturAideContent() {
           data.userMessage,
           data.assistantMessage,
         ]);
-        if (data.activeContext) {
-          setActiveContext(data.activeContext);
-        }
+        setActiveContext(data.activeContext || null);
       } else {
         setMessages((prev) => [
           ...prev.filter((m) => m.id !== tempId),
           {
-            id: Date.now() + 1,
+            id: -Date.now() - Math.floor(Math.random() * 10000),
             sender: "ASSISTANT",
             content:
+              data.error ||
               "I don’t currently have verified information about that in the NaturAide knowledge base.",
           },
         ]);
@@ -222,7 +197,7 @@ function AskNaturAideContent() {
       setMessages((prev) => [
         ...prev.filter((m) => m.id !== tempId),
         {
-          id: Date.now() + 1,
+          id: -Date.now() - Math.floor(Math.random() * 10000),
           sender: "ASSISTANT",
           content:
             "Network connection error. Please verify your connection and try again.",
@@ -410,10 +385,10 @@ function AskNaturAideContent() {
   const userMessagesCount = messages.filter((m) => m.sender === "USER").length;
 
   return (
-    <div className="flex flex-col min-h-screen relative bg-[#faf7f2] text-[#0f2c20]">
+    <div className="flex flex-col min-h-screen relative bg-[#faf9f5] text-[#0f2c20]">
       {/* 1. App Header with Clear Chat action */}
       <header className="sticky top-0 z-40 bg-white/85 backdrop-blur-md border-b border-[#dde6df]/80 px-4 py-2.5 transition-all">
-        <div className="w-full max-w-2xl mx-auto flex items-center justify-between gap-2">
+        <div className="w-full max-w-md sm:max-w-xl md:max-w-2xl lg:max-w-3xl mx-auto flex items-center justify-between gap-2">
           <Link
             href="/community"
             className="inline-flex items-center gap-1.5 py-1.5 px-3 rounded-full bg-[#faf7f2] hover:bg-emerald-50 active:scale-95 text-xs font-extrabold text-[#1e5c44] border border-[#dde6df] transition-all shadow-2xs"
@@ -446,12 +421,12 @@ function AskNaturAideContent() {
       </header>
 
       {/* 2. Main Chat Stream */}
-      <div className="flex-1 px-3.5 sm:px-6 pt-3 pb-36 space-y-4 max-w-2xl mx-auto w-full">
+      <div className="flex-1 px-3.5 sm:px-6 pt-3 pb-64 space-y-4 max-w-md sm:max-w-xl md:max-w-2xl lg:max-w-3xl mx-auto w-full">
         {/* Healthcare Educational Disclaimer Banner */}
         <div className="flex items-start gap-2.5 p-3 rounded-2xl bg-white border border-[#dde6df] text-slate-800 text-xs shadow-2xs">
           <Info className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
           <p className="leading-snug text-[#3d4a45] text-[11px] sm:text-xs">
-            <strong>Educational Notice:</strong> NaturAide answers using verified MySQL records and is not intended to diagnose, prescribe, or replace professional medical care.
+            <strong>Educational Notice:</strong> NaturAide provides general educational information and uses its curated knowledge base for medicinal plant, herbal product, safety, and evidence-related answers. It is not intended to diagnose, prescribe, or replace professional medical care.
           </p>
         </div>
 
@@ -593,65 +568,62 @@ function AskNaturAideContent() {
           </div>
         )}
 
-        {/* 3. CHAT HOME: Redesigned Empty State with 5 Guided Starter Cards */}
+        {/* 3. CHAT HOME: Clean Mascot Intro + 4 Suggestions */}
         {userMessagesCount === 0 && !loadingHistory && (
           <div className="space-y-4 py-2 animate-in fade-in duration-300">
-            {/* Main Welcome Hero Card */}
-            <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-br from-[#0f2c20] via-[#164a35] to-[#0a1e16] text-white shadow-md relative overflow-hidden space-y-3">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-emerald-300 text-xs font-bold border border-emerald-400/20 shadow-xs">
-                <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
-                <span>Verified Herbal Information Assistant</span>
+            {/* Mascot Welcome Intro Card */}
+            <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-br from-[#f2f8f4] via-[#faf9f5] to-[#edf6f0] border border-[#dcebe0] flex flex-col sm:flex-row items-center gap-4 sm:gap-5 shadow-2xs relative overflow-hidden">
+              <div className="w-20 h-20 sm:w-24 sm:h-24 relative shrink-0">
+                <Image
+                  src="/images/mascot-home.png"
+                  alt="NaturAide Assistant Mascot"
+                  width={987}
+                  height={1024}
+                  priority
+                  className="w-full h-full object-contain filter drop-shadow-[0_4px_8px_rgba(20,80,50,0.14)]"
+                />
               </div>
-
-              <h2 className="text-xl sm:text-2xl font-heading font-black tracking-tight text-white leading-tight">
-                Ask NaturAide
-              </h2>
-
-              <p className="text-xs sm:text-sm text-emerald-100/90 leading-relaxed">
-                Ask about medicinal plants, preparation, safety, research, or herbal products. All answers are grounded strictly in the verified NaturAide knowledge base.
-              </p>
+              <div className="space-y-1 text-center sm:text-left min-w-0">
+                <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-white/90 text-emerald-800 text-[11px] font-bold border border-emerald-200 shadow-2xs">
+                  <Sparkles className="w-3 h-3 text-amber-500 animate-pulse" />
+                  <span>Evidence-Grounded Assistant</span>
+                </div>
+                <h2 className="text-xl sm:text-2xl font-heading font-black tracking-tight text-[#0f2c20]">
+                  Ask NaturAide
+                </h2>
+                <p className="text-xs sm:text-sm text-[#486b5e] font-medium leading-relaxed">
+                  Ask about medicinal plants, documented uses, preparation, products, or safety.
+                </p>
+              </div>
             </div>
 
-            {/* 5 Guided Starter Cards */}
+            {/* 4 Clean Suggestions */}
             <div className="space-y-2">
-              <span className="text-[11px] font-black text-[#52796f] uppercase tracking-wider block px-1">
-                Guided Starter Topics:
+              <span className="text-[11px] font-extrabold text-[#719184] uppercase tracking-wider block px-1">
+                Suggested Questions
               </span>
 
-              <div className="space-y-2">
-                {STARTER_GUIDED_CARDS.map((card, idx) => (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {SUGGESTED_QUESTIONS.map((sug, idx) => (
                   <button
                     key={idx}
                     type="button"
-                    onClick={() => handleSendMessage(card.query)}
+                    onClick={() => handleSendMessage(sug.text)}
                     disabled={isSending}
-                    className="w-full text-left p-3.5 sm:p-4 rounded-2xl bg-white border border-[#dde6df] hover:border-emerald-500 shadow-2xs hover:shadow-xs transition-all active:scale-[0.99] group cursor-pointer flex items-center justify-between gap-3"
+                    className="w-full text-left p-3.5 rounded-2xl bg-white border border-[#dde6df] hover:border-emerald-400 shadow-2xs hover:shadow-xs transition-all active:scale-[0.98] group cursor-pointer flex flex-col justify-between"
                   >
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`w-10 h-10 rounded-xl ${card.color} flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-transform`}
-                      >
-                        {renderMetricIcon(card.icon)}
-                      </div>
-                      <div className="min-w-0">
-                        <strong className="text-[#0f2c20] text-xs sm:text-sm block font-heading font-black">
-                          {card.title}
-                        </strong>
-                        <p className="text-[11px] text-[#52796f] truncate mt-0.5 font-medium">
-                          {card.subtitle}
-                        </p>
-                      </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-heading font-extrabold text-xs sm:text-sm text-[#0f2c20] group-hover:text-emerald-800 transition-colors">
+                        &ldquo;{sug.text}&rdquo;
+                      </span>
+                      <ArrowRight className="w-3.5 h-3.5 text-[#78997f] group-hover:text-emerald-700 group-hover:translate-x-0.5 transition-transform shrink-0" />
                     </div>
-                    <ArrowRight className="w-4 h-4 text-[#78997f] group-hover:text-emerald-700 group-hover:translate-x-0.5 transition-all shrink-0" />
+                    <p className="text-[11px] text-[#52796f] mt-1 line-clamp-1">
+                      {sug.desc}
+                    </p>
                   </button>
                 ))}
               </div>
-            </div>
-
-            <div className="pt-1 text-center">
-              <p className="text-xs font-bold text-[#52796f]">
-                Or ask NaturAide below…
-              </p>
             </div>
           </div>
         )}
@@ -664,11 +636,11 @@ function AskNaturAideContent() {
           </div>
         ) : (
           <div className="space-y-3.5">
-            {messages.map((msg) => {
+            {messages.map((msg, idx) => {
               const isUser = msg.sender === "USER";
               return (
                 <div
-                  key={msg.id}
+                  key={`msg-${msg.id}-${idx}`}
                   className={`flex items-end gap-2 ${
                     isUser ? "justify-end" : "justify-start"
                   }`}
@@ -682,12 +654,12 @@ function AskNaturAideContent() {
                   <div
                     className={`max-w-[90%] sm:max-w-[82%] rounded-3xl p-4 sm:p-5 shadow-2xs leading-relaxed ${
                       isUser
-                        ? "bg-[#0f2c20] text-white rounded-br-xs"
-                        : "bg-white border border-[#dde6df] text-[#131b17] rounded-bl-xs"
+                        ? "bg-[#e8f5ed] text-[#0f2c20] border border-[#cbe4d4] rounded-br-xs"
+                        : "bg-white border border-[#dde6df] text-[#0f2c20] rounded-bl-xs"
                     }`}
                   >
                     {isUser ? (
-                      <p className="text-xs sm:text-sm font-medium whitespace-pre-wrap">
+                      <p className="text-xs sm:text-sm font-semibold whitespace-pre-wrap text-[#0f2c20]">
                         {msg.content}
                       </p>
                     ) : (
@@ -696,7 +668,7 @@ function AskNaturAideContent() {
                   </div>
 
                   {isUser && (
-                    <div className="w-7 h-7 rounded-full bg-[#0f2c20] flex items-center justify-center text-emerald-200 shrink-0 mb-1 text-[10px] font-extrabold shadow-2xs">
+                    <div className="w-7 h-7 rounded-full bg-[#1e5c44] flex items-center justify-center text-emerald-100 shrink-0 mb-1 text-[10px] font-extrabold shadow-2xs">
                       You
                     </div>
                   )}
@@ -705,9 +677,18 @@ function AskNaturAideContent() {
             })}
 
             {isSending && (
-              <div className="flex items-center gap-2 text-xs text-[#52796f] pl-9 py-2 animate-pulse">
-                <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
-                <span className="font-bold">NaturAide is reviewing verified MySQL records...</span>
+              <div className="flex items-center gap-2.5 text-xs text-[#52796f] pl-1 py-2 animate-fade-in">
+                <div className="w-7 h-7 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-800 shrink-0">
+                  <Leaf className="w-3.5 h-3.5" />
+                </div>
+                <div className="flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-white border border-[#dde6df] shadow-2xs">
+                  <div className="flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-bounce" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-bounce [animation-delay:0.15s]" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-bounce [animation-delay:0.3s]" />
+                  </div>
+                  <span className="font-bold text-[#1e5c44]">Looking through NaturAide&apos;s references...</span>
+                </div>
               </div>
             )}
 
@@ -717,40 +698,42 @@ function AskNaturAideContent() {
       </div>
 
       {/* 5. Fixed Message Composer docked above bottom bar */}
-      <div className="fixed bottom-16 sm:bottom-20 left-0 right-0 z-30 bg-[#faf7f2]/95 backdrop-blur-md border-t border-[#dde6df] p-3 sm:p-4">
-        <div className="max-w-2xl mx-auto w-full">
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleSendMessage();
-            }}
-            className="flex items-center gap-2"
-          >
-            <input
-              type="text"
-              value={inputMessage}
-              onChange={(e) => setInputMessage(e.target.value)}
-              placeholder={
-                activeContext && activeContext.type !== "NONE" && activeContext.name
-                  ? `Ask about ${activeContext.name}...`
-                  : "Ask about a plant or herbal product..."
-              }
-              disabled={isSending}
-              className="flex-1 bg-white text-[#0f2c20] placeholder-[#6b7c76] text-xs sm:text-sm px-4 py-3 sm:py-3.5 rounded-2xl border border-[#dde6df] shadow-2xs focus:outline-none focus:ring-3 focus:ring-emerald-400/30 transition-all font-medium"
-            />
-            <button
-              type="submit"
-              disabled={!inputMessage.trim() || isSending}
-              aria-label="Send question"
-              className="w-11 h-11 rounded-2xl bg-[#0f2c20] hover:bg-[#1e5c44] disabled:opacity-40 text-white flex items-center justify-center shrink-0 active:scale-95 transition-all shadow-xs cursor-pointer"
+      <div className="fixed bottom-[calc(6.25rem+env(safe-area-inset-bottom,0px))] sm:bottom-[7.25rem] left-0 right-0 z-40 flex justify-center pointer-events-none px-3 sm:px-6">
+        <div className="w-full max-w-md sm:max-w-xl md:max-w-2xl lg:max-w-3xl pointer-events-auto">
+          <div className="bg-[#faf9f5]/95 backdrop-blur-md border border-[#dde6df] shadow-[0_4px_24px_-2px_rgba(15,44,32,0.12)] rounded-2xl sm:rounded-3xl p-2 sm:p-2.5">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSendMessage();
+              }}
+              className="flex items-center gap-2"
             >
-              {isSending ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <Send className="w-4 h-4 text-emerald-300" />
-              )}
-            </button>
-          </form>
+              <input
+                type="text"
+                value={inputMessage}
+                onChange={(e) => setInputMessage(e.target.value)}
+                placeholder={
+                  activeContext && activeContext.type !== "NONE" && activeContext.name
+                    ? `Ask about ${activeContext.name}...`
+                    : "Ask about a plant or herbal product..."
+                }
+                disabled={isSending}
+                className="flex-1 min-w-0 bg-white text-[#0f2c20] placeholder-[#6b7c76] text-xs sm:text-sm px-3.5 sm:px-4 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl border border-[#dde6df] shadow-2xs focus:outline-none focus:ring-2 focus:ring-emerald-400/40 transition-all font-medium"
+              />
+              <button
+                type="submit"
+                disabled={!inputMessage.trim() || isSending}
+                aria-label="Send question"
+                className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl bg-[#0f2c20] hover:bg-[#1e5c44] disabled:opacity-40 text-white flex items-center justify-center shrink-0 active:scale-95 transition-all shadow-xs cursor-pointer"
+              >
+                {isSending ? (
+                  <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
+                ) : (
+                  <Send className="w-4 h-4 text-emerald-300" />
+                )}
+              </button>
+            </form>
+          </div>
         </div>
       </div>
 

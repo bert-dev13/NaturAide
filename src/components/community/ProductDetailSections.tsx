@@ -6,9 +6,14 @@ import ProductImageBadge from "@/components/community/ProductImageBadge";
 import VerifyOnFdaPhilippines from "@/components/community/CheckVerificationRecord";
 import Link from "next/link";
 import {
+  Bookmark2DIcon,
+  MicroscopeEvidence2DIcon,
+  Plant2DIcon,
+  MedicinePill2DIcon,
+  ShieldAlert2DIcon,
+} from "./CommunityIcons2D";
+import {
   ArrowLeft,
-  Bookmark,
-  BookmarkCheck,
   Bot,
   Building,
   CheckCircle2,
@@ -17,7 +22,6 @@ import {
   Coffee,
   ExternalLink,
   FileText,
-  Globe,
   Info,
   Layers,
   Leaf,
@@ -28,8 +32,6 @@ import {
   Sparkles,
   AlertTriangle,
   AlertCircle,
-  XCircle,
-  Share2,
   Check,
 } from "lucide-react";
 
@@ -133,13 +135,13 @@ export default function ProductDetailSections({
 }: ProductDetailSectionsProps) {
   const [isSaved, setIsSaved] = useState(initialSaved);
   const [saving, setSaving] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Progressive disclosure toggle states
   const [showMoreInfo, setShowMoreInfo] = useState(false);
   const [showAllIngredients, setShowAllIngredients] = useState(false);
   const [showAllReferences, setShowAllReferences] = useState(false);
-  const [showAllResources, setShowAllResources] = useState(false);
+  const [showEvidenceLearnMore, setShowEvidenceLearnMore] = useState(false);
 
   const handleToggleSave = async () => {
     setSaving(true);
@@ -152,23 +154,13 @@ export default function ProductDetailSections({
       const data = await res.json();
       if (data.success) {
         setIsSaved(data.saved);
+        setToastMessage(data.saved ? "Saved to My Guide" : "Removed from Saved");
+        setTimeout(() => setToastMessage(null), 2400);
       }
     } catch (err) {
       console.error("Save error:", err);
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handleShare = async () => {
-    try {
-      if (navigator.clipboard) {
-        await navigator.clipboard.writeText(window.location.href);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      }
-    } catch {
-      // fallback
     }
   };
 
@@ -216,8 +208,10 @@ export default function ProductDetailSections({
     formulationRefs.length + ingredientRefs.length + plantRefs.length;
   const hasIngredientStudy = ingredientAndPlantRefsCount > 0;
   const hasSafetyEvidence = safetyRefs.length > 0;
-  const hasOfficialResources =
-    resources.length > 0 || Boolean(regulatoryRecord?.verificationUrl);
+  const hasAnyEvidenceCategory =
+    hasExactProductStudy ||
+    hasIngredientStudy ||
+    hasSafetyEvidence;
 
   const registrationNumber = regulatoryRecord?.registrationNumber?.trim() || "";
   const regulatoryAgency = regulatoryRecord?.regulatoryAgency?.trim() || "";
@@ -233,7 +227,6 @@ export default function ProductDetailSections({
   // Determine displayed references based on progressive disclosure
   const displayedReferences = showAllReferences ? references : references.slice(0, 2);
   const visibleIngredients = showAllIngredients ? ingredients : ingredients.slice(0, 4);
-  const visibleResources = showAllResources ? resources : resources.slice(0, 2);
 
   // Render a reference card with modern styling
   const renderReferenceCard = (ref: any) => {
@@ -356,7 +349,7 @@ export default function ProductDetailSections({
   };
 
   return (
-    <div className="min-h-screen bg-[#faf7f2] text-[#0f2c20] pb-28">
+    <div className="min-h-screen bg-[#faf9f5] text-[#0f2c20] pb-28">
       {/* ================================================== */}
       {/* 1. MOBILE-APP TOP NAVIGATION BAR                   */}
       {/* ================================================== */}
@@ -377,38 +370,29 @@ export default function ProductDetailSections({
             {product.brandName || product.name}
           </span>
 
-          {/* Action Buttons: Share & Save */}
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={handleShare}
-              aria-label="Share product"
-              className="w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 active:scale-90 cursor-pointer shadow-2xs bg-[#faf7f2] border border-[#dde6df] text-[#0f2c20] hover:bg-emerald-50"
-            >
-              {copied ? (
-                <Check className="w-4 h-4 text-emerald-700 animate-in zoom-in" />
-              ) : (
-                <Share2 className="w-4 h-4 text-[#52796f]" />
-              )}
-            </button>
-
+          {/* Bookmark Button in Top Right */}
+          <div className="relative">
             <button
               onClick={handleToggleSave}
               disabled={saving}
               aria-label={isSaved ? "Saved in My Guide" : "Save to My Guide"}
               className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 active:scale-90 cursor-pointer shadow-2xs ${
                 isSaved
-                  ? "bg-emerald-600 text-white shadow-emerald-600/30 shadow-sm"
-                  : "bg-[#faf7f2] border border-[#dde6df] text-[#0f2c20] hover:bg-emerald-50"
+                  ? "bg-amber-100 text-amber-900 border border-amber-300 shadow-xs"
+                  : "bg-white border border-[#dde6df] text-[#0f2c20] hover:bg-emerald-50"
               }`}
             >
               {saving ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : isSaved ? (
-                <BookmarkCheck className="w-4 h-4" />
+                <Loader2 className="w-4 h-4 animate-spin text-emerald-700" />
               ) : (
-                <Bookmark className="w-4 h-4" />
+                <Bookmark2DIcon size={18} isSaved={isSaved} />
               )}
             </button>
+            {toastMessage && (
+              <div className="absolute right-0 top-11 whitespace-nowrap px-2.5 py-1 rounded-lg bg-[#0f2c20] text-white text-[11px] font-bold shadow-md animate-fade-in pointer-events-none z-50">
+                {toastMessage}
+              </div>
+            )}
           </div>
         </div>
       </header>
@@ -416,7 +400,7 @@ export default function ProductDetailSections({
       {/* ================================================== */}
       {/* SINGLE SCROLLABLE FULL-WIDTH COLUMN (max-w-4xl)    */}
       {/* ================================================== */}
-      <main className="w-full max-w-4xl mx-auto px-3.5 sm:px-6 py-4 space-y-4">
+      <main className="w-full max-w-4xl mx-auto px-4 sm:px-6 py-5 space-y-5">
         {/* Strict Educational / Non-Prescription Disclaimer */}
         <div className="p-3.5 rounded-2xl bg-amber-50/90 border border-amber-200/80 text-amber-950 text-xs leading-relaxed space-y-1 shadow-2xs">
           <div className="flex items-center gap-1.5 font-bold text-amber-900">
@@ -1134,144 +1118,95 @@ export default function ProductDetailSections({
         </section>
 
         {/* ================================================== */}
-        {/* 8. EVIDENCE AVAILABILITY ASSESSMENT                */}
+        {/* 8. EVIDENCE & REFERENCES                           */}
         {/* ================================================== */}
-        <section className="rounded-3xl bg-white border border-[#dde6df] p-4 sm:p-5 shadow-2xs space-y-4 transition-all">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs">
-                <Layers className="w-4 h-4" />
-              </div>
-              <h2 className="font-heading font-black text-sm sm:text-base text-[#0f2c20] uppercase tracking-wide">
-                Evidence Availability Assessment
-              </h2>
-            </div>
-            <p className="text-xs text-[#52796f]">
-              Transparent summary of verified scientific research and official records in NaturAide.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2.5 text-xs">
-            <div className="p-3 rounded-2xl bg-[#faf9f5] border border-[#dde6df] space-y-1">
-              <span className="text-[11px] text-[#78997f] block">Specific Product Research</span>
-              <div className="flex items-center gap-1.5">
-                {hasExactProductStudy ? (
-                  <>
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                    <span className="font-bold text-emerald-800">
-                      Available ({exactProductRefs.length})
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <XCircle className="w-4 h-4 text-amber-600" />
-                    <span className="font-bold text-amber-800">Not currently available</span>
-                  </>
-                )}
-              </div>
-            </div>
-
-            <div className="p-3 rounded-2xl bg-[#faf9f5] border border-[#dde6df] space-y-1">
-              <span className="text-[11px] text-[#78997f] block">Ingredient / Plant Research</span>
-              <div className="flex items-center gap-1.5">
-                {hasIngredientStudy ? (
-                  <>
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                    <span className="font-bold text-emerald-800">
-                      {ingredientAndPlantRefsCount} verified reference
-                      {ingredientAndPlantRefsCount === 1 ? "" : "s"}
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <XCircle className="w-4 h-4 text-slate-400" />
-                    <span className="font-bold text-slate-600">Not Available</span>
-                  </>
-                )}
-              </div>
-            </div>
-
-            <div className="p-3 rounded-2xl bg-[#faf9f5] border border-[#dde6df] space-y-1">
-              <span className="text-[11px] text-[#78997f] block">Safety Research</span>
-              <div className="flex items-center gap-1.5">
-                {hasSafetyEvidence ? (
-                  <>
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                    <span className="font-bold text-emerald-800">
-                      {safetyRefs.length} verified reference
-                      {safetyRefs.length === 1 ? "" : "s"}
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <XCircle className="w-4 h-4 text-slate-400" />
-                    <span className="font-bold text-slate-600">Not Available</span>
-                  </>
-                )}
-              </div>
-            </div>
-
-            <div className="p-3 rounded-2xl bg-[#faf9f5] border border-[#dde6df] space-y-1">
-              <span className="text-[11px] text-[#78997f] block">Official Resources</span>
-              <div className="flex items-center gap-1.5">
-                {hasOfficialResources ? (
-                  <>
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                    <span className="font-bold text-emerald-800">
-                      {resources.length + (regulatoryRecord ? 1 : 0)} verified resource
-                      {resources.length + (regulatoryRecord ? 1 : 0) === 1 ? "" : "s"}
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <XCircle className="w-4 h-4 text-slate-400" />
-                    <span className="font-bold text-slate-600">Not Available</span>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Honest Disclosure Statement */}
-          <div className="p-3.5 rounded-2xl bg-[#f0f5f2] border border-[#dde6df] text-xs text-[#2c473b] space-y-1.5 leading-relaxed">
-            <strong className="text-[#0f2c20] block">Evidence Context Disclosure:</strong>
-            {hasExactProductStudy ? (
-              <p>
-                Evidence is recorded evaluating this exact commercial product formulation under
-                controlled clinical or laboratory protocols.
-              </p>
-            ) : (
-              <p>
-                No research specifically evaluating this commercial product is currently recorded in
-                the NaturAide knowledge base. The references below concern its ingredient(s),
-                medicinal plant(s), or related formulation and should not be interpreted as proof of
-                the effectiveness of this specific commercial product.
-              </p>
-            )}
-          </div>
-        </section>
-
-        {/* ================================================== */}
-        {/* 9. SCIENTIFIC EVIDENCE & REFERENCES                */}
-        {/* ================================================== */}
-        <section className="rounded-3xl bg-white border border-[#dde6df] p-4 sm:p-5 shadow-2xs space-y-5 transition-all">
+        <section
+          id="evidence"
+          className="rounded-3xl bg-white border border-[#dde6df] p-4 sm:p-5 shadow-2xs space-y-4 transition-all"
+        >
+          {/* Header */}
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs">
-                <Microscope className="w-4 h-4" />
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-purple-100 border border-purple-200/90 flex items-center justify-center shrink-0 shadow-2xs">
+                <MicroscopeEvidence2DIcon size={20} />
               </div>
-              <h2 className="font-heading font-black text-sm sm:text-base text-[#0f2c20] uppercase tracking-wide">
-                Scientific Evidence &amp; References
-              </h2>
+              <div>
+                <h2 className="font-heading font-black text-sm sm:text-base text-[#0f2c20] uppercase tracking-wide">
+                  Evidence &amp; References
+                </h2>
+                <p className="text-xs text-[#52796f]">
+                  Scientific research publications, safety evaluations, and official references.
+                </p>
+              </div>
             </div>
-            <span className="text-[10px] font-bold text-[#52796f]">
+            <span className="text-[10px] sm:text-xs font-extrabold text-emerald-900 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 shadow-2xs">
               {references.length} {references.length === 1 ? "Study" : "Studies"}
             </span>
           </div>
 
+          {/* Dynamic Evidence Categories: Only displayed when category count > 0 */}
+          {hasAnyEvidenceCategory && (
+            <div className="space-y-2.5 pt-0.5">
+              {/* Product-Specific Research: Shown prominently ABOVE others IF count > 0 */}
+              {hasExactProductStudy && (
+                <div className="p-3.5 rounded-2xl bg-gradient-to-r from-emerald-50 via-teal-50 to-[#edf6f0] border border-emerald-300/80 shadow-2xs flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-8 h-8 rounded-xl bg-emerald-700 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                      <MedicinePill2DIcon size={18} />
+                    </div>
+                    <div>
+                      <strong className="text-xs sm:text-sm font-heading font-extrabold text-[#0f2c20] block">
+                        Product-Specific Research
+                      </strong>
+                      <span className="text-[11px] text-[#486b5e] font-medium">
+                        Clinical or laboratory evaluation of this exact finished commercial formulation
+                      </span>
+                    </div>
+                  </div>
+                  <span className="px-2.5 py-1 rounded-xl bg-white border border-emerald-200 font-black text-xs text-emerald-900 shrink-0 shadow-2xs">
+                    {exactProductRefs.length} {exactProductRefs.length === 1 ? "reference" : "references"}
+                  </span>
+                </div>
+              )}
+
+              {/* Other Evidence Categories with count > 0 */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                {hasIngredientStudy && (
+                  <div className="p-3.5 rounded-2xl bg-[#faf9f5] border border-[#dde6df] hover:border-emerald-300 transition-all space-y-1 shadow-2xs">
+                    <div className="flex items-center gap-2 text-[#0f2c20]">
+                      <Plant2DIcon size={18} />
+                      <strong className="font-heading font-bold text-xs">
+                        Plant / Ingredient Research
+                      </strong>
+                    </div>
+                    <p className="text-xs font-black text-emerald-800 pl-6">
+                      {ingredientAndPlantRefsCount}{" "}
+                      {ingredientAndPlantRefsCount === 1 ? "reference" : "references"}
+                    </p>
+                  </div>
+                )}
+
+                {hasSafetyEvidence && (
+                  <div className="p-3.5 rounded-2xl bg-[#faf9f5] border border-[#dde6df] hover:border-amber-300 transition-all space-y-1 shadow-2xs">
+                    <div className="flex items-center gap-2 text-[#0f2c20]">
+                      <ShieldAlert2DIcon size={18} />
+                      <strong className="font-heading font-bold text-xs">
+                        Safety Research
+                      </strong>
+                    </div>
+                    <p className="text-xs font-black text-amber-800 pl-6">
+                      {safetyRefs.length}{" "}
+                      {safetyRefs.length === 1 ? "reference" : "references"}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Multi-Ingredient Callout */}
           {Boolean(product.isMultiIngredient) && (
-            <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-950 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+            <div className="p-3 rounded-2xl bg-amber-50/90 border border-amber-200 text-amber-950 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <span className="px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 font-extrabold text-[10px] tracking-wide uppercase shrink-0">
                   MULTI-INGREDIENT PRODUCT
@@ -1286,17 +1221,18 @@ export default function ProductDetailSections({
             </div>
           )}
 
+          {/* References List */}
           {references.length === 0 ? (
             <div className="p-6 rounded-2xl bg-[#faf9f5] border border-dashed border-[#dde6df] text-center text-xs text-[#78997f]">
               No peer-reviewed scientific citations are currently indexed for this product in the
               knowledge base.
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-3 pt-1">
               {displayedReferences.map((ref) => renderReferenceCard(ref))}
 
               {references.length > 2 && (
-                <div className="text-center pt-2">
+                <div className="text-center pt-1">
                   <button
                     onClick={() => setShowAllReferences((prev) => !prev)}
                     className="inline-flex items-center gap-1.5 py-2 px-4 rounded-xl bg-[#faf7f2] border border-[#dde6df] hover:bg-emerald-50 text-xs font-extrabold text-[#1e5c44] active:scale-95 transition-all shadow-2xs cursor-pointer"
@@ -1315,10 +1251,10 @@ export default function ProductDetailSections({
                 </div>
               )}
 
-              <div className="pt-2 flex justify-center">
+              <div className="pt-1 flex justify-center">
                 <Link
                   href={`/community/ask?product=${product.id}`}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300 text-xs font-bold transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300 text-xs font-bold transition-colors shadow-2xs"
                 >
                   <Bot className="w-3.5 h-3.5 text-emerald-700" />
                   <span>Ask NaturAide About This Evidence</span>
@@ -1326,131 +1262,51 @@ export default function ProductDetailSections({
               </div>
             </div>
           )}
-        </section>
 
-        {/* ================================================== */}
-        {/* 10. OFFICIAL & REGULATORY RESOURCES                */}
-        {/* ================================================== */}
-        <section className="rounded-3xl bg-white border border-[#dde6df] p-4 sm:p-5 shadow-2xs space-y-4 transition-all">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs">
-                <Globe className="w-4 h-4" />
+          {/* Evidence Disclosure */}
+          <div className="p-3.5 rounded-2xl bg-[#f4f8f5]/90 border border-[#dcebe0] text-xs text-[#3d5a4d] space-y-1.5 transition-all">
+            <div className="flex items-start gap-2">
+              <Info className="w-4 h-4 text-[#52796f] shrink-0 mt-0.5" />
+              <div className="space-y-0.5 flex-1 min-w-0">
+                <strong className="text-[#0f2c20] font-bold block text-xs">
+                  Evidence note
+                </strong>
+                <p className="text-[11px] sm:text-xs text-[#486b5e] leading-relaxed">
+                  Available research may relate to the medicinal plant or active ingredient and does not
+                  necessarily evaluate this specific commercial product.
+                </p>
               </div>
-              <h2 className="font-heading font-black text-sm sm:text-base text-[#0f2c20] uppercase tracking-wide">
-                Official &amp; Regulatory Resources
-              </h2>
             </div>
-            <p className="text-xs text-[#52796f]">
-              Manufacturer product catalogs, official health registries, and Philippine FDA verification portals.
-            </p>
-          </div>
 
-          <div className="space-y-3">
-            {/* FDA Registration Resource */}
-            {regulatoryRecord && (
-              <div className="p-3.5 rounded-2xl bg-[#faf9f5] border border-[#dde6df] hover:border-emerald-300 transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
-                <div className="space-y-1 min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-900 text-[10px] font-extrabold">
-                      FDA REGISTRATION
-                    </span>
-                    <span className="text-[10px] text-[#78997f] flex items-center gap-0.5">
-                      <ShieldCheck className="w-3 h-3 text-emerald-600" />
-                      <span>{regulatoryRecord.regulatoryAgency || "Philippine FDA"} Registered</span>
-                    </span>
-                  </div>
-                  <h3 className="font-heading font-extrabold text-xs sm:text-sm text-[#0f2c20]">
-                    Official FDA Certificate of Product Registration ({registrationNumber || "On File"})
-                  </h3>
-                  <p className="text-[11px] text-[#52796f] leading-relaxed">
-                    Legitimate regulatory entry verified under Philippine health authority records.
-                  </p>
-                </div>
-                <a
-                  href={regulatoryRecord.verificationUrl || "https://verification.fda.gov.ph"}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full sm:w-auto px-3.5 py-2 rounded-xl bg-white border border-[#dde6df] hover:bg-[#edf2ee] text-[#0f2c20] font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-2xs shrink-0"
-                >
-                  <span>Verify on FDA Portal</span>
-                  <ExternalLink className="w-3 h-3 text-emerald-700" />
-                </a>
-              </div>
-            )}
-
-            {/* Other Official Resources */}
-            {visibleResources.map((res) => (
-              <div
-                key={res.id}
-                className="p-3.5 rounded-2xl bg-[#faf9f5] border border-[#dde6df] hover:border-emerald-300 transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs"
+            <div className="pt-0.5 pl-6">
+              <button
+                type="button"
+                onClick={() => setShowEvidenceLearnMore((prev) => !prev)}
+                className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 hover:text-emerald-950 transition-colors cursor-pointer"
+                aria-expanded={showEvidenceLearnMore}
               >
-                <div className="space-y-1 min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <span className="px-2 py-0.5 rounded-full bg-slate-200 text-slate-800 text-[10px] font-extrabold">
-                      {res.resourceType || "OFFICIAL"}
-                    </span>
-                    {res.lastVerifiedDate && (
-                      <span className="text-[10px] text-[#78997f] flex items-center gap-0.5">
-                        <Clock className="w-3 h-3 text-[#78997f]" />
-                        <span>
-                          Verified{" "}
-                          {new Date(res.lastVerifiedDate).toLocaleDateString("en-US", {
-                            year: "numeric",
-                            month: "short",
-                          })}
-                        </span>
-                      </span>
-                    )}
-                  </div>
+                <span>{showEvidenceLearnMore ? "Hide details" : "Learn more"}</span>
+                <ChevronDown
+                  className={`w-3 h-3 text-emerald-700 transition-transform duration-200 ${
+                    showEvidenceLearnMore ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
 
-                  <h3 className="font-heading font-extrabold text-xs sm:text-sm text-[#0f2c20]">
-                    {res.resourceName}
-                  </h3>
-
-                  {res.description && (
-                    <p className="text-[11px] text-[#52796f] leading-relaxed line-clamp-1">
-                      {res.description}
-                    </p>
-                  )}
-                </div>
-
-                <a
-                  href={res.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full sm:w-auto px-3.5 py-2 rounded-xl bg-white border border-[#dde6df] hover:bg-[#edf2ee] text-[#0f2c20] font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-2xs shrink-0"
-                >
-                  <span>Visit Official Source</span>
-                  <ExternalLink className="w-3 h-3 text-emerald-700" />
-                </a>
-              </div>
-            ))}
-
-            {resources.length > 2 && (
-              <div className="text-center pt-1">
-                <button
-                  onClick={() => setShowAllResources((prev) => !prev)}
-                  className="inline-flex items-center gap-1 text-[11px] font-extrabold text-[#1e5c44] hover:text-[#0f2c20] cursor-pointer py-1 active:scale-95 transition-all"
-                >
-                  <span>
-                    {showAllResources
-                      ? "Show Fewer Resources"
-                      : `Show All Official Resources (${resources.length})`}
-                  </span>
-                  <ChevronDown
-                    className={`w-3.5 h-3.5 text-emerald-700 transition-transform duration-300 ${
-                      showAllResources ? "rotate-180" : ""
-                    }`}
-                  />
-                </button>
-              </div>
-            )}
+              {showEvidenceLearnMore && (
+                <p className="mt-2 text-[11px] text-[#52796f] leading-relaxed animate-in fade-in duration-200 bg-white/80 p-2.5 rounded-xl border border-[#dde6df]/70">
+                  Herbal products in the NaturAide catalog are indexed alongside verified research on their
+                  botanical components and traditional uses. Clinical trials on specific finished commercial
+                  formulations are evaluated separately when available. Always consult a licensed healthcare
+                  professional before using herbal products for medical purposes.
+                </p>
+              )}
+            </div>
           </div>
         </section>
 
         {/* ================================================== */}
-        {/* 11. CONTEXTUAL BOT & BACK TO GUIDE NAVIGATION      */}
+        {/* CONTEXTUAL BOT & BACK TO GUIDE NAVIGATION          */}
         {/* ================================================== */}
         <div className="space-y-2 pt-1">
           <Link

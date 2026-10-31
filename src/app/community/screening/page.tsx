@@ -1,12 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import Image from "next/image";
 import Link from "next/link";
 import MobileAppHeader from "@/components/community/MobileAppHeader";
 import {
-  ShieldCheck,
   ShieldAlert,
   ArrowRight,
   ArrowLeft,
@@ -15,11 +12,7 @@ import {
   AlertTriangle,
   HelpCircle,
   Loader2,
-  Sparkles,
-  Info,
   Heart,
-  Pill,
-  Leaf,
   Stethoscope,
   Building2,
 } from "lucide-react";
@@ -28,6 +21,11 @@ import {
   getSeverityMeta,
   ScreeningSeverity,
 } from "@/lib/safety-rules";
+import {
+  LeafShield2DIcon,
+  ShieldAlert2DIcon,
+  Hospital2DIcon,
+} from "@/components/community/CommunityIcons2D";
 
 const HEALTH_CONCERNS = [
   { id: "cough", label: "Cough, Colds & Breathing", icon: "🍃" },
@@ -61,8 +59,6 @@ const ALLERGY_OPTIONS = [
 ];
 
 export default function HealthScreeningPage() {
-  const router = useRouter();
-
   // Wizard Step (1 to 4)
   const [step, setStep] = useState(1);
   const totalSteps = 4;
@@ -71,9 +67,9 @@ export default function HealthScreeningPage() {
   const [ageGroup, setAgeGroup] = useState("");
   const [healthConcern, setHealthConcern] = useState("");
   const [selectedMeds, setSelectedMeds] = useState<string[]>([]);
-  const [medDetails, setMedDetails] = useState("");
+  const [medDetails] = useState("");
   const [selectedAllergies, setSelectedAllergies] = useState<string[]>([]);
-  const [allergyDetails, setAllergyDetails] = useState("");
+  const [allergyDetails] = useState("");
   const [isPregnantOrLactating, setIsPregnantOrLactating] = useState<boolean | null>(null);
   const [hasSevereSymptoms, setHasSevereSymptoms] = useState<boolean | null>(null);
   const [hasOrganFailure, setHasOrganFailure] = useState<boolean | null>(null);
@@ -82,7 +78,7 @@ export default function HealthScreeningPage() {
   const [loadingInitial, setLoadingInitial] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [existingScreening, setExistingScreening] = useState<any>(null);
+  const [existingScreening, setExistingScreening] = useState<Record<string, unknown> | null>(null);
 
   useEffect(() => {
     const fetchCurrentStatus = async () => {
@@ -198,9 +194,10 @@ export default function HealthScreeningPage() {
         (data.evaluationResult === "ELIGIBLE_TO_CONTINUE" ? "/community" : "/community/guidance");
 
       window.location.href = destination;
-    } catch (err: any) {
+    } catch (err: unknown) {
       setIsSubmitting(false);
-      setErrorMessage(err.message || "An unexpected error occurred. Please try again.");
+      const msg = err instanceof Error ? err.message : "An unexpected error occurred. Please try again.";
+      setErrorMessage(msg);
     }
   };
 
@@ -215,20 +212,50 @@ export default function HealthScreeningPage() {
       />
 
       <div className="flex-1 px-4 sm:px-6 py-4 space-y-5">
-        {/* Step Progress Bar */}
-        <div className="space-y-1.5">
+        {/* Screening Intro Header */}
+        <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-br from-[#f2f8f4] via-[#faf9f5] to-[#edf6f0] border border-[#dcebe0] flex flex-col sm:flex-row items-center justify-between gap-3.5 shadow-2xs">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-2xl bg-emerald-100 flex items-center justify-center text-emerald-800 shrink-0 shadow-2xs">
+              <LeafShield2DIcon size={24} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="font-heading font-black text-base sm:text-lg text-[#0f2c20]">
+                  Let&apos;s Check What&apos;s Safe for You
+                </h1>
+                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
+                  About 1 minute
+                </span>
+              </div>
+              <p className="text-xs text-[#52796f] mt-0.5">
+                Answer a few questions before exploring herbal options.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Step Progress Indicator (Step X of 4 • Track + Dots) */}
+        <div className="space-y-2 p-3.5 rounded-2xl bg-white border border-[#dde6df] shadow-2xs">
           <div className="flex items-center justify-between text-xs font-bold text-[#52796f]">
-            <span>
+            <span className="font-heading font-extrabold text-[#0f2c20]">
               Step {step} of {totalSteps}
             </span>
-            <span>
-              {step === 1 && "Basic Info"}
-              {step === 2 && "Medications & Allergies"}
-              {step === 3 && "Health Safety Check"}
-              {step === 4 && "Review & Complete"}
-            </span>
+            <div className="flex items-center gap-1.5">
+              {[1, 2, 3, 4].map((s) => (
+                <span
+                  key={s}
+                  className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${
+                    s === step
+                      ? "bg-emerald-600 scale-125 ring-2 ring-emerald-200"
+                      : s < step
+                      ? "bg-emerald-500"
+                      : "bg-[#dde6df]"
+                  }`}
+                />
+              ))}
+            </div>
           </div>
-          <div className="w-full h-2 rounded-full bg-[#e2ebe4] overflow-hidden">
+          <div className="w-full h-1.5 rounded-full bg-[#e2ebe4] overflow-hidden">
             <div
               className="h-full bg-emerald-600 transition-all duration-300 rounded-full"
               style={{ width: `${(step / totalSteps) * 100}%` }}
@@ -284,7 +311,7 @@ export default function HealthScreeningPage() {
                 </span>
               </div>
               <p className="text-[10px] text-slate-500">
-                Completed on {new Date(existingScreening.createdAt).toLocaleDateString()}
+                Completed on {existingScreening.createdAt ? new Date(String(existingScreening.createdAt)).toLocaleDateString() : "earlier"}
               </p>
             </div>
           );
@@ -431,7 +458,6 @@ export default function HealthScreeningPage() {
                     const isSelected = selectedMeds.includes(opt.id);
                     const isSevere = opt.id === "blood-thinners";
                     const isCaution = opt.id === "bp-cardiac" || opt.id === "diabetes" || opt.id === "inhalers";
-                    const isLowRisk = opt.id === "none";
 
                     return (
                       <label
@@ -877,41 +903,38 @@ export default function HealthScreeningPage() {
 
                 {/* VISUAL SEVERITY RESULT CARD */}
                 {currentSeverity === "severe" && (
-                  <div className="p-4 sm:p-5 rounded-2xl bg-rose-50/90 border border-rose-300 border-l-4 border-l-rose-600 shadow-2xs space-y-3 transition-all duration-200">
+                  <div className="p-5 rounded-2xl bg-rose-50/90 border-2 border-rose-300 shadow-2xs space-y-3 transition-all duration-200">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 animate-pulse" />
-                        <h3 className="text-base font-heading font-extrabold text-rose-950">
-                          Severe Symptoms Identified
-                        </h3>
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-rose-100 flex items-center justify-center text-rose-700 shrink-0">
+                          <ShieldAlert2DIcon size={22} />
+                        </div>
+                        <div>
+                          <h3 className="text-base font-heading font-black text-rose-950">
+                            Professional Care Is Recommended
+                          </h3>
+                          <p className="text-xs text-rose-900">
+                            Acute symptoms or high-risk contraindications require clinical attention.
+                          </p>
+                        </div>
                       </div>
-                      <span className="px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-900 border border-rose-300 text-[10px] font-extrabold">
+                      <span className="px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-900 border border-rose-300 text-[10px] font-extrabold shrink-0">
                         High Risk
                       </span>
                     </div>
 
-                    <p className="text-xs sm:text-sm text-rose-900 leading-relaxed font-medium">
-                      Your responses indicate symptoms that may require professional medical attention.
+                    <p className="text-xs text-rose-900 leading-relaxed font-medium bg-white/70 p-3 rounded-xl border border-rose-200">
+                      Your responses indicate symptoms that may require professional medical attention rather than self-treatment with traditional herbal remedies. NaturAide does not diagnose medical conditions.
                     </p>
 
-                    <div className="p-3.5 rounded-xl bg-white/95 border border-rose-200 space-y-2">
-                      <div className="flex items-center gap-1.5 text-xs font-extrabold text-rose-900">
-                        <Stethoscope className="w-4 h-4 text-rose-600" />
-                        <span>Seek Professional Care</span>
-                      </div>
-                      <p className="text-[11px] text-rose-800 leading-relaxed">
-                        Acute symptoms or high-risk contraindications require clinical evaluation by licensed healthcare professionals rather than herbal self-care.
-                      </p>
-                      <div className="pt-1">
-                        <Link
-                          href="/community/facilities"
-                          target="_blank"
-                          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 active:scale-95 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
-                        >
-                          <Building2 className="w-3.5 h-3.5" />
-                          <span>Find Nearby Healthcare Facilities →</span>
-                        </Link>
-                      </div>
+                    <div className="pt-1">
+                      <Link
+                        href="/community/facilities"
+                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs active:scale-95 transition-all"
+                      >
+                        <Hospital2DIcon size={18} />
+                        <span>Find Nearby Healthcare Facilities →</span>
+                      </Link>
                     </div>
                   </div>
                 )}
@@ -941,22 +964,44 @@ export default function HealthScreeningPage() {
                 )}
 
                 {currentSeverity === "low" && (
-                  <div className="p-4 sm:p-5 rounded-2xl bg-emerald-50/90 border border-emerald-300 border-l-4 border-l-emerald-600 shadow-2xs space-y-2 transition-all duration-200">
+                  <div className="p-5 rounded-2xl bg-emerald-50/90 border-2 border-emerald-300 shadow-2xs space-y-3 transition-all duration-200">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-                        <h3 className="text-base font-heading font-extrabold text-emerald-950">
-                          Low-Risk Symptoms
-                        </h3>
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-800 shrink-0">
+                          <LeafShield2DIcon size={22} />
+                        </div>
+                        <div>
+                          <h3 className="text-base font-heading font-black text-emerald-950">
+                            You can continue exploring
+                          </h3>
+                          <p className="text-xs text-emerald-800">
+                            No immediate contraindications were flagged in this screening.
+                          </p>
+                        </div>
                       </div>
-                      <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-300 text-[10px] font-bold">
-                        Safe to Continue
+                      <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-300 text-[10px] font-extrabold shrink-0">
+                        Cleared
                       </span>
                     </div>
 
-                    <p className="text-xs sm:text-sm text-emerald-900 leading-relaxed font-medium">
-                      No severe warning signs were identified from your responses.
+                    <p className="text-xs text-emerald-900/90 leading-relaxed font-medium bg-white/70 p-3 rounded-xl border border-emerald-200">
+                      Please note: A cleared screening result does not mean any specific herbal plant is automatically appropriate or prescribed for your condition. Always check individual plant cautions and dosage guidance.
                     </p>
+
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                      <Link
+                        href="/community/herbal-guide"
+                        className="px-4 py-2 rounded-xl bg-[#0f2c20] hover:bg-[#1e5c44] text-white text-xs font-bold shadow-2xs"
+                      >
+                        Explore Relevant Guides →
+                      </Link>
+                      <Link
+                        href="/community/ask"
+                        className="px-4 py-2 rounded-xl bg-white hover:bg-emerald-50 text-emerald-900 border border-emerald-300 text-xs font-bold shadow-2xs"
+                      >
+                        Ask NaturAide
+                      </Link>
+                    </div>
                   </div>
                 )}
 

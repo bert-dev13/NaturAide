@@ -233,6 +233,12 @@ export async function POST(request: NextRequest) {
       activeContextType = "PREPARATION";
     }
 
+    // Retrieve recent conversation history prior to resolution to assess contextual turn eligibility
+    const [recentMsgs]: any = await pool.query(
+      "SELECT sender, content, metadata FROM messages WHERE conversationId = ? ORDER BY id DESC LIMIT 6",
+      [convId]
+    );
+
     // Save user message to MySQL
     const [userMsgRes]: any = await pool.query(
       "INSERT INTO messages (conversationId, sender, content) VALUES (?, 'USER', ?)",
@@ -247,15 +253,49 @@ export async function POST(request: NextRequest) {
       ? "PROFESSIONAL_GUIDANCE_REQUIRED"
       : "ELIGIBLE_TO_CONTINUE";
 
-    // 2. Resolve conversational context and query grounded knowledge from MySQL
+    // 2. Assess whether previous turn broke entity dependency (e.g. greeting, thanks, general question, casual chat)
+    let isEntityEligible = true;
+    if (recentMsgs && recentMsgs.length > 0) {
+      const lastUserMsg = recentMsgs.find((m: any) => m.sender === "USER");
+      if (lastUserMsg) {
+        const norm = (lastUserMsg.content || "").toLowerCase().trim();
+        if (
+          norm === "hi" ||
+          norm === "hello" ||
+          norm === "hey" ||
+          norm === "thanks" ||
+          norm === "thank you" ||
+          norm === "bye" ||
+          norm === "goodbye" ||
+          norm.includes("how are you") ||
+          norm.includes("joke") ||
+          norm.includes("what is my name") ||
+          norm.includes("my name is") ||
+          norm.includes("photosynthesis") ||
+          norm.includes("biodiversity") ||
+          norm.includes("what is medicinal plants") ||
+          norm.includes("what are medicinal plants") ||
+          norm.includes("what is a medicinal plant")
+        ) {
+          isEntityEligible = false;
+        }
+      }
+    }
+
+    const userDisplayName = session.firstName || session.name || null;
+
+    // 3. Resolve conversational context and query grounded knowledge from MySQL
     const resolution = await resolveContextAndKnowledge(userText, {
       currentPlantId,
       currentProductId,
       currentPreparationId,
       activeContextType,
+      isEntityEligible,
+      recentMessages: recentMsgs,
+      userName: userDisplayName,
     });
 
-    // 3. Persist updated context in conversation record in MySQL
+    // 4. Persist updated context in conversation record in MySQL
     if (resolution.activeType !== "NONE") {
       currentPlantId = resolution.plantId;
       currentProductId = resolution.productId;
@@ -266,40 +306,52 @@ export async function POST(request: NextRequest) {
         [currentPlantId, currentProductId, currentPreparationId, activeContextType, convId]
       );
     } else {
-      await pool.query("UPDATE conversations SET updatedAt = CURRENT_TIMESTAMP(3) WHERE id = ?", [convId]);
+      currentPlantId = null;
+      currentProductId = null;
+      currentPreparationId = null;
+      activeContextType = "NONE";
+      await pool.query(
+        "UPDATE conversations SET currentPlantId = NULL, currentProductId = NULL, currentPreparationId = NULL, activeContextType = 'NONE', updatedAt = CURRENT_TIMESTAMP(3) WHERE id = ?",
+        [convId]
+      );
     }
 
-    // 4. Build concise system prompt with strict grounding
-    const systemPrompt = buildSystemPrompt(
-      screeningOutcome,
-      resolution.knowledgeContextText,
-      resolution.isUnknownEntity
-    );
+    // 5. Generate assistant response
+    let assistantResponse = resolution.assistantDirectAnswer;
+    let modelUsed = "natureaide-grounded-engine";
+    let fallbackCount = 0;
 
-    // 5. Retrieve recent conversation history
-    const [recentMsgs]: any = await pool.query(
-      "SELECT sender, content FROM messages WHERE conversationId = ? ORDER BY id DESC LIMIT 6",
-      [convId]
-    );
-    const history = (recentMsgs || []).reverse();
+    if (!assistantResponse) {
+      // Build concise system prompt with strict grounding
+      const systemPrompt = buildSystemPrompt(
+        screeningOutcome,
+        resolution.knowledgeContextText,
+        resolution.isUnknownEntity,
+        false,
+        userDisplayName
+      );
 
-    const formattedMessages: ChatMessageParam[] = [
-      { role: "system", content: systemPrompt },
-      ...history.map((m: any) => ({
-        role: m.sender === "USER" ? ("user" as const) : ("assistant" as const),
-        content: m.content,
-      })),
-    ];
+      const history = (recentMsgs || []).reverse();
+      const formattedMessages: ChatMessageParam[] = [
+        { role: "system", content: systemPrompt },
+        ...history.map((m: any) => ({
+          role: m.sender === "USER" ? ("user" as const) : ("assistant" as const),
+          content: m.content,
+        })),
+      ];
 
-    if (formattedMessages[formattedMessages.length - 1]?.content !== userText) {
-      formattedMessages.push({ role: "user", content: userText });
+      if (formattedMessages[formattedMessages.length - 1]?.content !== userText) {
+        formattedMessages.push({ role: "user", content: userText });
+      }
+
+      // Execute chat with grounded fallback
+      const result = await executeChatWithFallback(formattedMessages, resolution.groundedFallbackAnswer);
+      assistantResponse = result.content;
+      modelUsed = result.modelUsed;
+      fallbackCount = result.fallbackCount;
     }
 
-    // 6. Execute chat with grounded fallback
-    const result = await executeChatWithFallback(formattedMessages, resolution.groundedFallbackAnswer);
-    const assistantResponse = result.content;
-
-    // 7. Save assistant response with structured card metadata to MySQL
+    // 6. Save assistant response with structured card metadata to MySQL
     const cardMetadataJson = resolution.cardData ? JSON.stringify(resolution.cardData) : null;
     const [asstMsgRes]: any = await pool.query(
       "INSERT INTO messages (conversationId, sender, content, metadata) VALUES (?, 'ASSISTANT', ?, ?)",
@@ -319,15 +371,17 @@ export async function POST(request: NextRequest) {
         content: assistantResponse,
         card: resolution.cardData,
       },
-      activeContext: {
-        type: resolution.activeType,
-        plantId: resolution.plantId,
-        productId: resolution.productId,
-        name: resolution.activeEntityName,
-        slug: resolution.activeEntitySlug,
-      },
-      modelUsed: result.modelUsed,
-      fallbackCount: result.fallbackCount,
+      activeContext:
+        resolution.activeType !== "NONE" && (resolution.plantId || resolution.productId)
+          ? {
+              type: resolution.activeType,
+              id: resolution.plantId || resolution.productId,
+              slug: resolution.activeEntitySlug,
+              name: resolution.activeEntityName,
+            }
+          : null,
+      modelUsed,
+      fallbackCount,
     });
   } catch (error) {
     console.error("Chat POST error:", error);

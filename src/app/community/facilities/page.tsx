@@ -22,6 +22,10 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import type { FacilityMarkerData } from "@/components/community/FacilityMap";
+import {
+  Hospital2DIcon,
+  LocationPin2DIcon,
+} from "@/components/community/CommunityIcons2D";
 
 // Dynamic import of Leaflet map to ensure 100% SSR compatibility
 const FacilityMap = dynamic(() => import("@/components/community/FacilityMap"), {
@@ -183,8 +187,8 @@ export default function FacilitiesMapPage() {
       <MobileAppHeader
         showBack={true}
         backHref="/community/guidance"
-        title="Nearby Healthcare Facilities"
-        subtitle="GPS-enabled map & verified public directory"
+        title="Find Healthcare Near You"
+        subtitle="Locate nearby healthcare facilities when professional care is recommended"
       />
 
       <div className="flex-1 px-4 sm:px-6 py-4 space-y-4 max-w-2xl mx-auto w-full">
@@ -211,20 +215,19 @@ export default function FacilitiesMapPage() {
 
         {/* GEOLOCATION PERMISSION / STATUS BANNERS */}
 
-        {/* 1. Prompt state: Explain why location is needed before asking */}
+        {/* 1. Prompt state: Friendly location permission */}
         {permissionState === "prompt" && (
-          <div className="p-4 sm:p-5 rounded-3xl bg-white border-2 border-emerald-600/30 shadow-2xs space-y-3">
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0">
-                <Compass className="w-5 h-5 text-emerald-700" />
+          <div className="p-5 rounded-3xl bg-white border border-[#dde6df] shadow-2xs space-y-3.5">
+            <div className="flex items-start gap-3.5">
+              <div className="w-11 h-11 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0 shadow-2xs">
+                <LocationPin2DIcon size={22} />
               </div>
               <div className="space-y-1">
                 <h2 className="font-heading font-extrabold text-sm sm:text-base text-[#0f2c20]">
-                  Find Nearest Healthcare Facility
+                  Find care near you
                 </h2>
-                <p className="text-xs text-[#3d4a45] leading-relaxed">
-                  NaturAide uses your location to help find nearby healthcare facilities. Your
-                  location will only be accessed with your permission.
+                <p className="text-xs text-[#52796f] leading-relaxed">
+                  Allow location access to show nearby healthcare facilities. You can also search manually below anytime.
                 </p>
               </div>
             </div>
@@ -233,10 +236,20 @@ export default function FacilitiesMapPage() {
               <button
                 type="button"
                 onClick={requestDeviceLocation}
-                className="flex-1 py-3 px-4 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer"
+                className="flex-1 py-3 px-4 rounded-xl bg-[#0f2c20] hover:bg-[#1e5c44] text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer active:scale-95"
               >
-                <MapPin className="w-4 h-4 text-emerald-200" />
-                <span>Use My Current Location</span>
+                <MapPin className="w-4 h-4 text-emerald-300" />
+                <span>Use My Location</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const inputEl = document.querySelector<HTMLInputElement>("input[placeholder*='Search City']");
+                  inputEl?.focus();
+                }}
+                className="py-3 px-4 rounded-xl bg-[#f0f4f1] hover:bg-emerald-100 text-[#1e5c44] font-bold text-xs transition-all cursor-pointer text-center"
+              >
+                Search Location Manually
               </button>
             </div>
           </div>
@@ -359,7 +372,7 @@ export default function FacilitiesMapPage() {
                 : "bg-white text-[#52796f] border border-[#dde6df] hover:border-emerald-300"
             }`}
           >
-            🏥 Hospitals & Medical Centers
+            Hospitals &amp; Medical Centers
           </button>
           <button
             type="button"
@@ -370,7 +383,7 @@ export default function FacilitiesMapPage() {
                 : "bg-white text-[#52796f] border border-[#dde6df] hover:border-emerald-300"
             }`}
           >
-            🩺 Health Centers
+            Health Centers
           </button>
           <button
             type="button"
@@ -381,7 +394,7 @@ export default function FacilitiesMapPage() {
                 : "bg-white text-[#52796f] border border-[#dde6df] hover:border-emerald-300"
             }`}
           >
-            ⚕️ Clinics
+            Clinics
           </button>
         </div>
 

@@ -41,7 +41,8 @@ export async function GET() {
     const [savedGuides]: any = await pool.query(
       `
       SELECT pg.id, pg.title, pg.category, pg.plantId, pg.description, pg.whatYouNeed, pg.preparationSteps,
-             p.commonName as plantName, spg.createdAt as savedAt
+             pg.importantReminders, pg.storageGuidance, pg.safetyInformation,
+             p.commonName as plantName, p.slug as plantSlug, spg.createdAt as savedAt
       FROM saved_preparation_guides spg
       JOIN preparation_guides pg ON spg.guideId = pg.id
       LEFT JOIN plants p ON pg.plantId = p.id

@@ -1,0 +1,391 @@
+import React from "react";
+
+interface IconProps {
+  className?: string;
+  size?: number;
+}
+
+export function Plant2DIcon({ className = "", size = 22 }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      className={className}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <circle cx="12" cy="12" r="11" fill="#ECFDF5" />
+      <path
+        d="M12 20V12M12 12C12 8 8 6 5 6C5 9.5 7 13 12 12ZM12 12C12 9 15 7 19 7C19 10.5 17 13.5 12 12Z"
+        stroke="#059669"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+export function LeafShield2DIcon({ className = "", size = 22 }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      className={className}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="M12 2L4 5.5V11.5C4 16.5 7.4 21.1 12 22.5C16.6 21.1 20 16.5 20 11.5V5.5L12 2Z"
+        fill="#E8F5ED"
+        stroke="#1E5C44"
+        strokeWidth="1.75"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M12 6.5C9.5 8 8.5 11 9 14.5C10 16 12 17 14.5 16.5C15 13.5 14 10.5 12 6.5Z"
+        fill="#34D399"
+      />
+      <path
+        d="M10 14.5L14 9.5"
+        stroke="#0F2C20"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+export function TeaCup2DIcon({ className = "", size = 22 }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      className={className}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <circle cx="12" cy="12" r="11" fill="#FEF3C7" />
+      <path
+        d="M5 9H17V14C17 16.2 15.2 18 13 18H9C6.8 18 5 16.2 5 14V9Z"
+        fill="#FDE68A"
+        stroke="#D97706"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M17 11H18.5C19.3 11 20 11.7 20 12.5C20 13.3 19.3 14 18.5 14H17"
+        stroke="#D97706"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+      <path
+        d="M8 6C8 5 9 4.5 9 3.5M12 6C12 5 13 4.5 13 3.5"
+        stroke="#B45309"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+export function MedicinePill2DIcon({ className = "", size = 22 }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      className={className}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <circle cx="12" cy="12" r="11" fill="#EFF6FF" />
+      <rect
+        x="6"
+        y="10"
+        width="12"
+        height="6"
+        rx="3"
+        transform="rotate(-30 12 13)"
+        fill="#93C5FD"
+        stroke="#2563EB"
+        strokeWidth="1.6"
+      />
+      <path
+        d="M9.5 14.5L14.5 11.5"
+        stroke="#1E40AF"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+export function MicroscopeEvidence2DIcon({ className = "", size = 22 }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      className={className}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <circle cx="12" cy="12" r="11" fill="#F5F3FF" />
+      <path
+        d="M6 19H18M10 19V17M14 17C14 14.2 12.5 13 10.5 13H9.5M12 5L15 8M10 7L13 10"
+        stroke="#7C3AED"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+      <circle cx="11.5" cy="8.5" r="3" stroke="#6D28D9" strokeWidth="1.5" fill="#DDD6FE" />
+    </svg>
+  );
+}
+
+export function ShieldAlert2DIcon({ className = "", size = 22 }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      className={className}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="M12 2L4 5.5V11.5C4 16.5 7.4 21.1 12 22.5C16.6 21.1 20 16.5 20 11.5V5.5L12 2Z"
+        fill="#FFFBEB"
+        stroke="#D97706"
+        strokeWidth="1.75"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M12 7.5V13"
+        stroke="#B45309"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <circle cx="12" cy="16.5" r="1.2" fill="#B45309" />
+    </svg>
+  );
+}
+
+export function Hospital2DIcon({ className = "", size = 22 }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      className={className}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <rect
+        x="3"
+        y="4"
+        width="18"
+        height="17"
+        rx="3"
+        fill="#F0FDF4"
+        stroke="#059669"
+        strokeWidth="1.6"
+      />
+      <path
+        d="M12 7V13M9 10H15"
+        stroke="#047857"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <rect x="9" y="16" width="6" height="5" fill="#34D399" />
+    </svg>
+  );
+}
+
+export function Bookmark2DIcon({
+  className = "",
+  size = 22,
+  isSaved = false,
+}: IconProps & { isSaved?: boolean }) {
+  if (isSaved) {
+    return (
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        className={className}
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          d="M6 3.5C6 2.67 6.67 2 7.5 2H16.5C17.33 2 18 2.67 18 3.5V22L12 18L6 22V3.5Z"
+          fill="#F59E0B"
+          stroke="#D97706"
+          strokeWidth="1.6"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M9 9.5L11 11.5L15 7.5"
+          stroke="#FFFFFF"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      className={className}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="M6 3.5C6 2.67 6.67 2 7.5 2H16.5C17.33 2 18 2.67 18 3.5V22L12 18L6 22V3.5Z"
+        fill="#FFFFFF"
+        stroke="#52796F"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+export function BotChat2DIcon({ className = "", size = 22 }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      className={className}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <rect
+        x="3"
+        y="4"
+        width="18"
+        height="14"
+        rx="4"
+        fill="#F5F3FF"
+        stroke="#7C3AED"
+        strokeWidth="1.75"
+      />
+      <path
+        d="M8 18L6 21V18H8Z"
+        fill="#F5F3FF"
+        stroke="#7C3AED"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+      <circle cx="8.5" cy="11" r="1.5" fill="#6D28D9" />
+      <circle cx="15.5" cy="11" r="1.5" fill="#6D28D9" />
+      <path
+        d="M10.5 14C11 14.5 13 14.5 13.5 14"
+        stroke="#7C3AED"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+      <path
+        d="M12 2V4"
+        stroke="#7C3AED"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+export function Search2DIcon({ className = "", size = 22 }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      className={className}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <circle cx="11" cy="11" r="7" stroke="#059669" strokeWidth="2" fill="#ECFDF5" />
+      <path
+        d="M16.5 16.5L21 21"
+        stroke="#047857"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+export function Sparkle2DIcon({ className = "", size = 20 }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      className={className}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="M12 2L14.2 8.8L21 11L14.2 13.2L12 20L9.8 13.2L3 11L9.8 8.8L12 2Z"
+        fill="#FBBF24"
+      />
+      <circle cx="19" cy="5" r="2" fill="#34D399" />
+      <circle cx="5" cy="19" r="1.5" fill="#60A5FA" />
+    </svg>
+  );
+}
+
+export function LocationPin2DIcon({ className = "", size = 22 }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      className={className}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <circle cx="12" cy="12" r="11" fill="#FEF2F2" />
+      <path
+        d="M12 4C9.24 4 7 6.24 7 9C7 13 12 19 12 19C12 19 17 13 17 9C17 6.24 14.76 4 12 4Z"
+        fill="#FCA5A5"
+        stroke="#DC2626"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+      <circle cx="12" cy="9" r="2" fill="#FFFFFF" />
+    </svg>
+  );
+}
+
+export function CheckCircle2DIcon({ className = "", size = 22 }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      className={className}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <circle cx="12" cy="12" r="10" fill="#ECFDF5" stroke="#059669" strokeWidth="1.75" />
+      <path
+        d="M8 12L11 15L16 9"
+        stroke="#047857"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
