@@ -34,7 +34,6 @@ Before cloning, install the following required tools on the new Windows laptop:
 Open Command Prompt (CMD) or PowerShell and clone the project:
 
 ```cmd
-cd C:\projects
 git clone https://github.com/bert-dev13/NaturAide.git
 cd NaturAide
 ```
@@ -80,7 +79,7 @@ The script automatically:
 
 ## Step 5: Configure `.env.local`
 
-Open `C:\projects\NaturAide\.env.local` in Notepad or VS Code:
+Open `.env.local` in Notepad or VS Code:
 - Verify that `DB_HOST=localhost`, `DB_PORT=3306`, and `DB_NAME=natureaide_db`.
 - (Optional) If you use external AI services, paste your API keys:
   ```ini
@@ -158,11 +157,7 @@ Choose **one** of the following methods to transfer the project to the new lapto
 In PowerShell or CMD:
 
 ```powershell
-# Navigate to your target directory (e.g. C:\projects)
-mkdir C:\projects -ErrorAction SilentlyContinue
-cd C:\projects
-
-# Clone the repository
+# Navigate to your workspace directory
 git clone <YOUR_GIT_REPOSITORY_URL> natureaide
 cd natureaide
 ```
@@ -175,9 +170,9 @@ If copying the project directory directly from your old laptop:
 
 1. **On the Old Laptop**:
    - Do **NOT** copy `node_modules` or `.next` (these contain hundreds of thousands of files and take hours to transfer).
-   - If using a Zip tool, select `C:\projects\natureaide` and **exclude** `node_modules`, `.next`, and `.docking-artifacts`.
+   - If using a Zip tool, select `natureaide` and **exclude** `node_modules`, `.next`, and `.docking-artifacts`.
 2. **On the New Laptop**:
-   - Extract or copy the folder to `C:\projects\natureaide`.
+   - Extract or copy the folder to your workspace (e.g. `natureaide`).
    - Ensure the `.env.local` file (if copied) is placed in the project root directory.
 
 ---
@@ -188,7 +183,7 @@ If copying the project directory directly from your old laptop:
 2. Navigate into the project directory:
 
 ```powershell
-cd C:\projects\natureaide
+cd natureaide
 ```
 
 3. Install npm packages:
@@ -289,7 +284,7 @@ Open PowerShell or CMD on your **old laptop** in the project directory:
 
 **On Old Laptop — PowerShell:**
 ```powershell
-cd C:\projects\natureaide
+cd natureaide
 & "C:\xampp\mysql\bin\mysqldump.exe" -u root --routines --triggers --result-file="natureaide_backup.sql" natureaide_db
 ```
 
@@ -297,7 +292,7 @@ cd C:\projects\natureaide
 
 **On Old Laptop — CMD:**
 ```cmd
-cd C:\projects\natureaide
+cd natureaide
 "C:\xampp\mysql\bin\mysqldump.exe" -u root --routines --triggers --result-file="natureaide_backup.sql" natureaide_db
 ```
 
@@ -305,19 +300,19 @@ Verify that `natureaide_backup.sql` has been created (typically ~1.6MB to ~3MB).
 
 #### Step A2: Import into the NEW Laptop
 
-Place `natureaide_backup.sql` inside `C:\projects\natureaide\` on the **new laptop**.
+Place `natureaide_backup.sql` inside the `natureaide\` directory on the **new laptop**.
 
 Run the following import command:
 
 **On New Laptop — PowerShell:**
 ```powershell
-cd C:\projects\natureaide
+cd natureaide
 cmd /c '""C:\xampp\mysql\bin\mysql.exe"" -u root natureaide_db < natureaide_backup.sql'
 ```
 
 **On New Laptop — CMD:**
 ```cmd
-cd C:\projects\natureaide
+cd natureaide
 "C:\xampp\mysql\bin\mysql.exe" -u root natureaide_db < natureaide_backup.sql
 ```
 
@@ -381,7 +376,7 @@ All migrations are tracked in the `schema_migrations` table and are strictly ide
 If you do not have a database dump and want to generate all tables and default seed data from scratch, run the built-in migration and seed scripts in sequence:
 
 ```powershell
-cd C:\projects\natureaide
+cd natureaide
 
 # 1. Initialize core tables, demo accounts, plants, and guides
 npx tsx scripts/init-db.ts
@@ -416,7 +411,7 @@ node scripts/apply_ai_representative_images_to_db.js
 
 ## 6. Configuring Environment Variables (`.env.local`)
 
-In the project root (`C:\projects\natureaide`), create or edit `.env.local`.
+In the project root (`natureaide`), create or edit `.env.local`.
 
 Copy the template below:
 
@@ -452,10 +447,10 @@ XAI_BASE_URL=https://api.x.ai/v1
 XAI_MODEL=grok-4.7
 
 # AutoDock Vina In-Silico Docking Engine (Stage 3 - Optional)
-# Leave blank to use defaults or configure if Python docking venv is installed
+# Leave blank to automatically resolve from project root (.docking-venv and tools/vina)
 VINA_BIN=
 DOCKING_PYTHON=
-DOCKING_ARTIFACT_DIR=C:\projects\natureaide\.docking-artifacts
+DOCKING_ARTIFACT_DIR=
 DOCKING_TIMEOUT_SECONDS=900
 ```
 
@@ -466,29 +461,22 @@ DOCKING_TIMEOUT_SECONDS=900
 
 ---
 
-## 7. Optional Scientific Toolchain (AutoDock Vina & Python)
+## 7. Automated Scientific Toolchain (AutoDock Vina & Python 3.11)
 
-The core web application runs 100% fine without this toolchain. However, if you plan to execute local **Stage 3 In-Silico Molecular Docking** computations:
+The docking environment is fully provisioned automatically during setup:
 
-1. **AutoDock Vina Binary**:
-   - Download the official Windows release of AutoDock Vina (`vina.exe`) from the [AutoDock Vina GitHub Releases](https://github.com/ccsb-scripps/AutoDock-Vina/releases).
-   - Place `vina.exe` in `C:\projects\natureaide\tools\vina\vina.exe` or point `VINA_BIN` in `.env.local` to its path.
+```powershell
+npm run setup
+```
 
-2. **Python Environment for Docking Worker**:
-   ```powershell
-   # Create a Python virtual environment
-   cd C:\projects\natureaide
-   python -m venv .docking-venv
+This single command:
+1. Validates Python 3.11.x installation on the system.
+2. Creates the isolated project-local `.docking-venv`.
+3. Installs pinned dependencies (`rdkit`, `meeko`, `gemmi`, `openbabel-wheel`, `scipy`, `numpy`, `pillow`) from `requirements-docking.txt`.
+4. Downloads the official AutoDock Vina v1.2.7 binary to `tools\vina\vina.exe` with SHA-256 integrity verification.
+5. Verifies Open Babel (`obabel.exe -V`) and conducts a smoke test with 3D conformer generation.
 
-   # Activate and install required cheminformatics libraries
-   .\.docking-venv\Scripts\activate
-   pip install rdkit meeko gemmi openbabel-wheel
-   ```
-3. Set the variables in `.env.local`:
-   ```ini
-   VINA_BIN=C:\projects\natureaide\tools\vina\vina.exe
-   DOCKING_PYTHON=C:\projects\natureaide\.docking-venv\Scripts\python.exe
-   ```
+`npm run dev:share` directly executes `.docking-venv\Scripts\python.exe` and `tools\vina\vina.exe` without requiring manual virtual environment activation or VS Code configuration.
 
 ---
 
@@ -499,7 +487,7 @@ The core web application runs 100% fine without this toolchain. However, if you 
 In PowerShell or CMD:
 
 ```powershell
-cd C:\projects\natureaide
+cd natureaide
 npm run dev
 ```
 
@@ -585,7 +573,7 @@ node scripts/test_natureaide_full_system_e2e.js
 To confirm that TypeScript, Tailwind Turbopack, and Next.js routes compile without errors:
 
 ```powershell
-cd C:\projects\natureaide
+cd natureaide
 
 # 1. Run ESLint checks
 npm run lint

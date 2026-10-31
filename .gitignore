@@ -30,9 +30,11 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
+# env files
+.env*.local
 .env.local
+.env
+!.env.example
 
 # vercel
 .vercel
@@ -41,6 +43,10 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# docking & python
 /.docking-artifacts/
 /.docking-venv/
-/tools/
+/tools/vina/vina*
+__pycache__/
+*.py[cod]
+*$py.class

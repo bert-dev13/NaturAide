@@ -333,24 +333,69 @@ async function main() {
   statusLine("MySQL", "✓ Connected")
   statusLine("Database", `✓ ${process.env.DB_NAME}`)
 
-  const pythonBin = process.env.DOCKING_PYTHON || (process.platform === "win32" ? "python.exe" : "python3")
-  const worker = path.join(root, "services", "docking", "worker.py")
-  if (!fs.existsSync(pythonBin) && path.isAbsolute(pythonBin)) {
-    fail("RDKit environment unavailable.")
+  // 1. Resolve Python interpreter (prefer project-local .docking-venv)
+  let pythonBin = process.env.DOCKING_PYTHON?.trim()
+  if (pythonBin && !path.isAbsolute(pythonBin)) {
+    pythonBin = path.resolve(root, pythonBin)
+  }
+  if (!pythonBin || !fs.existsSync(pythonBin)) {
+    const venvPython = path.join(
+      root,
+      ".docking-venv",
+      process.platform === "win32" ? "Scripts/python.exe" : "bin/python"
+    )
+    if (fs.existsSync(venvPython)) {
+      pythonBin = venvPython
+    }
   }
 
+  if (!pythonBin || !fs.existsSync(pythonBin)) {
+    statusLine("Python", "✗ Not found")
+    console.error("")
+    console.error("Docking environment is not installed.")
+    console.error("Run: npm run setup:docking")
+    console.error("")
+    process.exit(1)
+  }
+
+  const worker = path.join(root, "services", "docking", "worker.py")
   let tools
   try {
     const { stdout } = await execFileAsync(pythonBin, [worker, "tools"], { timeout: 30000, windowsHide: true })
     tools = parseWorkerJson(stdout)
   } catch {
-    fail("RDKit environment unavailable.")
+    fail("RDKit environment unavailable. Run: npm run setup:docking")
   }
-  if (!tools?.rdkit) fail("RDKit environment unavailable.")
+  if (!tools?.rdkit) fail("RDKit environment unavailable. Run: npm run setup:docking")
   statusLine("Python", `✓ ${pythonBin}`)
   statusLine("RDKit", `✓ ${tools.rdkit}`)
 
-  const vinaBin = process.env.VINA_BIN || path.join(root, "tools", "vina", process.platform === "win32" ? "vina.exe" : "vina")
+  // 2. Resolve AutoDock Vina binary (prefer project-local tools/vina/vina.exe)
+  let vinaBin = process.env.VINA_BIN?.trim()
+  if (vinaBin && !path.isAbsolute(vinaBin)) {
+    vinaBin = path.resolve(root, vinaBin)
+  }
+  if (!vinaBin || !fs.existsSync(vinaBin)) {
+    const defaultVina = path.join(
+      root,
+      "tools",
+      "vina",
+      process.platform === "win32" ? "vina.exe" : "vina"
+    )
+    if (fs.existsSync(defaultVina)) {
+      vinaBin = defaultVina
+    }
+  }
+
+  if (!vinaBin || !fs.existsSync(vinaBin)) {
+    statusLine("AutoDock Vina", "✗ Not found")
+    console.error("")
+    console.error("AutoDock Vina binary is missing.")
+    console.error("Run: npm run setup:docking")
+    console.error("")
+    process.exit(1)
+  }
+
   let vinaLabel = null
   try {
     const { stdout } = await execFileAsync(vinaBin, ["--version"], { timeout: 10000, windowsHide: true })
@@ -359,9 +404,9 @@ async function main() {
     vinaLabel = match ? `v${match[1]}` : line || null
   } catch (error) {
     const missing = error?.code === "ENOENT" || /ENOENT|not found/i.test(String(error?.message || ""))
-    fail(missing ? "AutoDock Vina not found." : "AutoDock Vina could not be executed.")
+    fail(missing ? "AutoDock Vina not found. Run: npm run setup:docking" : "AutoDock Vina could not be executed.")
   }
-  if (!vinaLabel) fail("AutoDock Vina not found.")
+  if (!vinaLabel) fail("AutoDock Vina not found. Run: npm run setup:docking")
   statusLine("AutoDock Vina", `✓ ${vinaLabel}`)
 
   const missingPrep = [

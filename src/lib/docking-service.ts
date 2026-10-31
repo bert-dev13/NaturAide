@@ -43,9 +43,47 @@ export interface EngineInfo {
 
 export function getDockingPaths() {
   const root = process.cwd();
-  const vinaBin = process.env.VINA_BIN || path.join(root, "tools", "vina", "vina.exe");
-  const pythonBin = process.env.DOCKING_PYTHON || (process.platform === "win32" ? "python.exe" : "python3");
-  const artifactDir = process.env.DOCKING_ARTIFACT_DIR || path.join(root, ".docking-artifacts");
+
+  // Intelligent project-relative AutoDock Vina resolution
+  let vinaBin = process.env.VINA_BIN?.trim();
+  if (vinaBin && !path.isAbsolute(vinaBin)) {
+    vinaBin = path.resolve(root, vinaBin);
+  }
+  if (!vinaBin || !fs.existsSync(vinaBin)) {
+    const defaultVina = path.join(root, "tools", "vina", process.platform === "win32" ? "vina.exe" : "vina");
+    if (fs.existsSync(defaultVina)) {
+      vinaBin = defaultVina;
+    } else {
+      vinaBin = vinaBin || defaultVina;
+    }
+  }
+
+  // Intelligent project-relative Python resolution
+  let pythonBin = process.env.DOCKING_PYTHON?.trim();
+  if (pythonBin && !path.isAbsolute(pythonBin)) {
+    pythonBin = path.resolve(root, pythonBin);
+  }
+  if (!pythonBin || !fs.existsSync(pythonBin)) {
+    const defaultVenvPython = path.join(
+      root,
+      ".docking-venv",
+      process.platform === "win32" ? "Scripts/python.exe" : "bin/python"
+    );
+    if (fs.existsSync(defaultVenvPython)) {
+      pythonBin = defaultVenvPython;
+    } else {
+      pythonBin = pythonBin || (process.platform === "win32" ? "python.exe" : "python3");
+    }
+  }
+
+  let artifactDir = process.env.DOCKING_ARTIFACT_DIR?.trim();
+  if (artifactDir && !path.isAbsolute(artifactDir)) {
+    artifactDir = path.resolve(root, artifactDir);
+  }
+  if (!artifactDir) {
+    artifactDir = path.join(root, ".docking-artifacts");
+  }
+
   const workerScript = path.join(root, "services", "docking", "worker.py");
 
   return { root, vinaBin, pythonBin, artifactDir, workerScript };

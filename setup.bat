@@ -557,9 +557,9 @@ if (-not (Test-Path $envFile)) {
         "XAI_API_KEY=",
         "XAI_BASE_URL=https://api.x.ai/v1",
         "XAI_MODEL=grok-4.7",
-        "VINA_BIN=$defaultVinaPath",
-        "DOCKING_PYTHON=$targetPyPath",
-        "DOCKING_ARTIFACT_DIR=$dockingArtifactsDir",
+        "VINA_BIN=",
+        "DOCKING_PYTHON=",
+        "DOCKING_ARTIFACT_DIR=",
         "DOCKING_TIMEOUT_SECONDS=900"
     )
     [System.IO.File]::WriteAllLines($envFile, $lines, [System.Text.Encoding]::UTF8)
@@ -604,21 +604,6 @@ if (-not (Test-Path $envFile)) {
     Test-EnvKey "TOGETHER_API_KEY" $false | Out-Null
     Test-EnvKey "XAI_API_KEY" $false | Out-Null
     
-    # Update DOCKING_PYTHON if .docking-venv python exists and differs
-    if ($targetPyPath -and (Test-Path $targetPyPath)) {
-        if ($envRaw -match "(?m)^DOCKING_PYTHON=(.*)$") {
-            $currentDockingPy = $matches[1].Trim()
-            if ($currentDockingPy -ne $targetPyPath) {
-                $envRaw = $envRaw -replace "(?m)^DOCKING_PYTHON=.*$", "DOCKING_PYTHON=$targetPyPath"
-                [System.IO.File]::WriteAllText($envFile, $envRaw, [System.Text.Encoding]::UTF8)
-                Write-Success "Updated DOCKING_PYTHON path in .env.local to point to .docking-venv."
-            }
-        } else {
-            Add-Content -Path $envFile -Value "`nDOCKING_PYTHON=$targetPyPath`n"
-            Write-Success "Added DOCKING_PYTHON path to .env.local."
-        }
-    }
-
     # Ensure AUTH_SECRET has minimum 32 chars
     if ($envRaw -match "(?m)^AUTH_SECRET=(.*)$") {
         $sec = $matches[1].Trim()

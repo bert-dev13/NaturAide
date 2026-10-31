@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "setup:docking": "node scripts/setup-docking.mjs",
     "dev": "next dev --port 3000",
     "tunnel": "node scripts/tunnel.mjs",
     "dev:share": "node scripts/dev-share.mjs",
@@ -15,7 +17,8 @@
     "sync:product-images": "npx tsx scripts/sync-product-images.ts",
     "discover:products": "npx tsx scripts/discover-plant-products.ts",
     "discover": "npx tsx scripts/discover-plant-products.ts",
-    "test:chat": "npx tsx tests/community-chat-routing.test.ts"
+    "test:chat": "npx tsx tests/community-chat-routing.test.ts",
+    "test:docking": "npx tsx tests/docking-integration.test.ts"
   },
   "dependencies": {
     "@types/bcryptjs": "^2.4.6",

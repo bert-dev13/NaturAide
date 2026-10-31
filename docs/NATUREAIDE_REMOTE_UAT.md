@@ -1,6 +1,6 @@
 # NatureAide - Remote Client Testing Guide (ngrok Integration)
 
-This guide describes how to run NatureAide and start the secure public HTTPS tunnel using the proven NANOTOPHEA ngrok implementation:
+This guide describes how to run NatureAide and start the secure public HTTPS tunnel using the integrated ngrok launcher:
 
 ```bash
 npm run dev:share
@@ -18,7 +18,7 @@ To host a remote testing session for a client:
 
 2. **Open Terminal**:
    ```powershell
-   cd C:\projects\natureaide
+   cd natureaide
    ```
 
 3. **Start Combined Dev & Tunnel Environment**:
@@ -54,8 +54,8 @@ To host a remote testing session for a client:
 
 | Command | Description |
 | :--- | :--- |
-| `npm run dev:share` | **Combined Mode**: Starts Next.js + ngrok tunnel in one command (replicated from NANOTOPHEA). |
-| `npm run tunnel` | **Tunnel-Only Mode**: Starts only the ngrok tunnel on port 3000 (replicated from NANOTOPHEA). |
+| `npm run dev:share` | **Combined Mode**: Starts Next.js + ngrok tunnel in one command with preflight status checks. |
+| `npm run tunnel` | **Tunnel-Only Mode**: Starts only the ngrok tunnel on port 3000. |
 | `npm run dev` | **Standard Dev Mode**: Starts Next.js development server on `http://localhost:3000`. |
 | `npm run build` | Compiles the production build for validation. |
 | `npm run start` | Runs the standalone Next.js production server. |
