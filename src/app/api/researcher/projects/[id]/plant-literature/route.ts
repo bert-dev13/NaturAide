@@ -57,6 +57,7 @@ export async function POST(
       const collectionDate = formatDateForDb(body.collectionDate);
       const collectionLocation = body.collectionLocation ? String(body.collectionLocation).trim() : null;
       const voucherSpecimenNumber = body.voucherSpecimenNumber ? String(body.voucherSpecimenNumber).trim() : null;
+      const sampleIdentifier = body.sampleIdentifier ? String(body.sampleIdentifier).trim() : null;
       const authenticationMethod = body.authenticationMethod ? String(body.authenticationMethod).trim() : null;
       const authenticatedBy = body.authenticatedBy ? String(body.authenticatedBy).trim() : null;
       const storageHandlingNotes = body.storageHandlingNotes ? String(body.storageHandlingNotes).trim() : null;
@@ -71,16 +72,17 @@ export async function POST(
         `
         INSERT INTO research_plant_data (
           projectId, partsStudied, specimenSource, collectionDate, collectionLocation,
-          voucherSpecimenNumber, authenticationMethod, authenticatedBy,
+          voucherSpecimenNumber, sampleIdentifier, authenticationMethod, authenticatedBy,
           storageHandlingNotes, materialType, extractionMethod, extractionSolvent,
           extractFractionName, selectionRationale, authenticationStatus, updatedAt
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP(3))
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP(3))
         ON DUPLICATE KEY UPDATE
           partsStudied = COALESCE(VALUES(partsStudied), partsStudied),
           specimenSource = COALESCE(VALUES(specimenSource), specimenSource),
           collectionDate = COALESCE(VALUES(collectionDate), collectionDate),
           collectionLocation = COALESCE(VALUES(collectionLocation), collectionLocation),
           voucherSpecimenNumber = COALESCE(VALUES(voucherSpecimenNumber), voucherSpecimenNumber),
+          sampleIdentifier = COALESCE(VALUES(sampleIdentifier), sampleIdentifier),
           authenticationMethod = COALESCE(VALUES(authenticationMethod), authenticationMethod),
           authenticatedBy = COALESCE(VALUES(authenticatedBy), authenticatedBy),
           storageHandlingNotes = COALESCE(VALUES(storageHandlingNotes), storageHandlingNotes),
@@ -99,6 +101,7 @@ export async function POST(
           collectionDate,
           collectionLocation,
           voucherSpecimenNumber,
+          sampleIdentifier,
           authenticationMethod,
           authenticatedBy,
           storageHandlingNotes,

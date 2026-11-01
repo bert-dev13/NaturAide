@@ -103,26 +103,31 @@ export default function ResearcherHeader({
       {/* MOBILE DRAWER / SHEET */}
       {mobileOpen && (
         <div className="lg:hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex">
-          <div className="w-[290px] max-w-[85vw] bg-gradient-to-b from-[#092218] via-[#0d2a1f] to-[#071a12] text-white border-r border-[#1a4a37]/60 p-4 sm:p-5 flex flex-col justify-between shadow-2xl h-full animate-in slide-in-from-left duration-200">
+          <div className="w-[280px] max-w-[85vw] bg-[#091f16] text-white border-r border-[#143827] p-4 sm:p-5 flex flex-col justify-between shadow-2xl h-full animate-in slide-in-from-left duration-200">
             {/* Drawer Header (shrink-0) */}
-            <div className="flex items-center justify-between pb-3 border-b border-white/10 shrink-0">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-white p-1 border border-white/20 shrink-0 shadow-xs">
+            <div className="flex items-center justify-between pb-3 border-b border-emerald-900/50 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-white p-1 shrink-0 shadow-xs flex items-center justify-center">
                   <Image
                     src="/images/nature-logo.png"
                     alt="NaturAide Logo"
-                    width={20}
-                    height={20}
+                    width={22}
+                    height={22}
                     className="object-contain"
                   />
                 </div>
-                <span className="font-heading font-extrabold text-base text-white">
-                  NaturAide
-                </span>
+                <div className="flex flex-col">
+                  <span className="font-semibold text-sm text-white">
+                    NaturAide
+                  </span>
+                  <span className="text-[9px] font-medium text-emerald-400/80 tracking-widest uppercase">
+                    Platform
+                  </span>
+                </div>
               </div>
               <button
                 onClick={() => setMobileOpen(false)}
-                className="p-1.5 rounded-lg text-emerald-300 hover:text-white hover:bg-white/10"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
                 aria-label="Close navigation drawer"
               >
                 <X className="w-5 h-5" />
@@ -134,10 +139,10 @@ export default function ResearcherHeader({
               <Link
                 href="/researcher/projects?new=true"
                 onClick={() => setMobileOpen(false)}
-                className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 text-[#072015] font-heading font-extrabold text-xs shadow-md shadow-emerald-950/40"
+                className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs shadow-xs transition-colors"
               >
-                <PlusCircle className="w-4 h-4 stroke-[2.5]" />
-                <span>+ Start New Research</span>
+                <PlusCircle className="w-4 h-4 stroke-[2]" />
+                <span>Start New Research</span>
               </Link>
             </div>
 
@@ -147,23 +152,23 @@ export default function ResearcherHeader({
             </div>
 
             {/* User Profile & Sign Out Footer (shrink-0) */}
-            <div className="pt-3 border-t border-white/10 shrink-0 space-y-2">
+            <div className="pt-3 border-t border-emerald-900/50 shrink-0 space-y-2">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-bold text-white truncate">{user.name}</p>
-                  <p className="text-[10px] text-emerald-300/80 font-semibold uppercase">Investigator</p>
+                  <p className="text-xs font-medium text-white truncate">{user.name}</p>
+                  <p className="text-[10px] text-emerald-400/70 uppercase tracking-wider">Investigator</p>
                 </div>
                 <Link
                   href="/researcher/profile"
                   onClick={() => setMobileOpen(false)}
-                  className="text-xs font-bold text-emerald-400 hover:underline"
+                  className="text-xs font-medium text-emerald-400 hover:text-emerald-300 transition-colors"
                 >
                   Profile
                 </Link>
               </div>
               <LogoutButton
                 label="Sign Out"
-                className="w-full justify-center py-2 px-3 rounded-xl text-xs font-bold text-rose-200 bg-rose-950/60 border border-rose-800 hover:bg-rose-900/80"
+                className="w-full justify-center py-2 px-3 rounded-lg text-xs font-medium text-rose-300 bg-rose-950/40 border border-rose-900/60 hover:bg-rose-900/60 transition-colors"
               />
             </div>
           </div>

@@ -174,6 +174,33 @@ export default async function PlantLiteratureStagePage({
     safetyEvidence,
   };
 
+  // 6. Fetch Pharmacognosy review feedback / findings if revisions are requested
+  const [reviewFeedback]: any = await pool.query(
+    `
+    SELECT rf.*, u.name as reviewerDisplayName
+    FROM review_feedback rf
+    LEFT JOIN users u ON rf.reviewerId = u.id
+    WHERE rf.projectId = ? AND (
+      rf.areaKey = 'pharmacognosy'
+      OR rf.affectedStage IN ('Stage 1', 'plant-literature', 'botanical', '1')
+      OR rf.sectionName LIKE '%Botanical%'
+      OR rf.sectionName LIKE '%Extraction%'
+      OR rf.sectionName LIKE '%Specimen%'
+      OR rf.sectionName LIKE '%Literature%'
+      OR rf.sectionName LIKE '%Synthesis%'
+    )
+    ORDER BY
+      CASE rf.severity
+        WHEN 'CRITICAL' THEN 1
+        WHEN 'MAJOR' THEN 2
+        WHEN 'MINOR' THEN 3
+        ELSE 4
+      END ASC,
+      rf.id ASC
+    `,
+    [projectId]
+  );
+
   return (
     <PlantLiteratureClient
       projectId={projectId}
@@ -204,6 +231,7 @@ export default async function PlantLiteratureStagePage({
       initialReferences={references}
       initialSynthesis={synthesis}
       initialCounts={initialCounts}
+      initialReviewFeedback={reviewFeedback || []}
     />
   );
 }

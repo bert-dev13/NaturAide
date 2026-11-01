@@ -1200,45 +1200,28 @@ export default function ExpertReviewClient({ projectId }: Props) {
       <ResearchStageFooter
         projectId={projectId}
         stageNumber={6}
-        stageTitle="Final Professional Review"
-        backHref={`/researcher/projects/${projectId}/completion-integration`}
-        backLabel="Back to Stage 5"
-        statusMessage={
-          phase === "prepare"
-            ? isReadyForReview
-              ? "Dossier Ready for Submission"
-              : "Prerequisites Incomplete"
-            : phase === "review"
-            ? "Waiting for Review Panel"
-            : phase === "revisions"
-            ? openRevisionsCount > 0
-              ? `${openRevisionsCount} revision${openRevisionsCount === 1 ? "" : "s"} require attention`
-              : "Revisions Addressed · Ready to Resubmit"
-            : "Final Approval Recorded"
-        }
-        secondaryAction={{
-          label: phase === "approved" ? "View Final Dossier" : "Preview Dossier",
-          onClick: () => setShowDossierModal(true),
-          icon: Eye,
-        }}
+        stageTitle="Knowledge Integration"
+        backHref={`/researcher/projects/${projectId}`}
+        backLabel="Back to Project"
         primaryAction={
           phase === "prepare"
             ? {
-                label: "Submit for Professional Review",
+                label: "Complete Research",
                 onClick: () => setShowSubmitModal(true),
                 disabled: !isReadyForReview || submitting,
                 loading: submitting,
-                icon: Send,
               }
             : phase === "revisions" && canResubmit
             ? {
-                label: "Resubmit Revised Dossier",
+                label: "Complete Research",
                 onClick: () => setShowResubmitModal(true),
                 disabled: submitting,
                 loading: submitting,
-                icon: Send,
               }
-            : undefined
+            : {
+                label: "Complete Research",
+                href: `/researcher/projects/${projectId}`,
+              }
         }
       />
 

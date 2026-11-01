@@ -181,6 +181,7 @@ export async function GET(
     const [projectRows]: any = await pool.query(
       `
       SELECT rp.id, rp.title, rp.currentStage, rp.status, rp.researchObjective, rp.researchQuestion,
+             rp.plantId,
              COALESCE(p.commonName, rp.plantCustomName, 'Unspecified Plant') as plantName,
              p.scientificName as plantScientificName
       FROM research_projects rp
@@ -244,6 +245,56 @@ export async function GET(
       status: "IN_PROGRESS",
     };
 
+    // Fetch available phytochemicals from plant_compounds for this plant
+    const plantId = project.plantId || null;
+    const plantSci = (project.plantScientificName || "").trim().toLowerCase();
+    const plantComm = (project.plantName || "").trim().toLowerCase();
+
+    let plantCompoundRows: any[] = [];
+    try {
+      const [pcRows]: any = await pool.query(
+        `
+        SELECT id, plantId, plantScientificName, plantCommonName, compoundName,
+               iupacName, molecularFormula, molecularWeight, compoundClass,
+               pubchemId, smiles, plantPartReported, referencesData, verificationStatus
+        FROM plant_compounds
+        WHERE (? IS NOT NULL AND plantId = ?)
+           OR (LENGTH(?) > 2 AND LOWER(plantScientificName) = LOWER(?))
+           OR (LENGTH(?) > 2 AND LOWER(plantCommonName) = LOWER(?))
+           OR (LENGTH(?) > 2 AND LOWER(?) LIKE CONCAT('%', LOWER(plantCommonName), '%'))
+           OR (LENGTH(?) > 2 AND LOWER(plantCommonName) LIKE CONCAT('%', ?, '%'))
+           OR (LENGTH(?) > 2 AND LOWER(?) LIKE CONCAT('%', LOWER(plantScientificName), '%'))
+           OR (LENGTH(?) > 2 AND LOWER(plantScientificName) LIKE CONCAT('%', ?, '%'))
+        ORDER BY compoundName ASC
+        `,
+        [
+          plantId, plantId,
+          plantSci, plantSci,
+          plantComm, plantComm,
+          plantComm, plantComm, plantComm, plantComm,
+          plantSci, plantSci, plantSci, plantSci
+        ]
+      );
+      plantCompoundRows = pcRows;
+    } catch (e) {
+      console.warn("plant_compounds query warning:", e);
+    }
+
+    const availablePlantCompounds = plantCompoundRows.map((row: any) => {
+      let parsedRefs = [];
+      if (row.referencesData) {
+        try {
+          parsedRefs = typeof row.referencesData === "string" ? JSON.parse(row.referencesData) : row.referencesData;
+        } catch {
+          parsedRefs = [];
+        }
+      }
+      return {
+        ...row,
+        references: parsedRefs,
+      };
+    });
+
     // Calculate real dynamic counts
     const compoundsCount = compounds.length;
     const screenedCompoundIds = new Set(
@@ -268,6 +319,7 @@ export async function GET(
       results,
       literature,
       synthesis,
+      availablePlantCompounds,
       counts: {
         compoundsCount,
         screenedCount,
@@ -300,7 +352,7 @@ export async function POST(
     // Verify ownership
     const [pCheck]: any = await pool.query(
       `
-      SELECT rp.id, rp.title, rp.researchObjective,
+      SELECT rp.id, rp.title, rp.researchObjective, rp.plantId,
              COALESCE(p.commonName, rp.plantCustomName, 'Unspecified Plant') as plantName,
              p.scientificName as plantScientificName
       FROM research_projects rp
@@ -339,6 +391,20 @@ export async function POST(
         return NextResponse.json({ error: "Compound name is required" }, { status: 400 });
       }
 
+      const cName = compoundName.trim();
+
+      // Duplicate check: Prevent duplicate project compounds at backend level
+      const [dupCheck]: any = await pool.query(
+        `SELECT id FROM research_compounds WHERE projectId = ? AND LOWER(TRIM(compoundName)) = LOWER(?) LIMIT 1`,
+        [projectId, cName]
+      );
+      if (dupCheck.length > 0) {
+        return NextResponse.json(
+          { error: `"${cName}" is already cataloged in this research project.` },
+          { status: 409 }
+        );
+      }
+
       const isResearcherAdded = sourceProvenance === "RESEARCHER_ENTERED";
       if (isResearcherAdded && (!sourceReference || !sourceReference.trim())) {
         return NextResponse.json(
@@ -358,7 +424,7 @@ export async function POST(
       let finalCid = pubchemId?.trim() || null;
 
       if (!finalFormula || !finalWeight || !finalSmiles) {
-        const pubchem = await fetchPubChemProperties(compoundName.trim());
+        const pubchem = await fetchPubChemProperties(cName);
         if (pubchem) {
           finalFormula = finalFormula || pubchem.molecularFormula || null;
           finalWeight = finalWeight || pubchem.molecularWeight || null;
@@ -380,7 +446,7 @@ export async function POST(
         `,
         [
           projectId,
-          compoundName.trim(),
+          cName,
           finalIupac,
           finalSmiles,
           finalFormula,
@@ -399,7 +465,7 @@ export async function POST(
         INSERT INTO research_activity_logs (projectId, researcherId, actionType, description)
         VALUES (?, ?, 'COMPOUND_ADDED', ?)
         `,
-        [projectId, session.id, `Cataloged phytochemical: "${compoundName.trim()}" (${resolvedProvenance})`]
+        [projectId, session.id, `Cataloged phytochemical: "${cName}" (${resolvedProvenance})`]
       );
 
       return NextResponse.json({
@@ -407,6 +473,268 @@ export async function POST(
         message: "Phytochemical cataloged successfully.",
         insertedId: res.insertId,
         compoundId: res.insertId,
+        compound: {
+          id: res.insertId,
+          projectId,
+          compoundName: cName,
+          iupacName: finalIupac,
+          smiles: finalSmiles,
+          molecularFormula: finalFormula,
+          molecularWeight: finalWeight,
+          pubchemId: finalCid,
+          plantSource: plantSource?.trim() || project.plantName,
+          sourceReference: sourceReference?.trim() || null,
+          sourceProvenance: resolvedProvenance,
+          selectedForDocking: 0,
+          preparationStatus: "UNPREPARED",
+        },
+      });
+    }
+
+    // =========================================================================
+    // 1b. BATCH ADD COMPOUNDS
+    // =========================================================================
+    if (action === "add-compounds") {
+      const { compounds: compoundsToAdd } = body;
+      if (!Array.isArray(compoundsToAdd) || compoundsToAdd.length === 0) {
+        return NextResponse.json({ error: "No compounds specified to add" }, { status: 400 });
+      }
+
+      const insertedCompounds: any[] = [];
+      const skippedDuplicates: string[] = [];
+
+      for (const item of compoundsToAdd) {
+        if (!item.compoundName || !item.compoundName.trim()) continue;
+        const cName = item.compoundName.trim();
+
+        const [dup]: any = await pool.query(
+          `SELECT id FROM research_compounds WHERE projectId = ? AND LOWER(TRIM(compoundName)) = LOWER(?) LIMIT 1`,
+          [projectId, cName]
+        );
+        if (dup.length > 0) {
+          skippedDuplicates.push(cName);
+          continue;
+        }
+
+        let finalFormula = item.molecularFormula?.trim() || null;
+        let finalWeight = item.molecularWeight ? parseFloat(item.molecularWeight) : null;
+        let finalSmiles = item.smiles?.trim() || null;
+        let finalIupac = item.iupacName?.trim() || null;
+        let finalCid = item.pubchemId?.trim() || null;
+
+        if (!finalFormula || !finalWeight || !finalSmiles) {
+          const pubchem = await fetchPubChemProperties(cName);
+          if (pubchem) {
+            finalFormula = finalFormula || pubchem.molecularFormula || null;
+            finalWeight = finalWeight || pubchem.molecularWeight || null;
+            finalSmiles = finalSmiles || pubchem.smiles || null;
+            finalIupac = finalIupac || pubchem.iupacName || null;
+            finalCid = finalCid || (pubchem.cid ? String(pubchem.cid) : null);
+          }
+        }
+
+        const [ins]: any = await pool.query(
+          `
+          INSERT INTO research_compounds (
+            projectId, compoundName, iupacName, smiles, molecularFormula,
+            molecularWeight, pubchemId, plantSource, sourceReference,
+            sourceNotes, sourceProvenance, selectedForDocking, preparationStatus
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'UNPREPARED')
+          `,
+          [
+            projectId,
+            cName,
+            finalIupac,
+            finalSmiles,
+            finalFormula,
+            finalWeight,
+            finalCid,
+            item.plantSource?.trim() || project.plantName,
+            item.sourceReference?.trim() || null,
+            item.sourceNotes?.trim() || null,
+            item.sourceProvenance || "VERIFIED_DATABASE",
+          ]
+        );
+
+        insertedCompounds.push({
+          id: ins.insertId,
+          projectId,
+          compoundName: cName,
+          iupacName: finalIupac,
+          smiles: finalSmiles,
+          molecularFormula: finalFormula,
+          molecularWeight: finalWeight,
+          pubchemId: finalCid,
+          plantSource: item.plantSource?.trim() || project.plantName,
+          sourceReference: item.sourceReference?.trim() || null,
+          sourceProvenance: item.sourceProvenance || "VERIFIED_DATABASE",
+          selectedForDocking: 0,
+          preparationStatus: "UNPREPARED",
+        });
+      }
+
+      if (insertedCompounds.length > 0) {
+        await pool.query(
+          `
+          INSERT INTO research_activity_logs (projectId, researcherId, actionType, description)
+          VALUES (?, ?, 'COMPOUNDS_BATCH_ADDED', ?)
+          `,
+          [
+            projectId,
+            session.id,
+            `Cataloged ${insertedCompounds.length} phytochemicals: ${insertedCompounds.map((c) => c.compoundName).join(", ")}`,
+          ]
+        );
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: `Cataloged ${insertedCompounds.length} compounds.`,
+        insertedCompounds,
+        skippedDuplicates,
+      });
+    }
+
+    // =========================================================================
+    // 1c. SUBMIT NOVEL / RESEARCHER COMPOUND WITH EVIDENCE
+    // =========================================================================
+    if (action === "submit-custom-compound") {
+      const {
+        compoundName,
+        molecularFormula,
+        molecularWeight,
+        pubchemId,
+        smiles,
+        compoundClass,
+        plantAssociationEvidence,
+        sourceReference,
+      } = body;
+
+      if (!compoundName || !compoundName.trim()) {
+        return NextResponse.json({ error: "Compound name is required" }, { status: 400 });
+      }
+      if (!sourceReference || !sourceReference.trim()) {
+        return NextResponse.json(
+          { error: "A scientific reference (DOI, URL, or citation) is required for evidence." },
+          { status: 400 }
+        );
+      }
+      if (!plantAssociationEvidence || !plantAssociationEvidence.trim()) {
+        return NextResponse.json(
+          { error: "Evidence explaining the association with this plant is required." },
+          { status: 400 }
+        );
+      }
+
+      const cName = compoundName.trim();
+      const [dup]: any = await pool.query(
+        `SELECT id FROM research_compounds WHERE projectId = ? AND LOWER(TRIM(compoundName)) = LOWER(?) LIMIT 1`,
+        [projectId, cName]
+      );
+      if (dup.length > 0) {
+        return NextResponse.json(
+          { error: `"${cName}" is already cataloged in this research project.` },
+          { status: 409 }
+        );
+      }
+
+      let finalFormula = molecularFormula?.trim() || null;
+      let finalWeight = molecularWeight ? parseFloat(molecularWeight) : null;
+      let finalSmiles = smiles?.trim() || null;
+      let finalCid = pubchemId?.trim() || null;
+
+      if (!finalFormula || !finalWeight || !finalSmiles) {
+        const pubchem = await fetchPubChemProperties(cName);
+        if (pubchem) {
+          finalFormula = finalFormula || pubchem.molecularFormula || null;
+          finalWeight = finalWeight || pubchem.molecularWeight || null;
+          finalSmiles = finalSmiles || pubchem.smiles || null;
+          finalCid = finalCid || (pubchem.cid ? String(pubchem.cid) : null);
+        }
+      }
+
+      // Record in plant_compounds library as RESEARCHER_SUBMITTED
+      const refData = [
+        {
+          title: plantAssociationEvidence.trim(),
+          source: sourceReference.trim(),
+          year: new Date().getFullYear(),
+          submittedByResearcherId: session.id,
+        },
+      ];
+
+      await pool.query(
+        `
+        INSERT INTO plant_compounds (
+          plantId, plantScientificName, plantCommonName, compoundName,
+          molecularFormula, molecularWeight, compoundClass,
+          pubchemId, smiles, referencesData, verificationStatus,
+          submittedByResearcherId
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'RESEARCHER_SUBMITTED', ?)
+        `,
+        [
+          project.plantId || null,
+          project.plantScientificName || project.plantName,
+          project.plantName,
+          cName,
+          finalFormula,
+          finalWeight,
+          compoundClass?.trim() || "Unclassified",
+          finalCid,
+          finalSmiles,
+          JSON.stringify(refData),
+          session.id,
+        ]
+      );
+
+      // Add to research_compounds for current project
+      const [ins]: any = await pool.query(
+        `
+        INSERT INTO research_compounds (
+          projectId, compoundName, smiles, molecularFormula,
+          molecularWeight, pubchemId, plantSource, sourceReference,
+          sourceNotes, sourceProvenance, selectedForDocking, preparationStatus
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'RESEARCHER_ENTERED', 0, 'UNPREPARED')
+        `,
+        [
+          projectId,
+          cName,
+          finalSmiles,
+          finalFormula,
+          finalWeight,
+          finalCid,
+          project.plantName,
+          sourceReference.trim(),
+          plantAssociationEvidence.trim(),
+        ]
+      );
+
+      await pool.query(
+        `
+        INSERT INTO research_activity_logs (projectId, researcherId, actionType, description)
+        VALUES (?, ?, 'CUSTOM_COMPOUND_SUBMITTED', ?)
+        `,
+        [projectId, session.id, `Submitted novel phytochemical with evidence: "${cName}"`]
+      );
+
+      return NextResponse.json({
+        success: true,
+        message: "Phytochemical submitted with evidence and added to project.",
+        insertedId: ins.insertId,
+        compound: {
+          id: ins.insertId,
+          projectId,
+          compoundName: cName,
+          smiles: finalSmiles,
+          molecularFormula: finalFormula,
+          molecularWeight: finalWeight,
+          pubchemId: finalCid,
+          plantSource: project.plantName,
+          sourceReference: sourceReference.trim(),
+          sourceProvenance: "RESEARCHER_ENTERED",
+          selectedForDocking: 0,
+          preparationStatus: "UNPREPARED",
+        },
       });
     }
 

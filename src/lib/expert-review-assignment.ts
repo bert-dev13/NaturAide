@@ -127,7 +127,11 @@ export async function buildFullDossierSnapshot(projectId: number): Promise<any> 
             COALESCE(p.commonName, rp.plantCustomName, 'Unspecified Plant') as plantName,
             p.scientificName as plantScientificName,
             p.category as plantFamily,
+            p.botanical_synonyms as botanicalSynonyms,
+            p.local_names as plantLocalNames,
             p.plant_parts_used as plantPartsUsed,
+            p.source_organization as sourceOrganization,
+            p.source_verified as sourceVerified,
             p.simpleUse as traditionalUses
      FROM research_projects rp
      LEFT JOIN plants p ON rp.plantId = p.id
@@ -142,6 +146,12 @@ export async function buildFullDossierSnapshot(projectId: number): Promise<any> 
     [projectId]
   );
   const plantData = plantDataRows[0] || null;
+
+  const [stage1SynthRows]: any = await pool.query(
+    "SELECT * FROM research_literature_syntheses WHERE projectId = ? LIMIT 1",
+    [projectId]
+  );
+  const stage1Synthesis = stage1SynthRows[0] || null;
 
   // 3. Stage 1 Literature References
   const [litRefs]: any = await pool.query(
@@ -246,14 +256,39 @@ export async function buildFullDossierSnapshot(projectId: number): Promise<any> 
       completion?.isSynthesisApproved ||
       (completion?.isInterpretationApproved && completion?.isConclusionApproved)
     ),
-    // Botanical & Plant Data
+    // Botanical & Plant Data (Direct from Researcher Stage 1)
     plantName: project?.plantName || "Unspecified Plant",
     plantScientificName: project?.plantScientificName || "",
     plantFamily: project?.plantFamily || "",
+    plantLocalNames: plantData?.localNames || project?.plantLocalNames || "",
     plantPartsStudied: plantData?.partsStudied || project?.plantPartsUsed || "Leaves",
+    botanicalSynonyms: project?.botanicalSynonyms || "",
+    sourceOrganization: project?.sourceOrganization || "Philippine Institute of Traditional and Alternative Health Care (PITAHC)",
+    sourceVerified: Boolean(project?.sourceVerified || project?.plantId),
+    specimenSource: plantData?.specimenSource || "",
+    collectionDate: plantData?.collectionDate || "",
+    collectionLocation: plantData?.collectionLocation || "",
+    voucherSpecimenNumber: plantData?.voucherSpecimenNumber || "",
+    sampleIdentifier: plantData?.sampleIdentifier || "",
+    authenticationMethod: plantData?.authenticationMethod || "Macro-morphological & Taxonomic Key",
+    authenticatedBy: plantData?.authenticatedBy || "",
+    selectionRationale: plantData?.selectionRationale || "",
+    materialType: plantData?.materialType || "Crude Extract",
     extractionMethod: plantData?.extractionMethod || "Cold Maceration with Rotary Evaporation",
     extractionSolvent: plantData?.extractionSolvent || "80% Aqueous Ethanol",
-    materialType: plantData?.materialType || "Crude Extract",
+    extractFractionName: plantData?.extractFractionName || "",
+    storageHandlingNotes: plantData?.storageHandlingNotes || "",
+    authenticationStatus: plantData?.authenticationStatus || "VERIFIED",
+    stage1Synthesis: stage1Synthesis
+      ? {
+          keyFindings: stage1Synthesis.keyFindings || "",
+          areasOfAgreement: stage1Synthesis.areasOfAgreement || "",
+          conflictingFindings: stage1Synthesis.conflictingFindings || "",
+          evidenceLimitations: stage1Synthesis.evidenceLimitations || "",
+          remainingGaps: stage1Synthesis.remainingGaps || "",
+          relevanceToQuestion: stage1Synthesis.relevanceToQuestion || "",
+        }
+      : null,
     // Comprehensive Stage Arrays (Read-Only Viewer Grounding)
     literature: litRefs || [],
     compounds: compounds || [],

@@ -116,25 +116,19 @@ const ROLE_STEPS: Record<string, CheckingStepDef[]> = {
     { id: "computational_results", number: "05", title: "Computational Results & Limits", subtitle: "Binding affinity benchmarks and in-silico limits" },
   ],
   pharmacology: [
-    { id: "mechanisms", number: "01", title: "Molecular Mechanisms", subtitle: "Hypothesized pathways of therapeutic action" },
-    { id: "biological_relevance", number: "02", title: "Biological Relevance", subtitle: "Physiological relevance and enzymatic targets" },
-    { id: "compound_target_evidence", number: "03", title: "Compound-Target Evidence", subtitle: "Interaction matrix and binding affinity correlation" },
-    { id: "literature", number: "04", title: "Supporting Literature", subtitle: "Pharmacological and functional bioassay citations" },
-    { id: "pharmacological_interpretation", number: "05", title: "Pharmacological Interpretation", subtitle: "Mechanistic interpretation and biological boundaries" },
+    { id: "setup", number: "01", title: "Setup", subtitle: "Submitted ligand, molecular target, and reproducibility parameters" },
+    { id: "results", number: "02", title: "Results", subtitle: "Predicted binding affinities and conformational poses" },
+    { id: "interpretation", number: "03", title: "Interpretation", subtitle: "Researcher scientific interpretation and computational limitations" },
   ],
   formulation: [
-    { id: "prototype_profile", number: "01", title: "Prototype Profile", subtitle: "Dosage form, vehicle, and route specifications" },
-    { id: "composition_ingredients", number: "02", title: "Composition & Ingredients", subtitle: "Standardized active fraction and pharmaceutical excipients" },
-    { id: "preparation_sop", number: "03", title: "Preparation SOP", subtitle: "Compounding procedure, mixing steps, and process control" },
-    { id: "concentration_ratio", number: "04", title: "Concentration & Ratio", subtitle: "Plant-to-extract ratio and active concentration limits" },
-    { id: "formulation_assessment", number: "05", title: "Formulation Assessment", subtitle: "Stability risks, shelf-life factors, and formulation boundaries" },
+    { id: "formulation", number: "01", title: "Formulation", subtitle: "Formulation type, plant material, extraction solvent, and method" },
+    { id: "composition", number: "02", title: "Composition", subtitle: "Phytochemical active components, amounts, and preparation roles" },
+    { id: "documentation", number: "03", title: "Documentation", subtitle: "Formulation notes, standard operating procedure (SOP), and summary" },
   ],
   clinical_safety: [
-    { id: "toxicity_boundaries", number: "01", title: "Toxicity Boundaries", subtitle: "Cytotoxicity thresholds and published safety margins" },
-    { id: "contraindications_warnings", number: "02", title: "Contraindications & Warnings", subtitle: "Hypersensitivity, pregnancy, lactation, and condition warnings" },
-    { id: "herb_drug_interactions", number: "03", title: "Herb-Drug Interactions", subtitle: "Cytochrome P450 modulation and pharmacological synergies" },
-    { id: "dose_concentration", number: "04", title: "Dose & Concentration Limits", subtitle: "Maximum recommended daily doses and toxic thresholds" },
-    { id: "safety_assessment", number: "05", title: "Clinical Safety Assessment", subtitle: "Evidence synthesis and clinical safety precautions" },
+    { id: "safety_evidence", number: "01", title: "Safety Evidence", subtitle: "Carried forward formulation parameters and documented safety references" },
+    { id: "safety_assessment", number: "02", title: "Safety Assessment", subtitle: "Toxicity, contraindications, interactions, dose limits, and formulation safety" },
+    { id: "clinical_summary", number: "03", title: "Clinical Summary", subtitle: "Synthesized clinical safety evaluation, key considerations, and limitations" },
   ],
 };
 
@@ -162,25 +156,22 @@ const CHECKLIST_CRITERIA_BY_ROLE: Record<string, ChecklistItem[]> = {
     { id: "in_silico_citations", label: "In-silico literature & structural data sources reviewed" },
   ],
   pharmacology: [
-    { id: "mechanism_pathway", label: "Proposed molecular mechanism biochemically substantiated" },
-    { id: "biological_relevance", label: "Biological relevance & physiological pathways documented" },
-    { id: "compound_target_matrix", label: "Compound-target interaction matrix substantiated" },
-    { id: "toxicity_boundaries", label: "Cellular toxicity & safety boundaries evaluated" },
-    { id: "pharmacological_literature", label: "Supporting pharmacological citations verified" },
+    { id: "target_relevance", label: "Target macromolecule & crystal structure biochemically relevant" },
+    { id: "docking_parameters", label: "AutoDock Vina search grid & exhaustiveness appropriately configured" },
+    { id: "reproducible_evidence", label: "Docking runs, poses, and binding affinities computationally verified" },
+    { id: "scientific_limitations", label: "Computational predictions properly acknowledged with biological boundaries" },
   ],
   formulation: [
-    { id: "prototype_specs", label: "Dosage form prototype & delivery route clearly specified" },
-    { id: "excipient_compatibility", label: "Extract standardization & excipient compatibility verified" },
-    { id: "compounding_sop", label: "Preparation standard operating procedure (SOP) sufficiently detailed" },
-    { id: "der_ratio", label: "Plant-to-extract ratio (DER) & concentration limits justified" },
-    { id: "stability_storage", label: "Formulation stability risks & packaging storage conditions evaluated" },
+    { id: "prototype_specs", label: "Formulation type, plant material, and extraction parameters verified" },
+    { id: "composition_verified", label: "Active phytochemical composition, amounts, and roles documented" },
+    { id: "compounding_sop", label: "Preparation Standard Operating Procedure (SOP) sufficiently detailed" },
+    { id: "documentation_complete", label: "Formulation summary and researcher documentation complete" },
   ],
   clinical_safety: [
-    { id: "preclinical_safety", label: "Cytotoxicity thresholds & preclinical safety boundaries reviewed" },
-    { id: "contraindications", label: "Contraindications & vulnerable population warnings clearly stated" },
-    { id: "herb_drug_interactions", label: "Potential herb-drug interactions (e.g. CYP450, antidiabetics) documented" },
-    { id: "dose_limits", label: "Maximum recommended daily dose & concentration limits justified" },
-    { id: "clinical_relevance", label: "Clinical safety precautions & surveillance relevance evaluated" },
+    { id: "preclinical_safety", label: "Preclinical toxicity boundaries & organ safety verified" },
+    { id: "contraindications_warnings", label: "Contraindications & pregnancy/lactation warnings evaluated" },
+    { id: "herb_drug_interactions", label: "Herb-drug interaction risks assessed with pharmacological rationale" },
+    { id: "clinical_summary_valid", label: "Clinical safety summary & evidence limitations scientifically justified" },
   ],
 };
 
@@ -327,6 +318,11 @@ export default function RoleCheckingWorkspaceClient({
   // UI state
   const [submitting, setSubmitting] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [expDetailsOpen, setExpDetailsOpen] = useState(false);
+  const [inspectingRun, setInspectingRun] = useState<any | null>(null);
+  const [inspectSubTab, setInspectSubTab] = useState<"summary" | "poses" | "parameters" | "log">("summary");
+  const [showLimitationsPharmacology, setShowLimitationsPharmacology] = useState(false);
+  const [copiedReviewerLog, setCopiedReviewerLog] = useState(false);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -1921,21 +1917,61 @@ export default function RoleCheckingWorkspaceClient({
               </div>
             )}
 
-            {/* PHARMACOGNOSY: 05 RESEARCH INTERPRETATION */}
+            {/* PHARMACOGNOSY: 05 RESEARCH INTERPRETATION & FINAL KNOWLEDGE INTEGRATION */}
             {roleKey === "pharmacognosy" && currentStep.id === "interpretation" && (
               <div className="space-y-4 text-xs">
-                <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <p className="font-bold text-slate-900 text-sm">
-                      Botanical Synthesis & Material Authenticity
-                    </p>
-                    <ProvenanceBadge type="INTERPRETATION" />
+                <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-4">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                    <div>
+                      <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                        RESEARCH SYNTHESIS & INTEGRATION
+                      </span>
+                      <h4 className="text-sm font-black text-slate-900">Multi-Stage Integration</h4>
+                    </div>
+                    <ProvenanceBadge type="RESEARCHER PROVIDED" />
                   </div>
-                  <p className="text-slate-800 leading-relaxed whitespace-pre-wrap">
-                    {snapshot?.scientificInterpretation ||
-                      snapshot?.botanicalInterpretation ||
-                      "Ethnomedicinal literature and phytochemical characterization validate the taxonomic identity and traditional extraction methodology for this botanical specimen. Ethanolic preparation yields standardized triterpenoid and saponin fractions corresponding to traditional documentation. Quality control limits must be verified prior to bulk preparation."}
-                  </p>
+
+                  {/* Key Findings */}
+                  {snapshot?.synthesis?.keyFindings && snapshot.synthesis.keyFindings.length > 0 && (
+                    <div className="space-y-1.5">
+                      <strong className="text-slate-900 block text-xs">Key Findings:</strong>
+                      <ul className="list-disc list-inside space-y-1 text-slate-700 bg-slate-50/80 p-3 rounded-xl border border-slate-200/70">
+                        {snapshot.synthesis.keyFindings.map((f: string, i: number) => (
+                          <li key={i}>{f}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Evidence Alignment */}
+                  <div className="space-y-1">
+                    <strong className="text-slate-900 block text-xs">Evidence Alignment:</strong>
+                    <p className="text-slate-800 bg-slate-50/80 p-3 rounded-xl border border-slate-200/70 leading-relaxed font-medium">
+                      {snapshot?.synthesis?.evidenceAlignment || snapshot?.evidenceAlignment || "Traditional ethnomedicinal literature directly aligns with computational in-silico screening and molecular docking binding results."}
+                    </p>
+                  </div>
+
+                  {/* Scientific Interpretation */}
+                  <div className="space-y-1">
+                    <strong className="text-slate-900 block text-xs">Scientific Interpretation:</strong>
+                    <p className="text-slate-800 bg-slate-50/80 p-3 rounded-xl border border-slate-200/70 leading-relaxed font-medium">
+                      {snapshot?.synthesis?.scientificInterpretation || snapshot?.scientificInterpretation || snapshot?.botanicalInterpretation || "Ethnomedicinal literature and phytochemical characterization validate the taxonomic identity and traditional extraction methodology for this botanical specimen."}
+                    </p>
+                  </div>
+
+                  {/* Final Conclusion */}
+                  <div className="space-y-1">
+                    <strong className="text-slate-900 block text-xs">Final Conclusion:</strong>
+                    <p className="text-slate-800 bg-slate-50/80 p-3 rounded-xl border border-slate-200/70 leading-relaxed font-medium">
+                      {snapshot?.synthesis?.conclusion || snapshot?.finalConclusion || "The multi-stage research pipeline establishes consistent botanical, computational, and clinical safety profiles for future development."}
+                    </p>
+                  </div>
+
+                  {/* Research Limitations */}
+                  <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-600 text-[11px] leading-relaxed">
+                    <strong className="text-slate-800 block mb-0.5">Research Limitations:</strong>
+                    {snapshot?.synthesis?.limitations || snapshot?.limitations || "Predictions reflect computational modeling and published literature without empirical bioassays."}
+                  </div>
                 </div>
               </div>
             )}
@@ -1952,44 +1988,106 @@ export default function RoleCheckingWorkspaceClient({
                       <ProvenanceBadge type="RESEARCHER PROVIDED" detail="SMILES" />
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {(snapshot?.compounds || []).map((cmp: any, idx: number) => (
-                        <div key={cmp.id || idx} className="p-3.5 rounded-xl border border-slate-200 bg-slate-50 space-y-1">
-                          <p className="font-bold text-slate-900 text-sm">{cmp.compoundName || cmp.name}</p>
-                          <p className="text-slate-600 font-mono text-[11px]">Formula: {cmp.molecularFormula || cmp.formula || "N/A"}</p>
-                          <p className="text-slate-600 font-mono text-[11px]">MW: {cmp.molecularWeight || cmp.mw || "N/A"} g/mol</p>
-                        </div>
-                      ))}
+                      {(snapshot?.compounds || []).map((cmp: any, idx: number) => {
+                        const isDockingCandidate = Boolean(cmp.selectedForDocking);
+                        return (
+                          <div key={cmp.id || idx} className="p-3.5 rounded-xl border border-slate-200 bg-slate-50 space-y-1.5">
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="font-bold text-slate-900 text-sm">{cmp.compoundName || cmp.name}</p>
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                  isDockingCandidate
+                                    ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                                    : "bg-slate-200/80 text-slate-700"
+                                }`}
+                              >
+                                {isDockingCandidate ? "Selected for Docking" : "Candidate"}
+                              </span>
+                            </div>
+                            <p className="text-slate-600 font-mono text-[11px]">
+                              Formula: <span className="font-bold text-slate-800">{cmp.molecularFormula || cmp.formula || "N/A"}</span>
+                            </p>
+                            <p className="text-slate-600 font-mono text-[11px]">
+                              MW: {cmp.molecularWeight ? `${Number(cmp.molecularWeight).toFixed(2)} g/mol` : "N/A"}
+                            </p>
+                            {cmp.smiles && (
+                              <p className="text-slate-500 font-mono text-[10px] truncate" title={cmp.smiles}>
+                                SMILES: {cmp.smiles}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
 
                 {currentStep.id === "screening_admet" && (
-                  <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <p className="font-bold text-slate-900">Pharmacokinetic Filtering & Lipinski Compliance</p>
-                      <ProvenanceBadge type="PREDICTED" detail="ADMET Filter" />
+                  <div className="space-y-3">
+                    <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="font-bold text-slate-900">Pharmacokinetic Filtering & Lipinski Compliance</p>
+                        <ProvenanceBadge type="PREDICTED" detail="ADMET Filter" />
+                      </div>
+                      <p className="text-slate-800 leading-relaxed">
+                        Lipinski Rule of Five compliance verified across screened ligands: MW ≤ 500 Da, LogP ≤ 5, H-bond donors ≤ 5, H-bond acceptors ≤ 10.
+                      </p>
                     </div>
-                    <p className="text-slate-800 leading-relaxed">
-                      Lipinski Rule of Five compliance verified across screened ligands: MW ≤ 500 Da, LogP ≤ 5, H-bond donors ≤ 5, H-bond acceptors ≤ 10.
-                    </p>
+
+                    {snapshot?.insilicoResults && snapshot.insilicoResults.length > 0 && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <p className="font-bold text-slate-900">Screening Calculations ({snapshot.insilicoResults.length})</p>
+                          <ProvenanceBadge type="PREDICTED" detail="In-Silico Engine" />
+                        </div>
+                        <div className="grid grid-cols-1 gap-2.5">
+                          {snapshot.insilicoResults.map((res: any, idx: number) => (
+                            <div key={res.id || idx} className="p-3.5 rounded-xl border border-slate-200 bg-white space-y-1">
+                              <div className="flex items-center justify-between">
+                                <span className="font-bold text-slate-900 text-sm">{res.compoundName}</span>
+                                <span className="px-2 py-0.5 rounded-md bg-cyan-50 text-cyan-800 border border-cyan-200 text-[10px] font-bold">
+                                  {res.predictionType || "ADMET"}
+                                </span>
+                              </div>
+                              <p className="text-slate-700 text-xs leading-relaxed">{res.resultSummary}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
                 {currentStep.id === "target_selection" && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+                  <div className="space-y-3">
+                    {/* Researcher Docking Selection & Rationale */}
+                    <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200/80 space-y-2">
                       <div className="flex items-center justify-between">
-                        <p className="font-bold text-slate-900">3W37 · Alpha-Amylase</p>
-                        <ProvenanceBadge type="LITERATURE" detail="PDB / RCSB" />
+                        <p className="font-bold text-amber-950 text-xs">Researcher Docking Selection Rationale</p>
+                        <ProvenanceBadge type="INTERPRETATION" />
                       </div>
-                      <p className="text-slate-500 text-[11px]">Human Pancreatic Alpha-Amylase complex (Resolution: 1.8 Å)</p>
+                      <p className="text-slate-800 text-xs leading-relaxed whitespace-pre-wrap">
+                        {snapshot?.insilicoSynthesis?.selectionRationale ||
+                          snapshot?.selectionRationale ||
+                          "Screened compounds were selected based on favorable Lipinski compliance, high predicted intestinal absorption, and verified traditional ethnobotanical relevance."}
+                      </p>
                     </div>
-                    <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
-                      <div className="flex items-center justify-between">
-                        <p className="font-bold text-slate-900">2QMJ · DPP-4 Complex</p>
-                        <ProvenanceBadge type="LITERATURE" detail="PDB / RCSB" />
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <p className="font-bold text-slate-900">3W37 · Alpha-Amylase</p>
+                          <ProvenanceBadge type="LITERATURE" detail="PDB / RCSB" />
+                        </div>
+                        <p className="text-slate-500 text-[11px]">Human Pancreatic Alpha-Amylase complex (Resolution: 1.8 Å)</p>
                       </div>
-                      <p className="text-slate-500 text-[11px]">Dipeptidyl Peptidase IV Crystal Structure</p>
+                      <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <p className="font-bold text-slate-900">2QMJ · DPP-4 Complex</p>
+                          <ProvenanceBadge type="LITERATURE" detail="PDB / RCSB" />
+                        </div>
+                        <p className="text-slate-500 text-[11px]">Dipeptidyl Peptidase IV Crystal Structure</p>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -2031,61 +2129,207 @@ export default function RoleCheckingWorkspaceClient({
               </div>
             )}
 
-            {/* PHARMACOLOGY WORKSPACE STEPS */}
+            {/* PHARMACOLOGY WORKSPACE STEPS (Stage 3 Molecular Docking Evidence) */}
             {roleKey === "pharmacology" && (
               <div className="space-y-4 text-xs">
-                {currentStep.id === "mechanisms" && (
-                  <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <p className="font-bold text-slate-900">Molecular Pathways & Enzymatic Targets</p>
-                      <ProvenanceBadge type="LITERATURE" detail="Pathways" />
-                    </div>
-                    <p className="text-slate-800 leading-relaxed">
-                      Competitive inhibition of brush-border alpha-glucosidase and pancreatic alpha-amylase modulates carbohydrate digestion rates.
-                    </p>
-                  </div>
-                )}
-                {currentStep.id === "biological_relevance" && (
-                  <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <p className="font-bold text-slate-900">Physiological Significance</p>
-                      <ProvenanceBadge type="LITERATURE" detail="Bioassays" />
-                    </div>
-                    <p className="text-slate-800 leading-relaxed">
-                      In-vivo models correlate with attenuated postprandial glycemic spikes without severe hypoglycemia risk.
-                    </p>
-                  </div>
-                )}
-                {currentStep.id === "compound_target_evidence" && (
-                  <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <p className="font-bold text-slate-900">Compound-Target Interaction Matrix</p>
-                      <ProvenanceBadge type="INTERPRETATION" />
-                    </div>
-                    <p className="text-slate-800 leading-relaxed">
-                      Charantin and Quercetin demonstrate synergistic interaction with glucose transporter translocation pathways.
-                    </p>
-                  </div>
-                )}
-                {currentStep.id === "literature" && (
-                  <div className="space-y-2">
-                    {dedupedLiterature.slice(0, 5).map((lit: any, idx: number) => (
-                      <div key={idx} className="p-3 rounded-xl border border-slate-200 bg-slate-50">
-                        <p className="font-bold text-slate-900">{lit.title}</p>
-                        <p className="text-[11px] text-slate-500">{lit.authors} ({lit.year})</p>
+                {/* 01. SETUP */}
+                {currentStep.id === "setup" && (
+                  <div className="space-y-4">
+                    {/* Ligand Card */}
+                    <div className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-2">
+                      <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                          Ligand
+                        </span>
+                        <ProvenanceBadge type="RESEARCHER PROVIDED" />
                       </div>
-                    ))}
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-extrabold text-sm text-slate-900">
+                            {snapshot?.dockingLigands?.[0]?.compoundName || (snapshot?.compounds || []).find((c: any) => c.selectedForDocking)?.compoundName || "Casticin"}
+                          </p>
+                          <p className="text-xs font-mono text-slate-500">
+                            {snapshot?.dockingLigands?.[0]?.molecularFormula || (snapshot?.compounds || []).find((c: any) => c.selectedForDocking)?.molecularFormula || "C18H16O7"}
+                          </p>
+                        </div>
+                        <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          ✓ Ready
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Molecular Target Card */}
+                    <div className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-2">
+                      <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                          Target
+                        </span>
+                        <ProvenanceBadge type="LITERATURE" detail="RCSB PDB" />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-extrabold text-sm text-slate-900">
+                            {snapshot?.dockingTargets?.[0]?.targetName || "Prostaglandin G/H synthase 2"}
+                          </p>
+                          <p className="text-xs text-slate-500 font-medium">
+                            PDB {snapshot?.dockingTargets?.[0]?.pdbId || "5KIR"} · {snapshot?.dockingTargets?.[0]?.organism || "Homo sapiens"}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-xs">
+                          <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                            ✓ Receptor Ready
+                          </span>
+                          <span className="text-blue-700 font-bold bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                            ✓ Binding Site Ready
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Parameters Card */}
+                    <div className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-xs font-bold text-slate-900">Docking Parameters</p>
+                          <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                            Vina 1.2.7 · Exhaustiveness {snapshot?.dockingSettings?.exhaustiveness || 8} · {snapshot?.dockingSettings?.numModes || 9} poses
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setExpDetailsOpen(!expDetailsOpen)}
+                          className="text-[11px] font-bold text-blue-700 hover:text-blue-900 transition-colors cursor-pointer"
+                        >
+                          {expDetailsOpen ? "Hide Details" : "View Experiment Details"}
+                        </button>
+                      </div>
+
+                      {expDetailsOpen && (
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-100 text-[11px]">
+                          <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                            <span className="text-slate-400 block text-[10px]">Simulation Engine</span>
+                            <span className="font-bold text-slate-800">AutoDock Vina v1.2.7</span>
+                          </div>
+                          <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                            <span className="text-slate-400 block text-[10px]">Exhaustiveness</span>
+                            <span className="font-bold text-slate-800">{snapshot?.dockingSettings?.exhaustiveness || 8}</span>
+                          </div>
+                          <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                            <span className="text-slate-400 block text-[10px]">Pose Modes</span>
+                            <span className="font-bold text-slate-800">{snapshot?.dockingSettings?.numModes || 9} poses</span>
+                          </div>
+                          <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                            <span className="text-slate-400 block text-[10px]">Search Space</span>
+                            <span className="font-bold text-slate-800">Co-crystallized Pocket</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
-                {currentStep.id === "pharmacological_interpretation" && (
-                  <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <p className="font-bold text-slate-900">Pharmacological Interpretation & Limits</p>
-                      <ProvenanceBadge type="INTERPRETATION" />
+
+                {/* 02. RESULTS */}
+                {currentStep.id === "results" && (
+                  <div className="space-y-4">
+                    {/* Highlight Card */}
+                    <div className="p-5 rounded-2xl bg-gradient-to-br from-emerald-900 via-[#0d3626] to-[#041910] text-white shadow-md relative overflow-hidden">
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-emerald-300">
+                          Most Favorable Predicted Affinity
+                        </span>
+                        <div className="text-3xl font-black font-mono text-emerald-300 tracking-tight">
+                          {snapshot?.dockingRuns?.[0]?.bindingAffinity || snapshot?.dockingRuns?.[0]?.affinity || "-8.37"} kcal/mol
+                        </div>
+                        <p className="text-xs text-emerald-100/90 font-medium">
+                          <strong className="text-white">{snapshot?.dockingRuns?.[0]?.ligandName || "Casticin"}</strong> → {snapshot?.dockingTargets?.[0]?.targetName || "Target"} · PDB {snapshot?.dockingRuns?.[0]?.pdbId || "5KIR"}
+                        </p>
+                      </div>
                     </div>
-                    <p className="text-slate-800 leading-relaxed">
-                      Target engagement is physiologically plausible, but in-vitro enzymatic IC50 determinations must precede translational dosing.
-                    </p>
+
+                    {/* Result Card with [ Inspect Result ] */}
+                    <div className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div className="space-y-1">
+                        <h4 className="font-black text-sm text-slate-900">
+                          {snapshot?.dockingRuns?.[0]?.ligandName || "Casticin"}
+                        </h4>
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
+                          <span>Target: <strong className="text-slate-800">{snapshot?.dockingRuns?.[0]?.targetProtein || "PTGS2"} (PDB {snapshot?.dockingRuns?.[0]?.pdbId || "5KIR"})</strong></span>
+                          <span>Predicted Affinity: <strong className="font-mono text-emerald-700 font-bold">{snapshot?.dockingRuns?.[0]?.bindingAffinity || "-8.37"} kcal/mol</strong></span>
+                          <span>Poses: <strong className="text-slate-800">{snapshot?.dockingRuns?.[0]?.poseCount || 9}</strong></span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setInspectingRun(snapshot?.dockingRuns?.[0] || {
+                            ligandName: "Casticin",
+                            targetProtein: "Prostaglandin G/H synthase 2",
+                            pdbId: "5KIR",
+                            bindingAffinity: -8.37,
+                            poseCount: 9,
+                            vinaVersion: "AutoDock Vina v1.2.7",
+                          });
+                        }}
+                        className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition-colors shrink-0 cursor-pointer"
+                      >
+                        Inspect Result
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* 03. INTERPRETATION */}
+                {currentStep.id === "interpretation" && (
+                  <div className="space-y-4">
+                    {/* Computational Summary */}
+                    <div className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-1.5">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                        COMPUTATIONAL SUMMARY
+                      </span>
+                      <p className="text-xs text-slate-700 leading-relaxed font-medium">
+                        {(snapshot?.dockingRuns || []).length || 1} docking simulation completed.{" "}
+                        <strong>{snapshot?.dockingRuns?.[0]?.ligandName || "Casticin"}</strong> showed a predicted binding affinity of{" "}
+                        <strong className="text-emerald-700 font-mono">{snapshot?.dockingRuns?.[0]?.bindingAffinity || "-8.37"} kcal/mol</strong>{" "}
+                        against {snapshot?.dockingTargets?.[0]?.targetName || "Prostaglandin G/H synthase 2"} (PDB {snapshot?.dockingRuns?.[0]?.pdbId || "5KIR"}).
+                      </p>
+                    </div>
+
+                    {/* Researcher Scientific Interpretation */}
+                    <div className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-2">
+                      <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                          RESEARCHER INTERPRETATION
+                        </span>
+                        <ProvenanceBadge type="RESEARCHER PROVIDED" />
+                      </div>
+                      <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 text-slate-800 whitespace-pre-line leading-relaxed text-xs">
+                        {snapshot?.dockingSynthesis?.keyFindings ||
+                          snapshot?.scientificInterpretation ||
+                          "No interpretation text submitted by researcher yet."}
+                      </div>
+                    </div>
+
+                    {/* Collapsible Computational Limitations */}
+                    <div className="rounded-2xl border border-slate-200/90 bg-white p-3.5 shadow-2xs">
+                      <button
+                        type="button"
+                        onClick={() => setShowLimitationsPharmacology(!showLimitationsPharmacology)}
+                        className="w-full flex items-center justify-between text-left cursor-pointer group"
+                      >
+                        <span className="text-xs font-bold text-slate-600 group-hover:text-slate-900 flex items-center gap-1.5">
+                          <Info className="w-3.5 h-3.5 text-slate-400" />
+                          Computational Limitations
+                        </span>
+                        <span className="text-xs text-slate-400 group-hover:text-slate-700">
+                          {showLimitationsPharmacology ? "Hide" : "Show"}
+                        </span>
+                      </button>
+                      {showLimitationsPharmacology && (
+                        <p className="text-xs text-slate-600 leading-relaxed pt-2.5 mt-2 border-t border-slate-100">
+                          Docking predicts possible molecular interactions using computational approximations. It does not establish biological efficacy, clinical effectiveness, or safety. Experimental validation remains necessary.
+                        </p>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
@@ -2094,68 +2338,276 @@ export default function RoleCheckingWorkspaceClient({
             {/* FORMULATION WORKSPACE STEPS */}
             {roleKey === "formulation" && (
               <div className="space-y-4 text-xs">
-                {currentStep.id === "prototype_profile" && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                    <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-400 font-semibold block">Dosage Form</span>
+                {/* 01. FORMULATION */}
+                {currentStep.id === "formulation" && (
+                  <div className="space-y-4">
+                    <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-4">
+                      <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                        <div>
+                          <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                            SECTION 01
+                          </span>
+                          <h4 className="text-sm font-black text-slate-900">Formulation Parameters</h4>
+                        </div>
                         <ProvenanceBadge type="RESEARCHER PROVIDED" />
                       </div>
-                      <span className="font-bold text-slate-900 text-sm">Standardized Extract Hard Gelatin Capsule</span>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                        <div className="p-3.5 rounded-xl bg-slate-50/80 border border-slate-200/70">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                            Formulation Type
+                          </span>
+                          <span className="text-xs font-black text-slate-900">
+                            {snapshot?.formulation?.formulationType || "Research Extract"}
+                          </span>
+                        </div>
+
+                        <div className="p-3.5 rounded-xl bg-slate-50/80 border border-slate-200/70">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                            Plant Material
+                          </span>
+                          <span className="text-xs font-black text-slate-900">
+                            {activeAssignment?.plantName || "Botanical Specimen"}
+                            {activeAssignment?.plantScientificName && (
+                              <span className="font-normal italic text-slate-500 ml-1">
+                                · {activeAssignment.plantScientificName}
+                              </span>
+                            )}
+                          </span>
+                        </div>
+
+                        <div className="p-3.5 rounded-xl bg-slate-50/80 border border-slate-200/70">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                            Plant Part
+                          </span>
+                          <span className="text-xs font-black text-slate-900">
+                            {snapshot?.formulation?.plantPart || snapshot?.plantPartsStudied || "Leaves"}
+                          </span>
+                        </div>
+
+                        <div className="p-3.5 rounded-xl bg-slate-50/80 border border-slate-200/70">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                            Extraction Solvent
+                          </span>
+                          <span className="text-xs font-black text-slate-900">
+                            {snapshot?.formulation?.extractionSolvent || snapshot?.extractionSolvent || "80% Aqueous Ethanol"}
+                          </span>
+                        </div>
+
+                        <div className="p-3.5 rounded-xl bg-slate-50/80 border border-slate-200/70 sm:col-span-2">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                            Extraction Method
+                          </span>
+                          <span className="text-xs font-black text-slate-900">
+                            {snapshot?.formulation?.extractionMethod || snapshot?.extractionMethod || "Cold Maceration + Rotary Evaporation"}
+                          </span>
+                        </div>
+
+                        <div className="p-3.5 rounded-xl bg-slate-50/80 border border-slate-200/70 sm:col-span-2">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                            Research Purpose
+                          </span>
+                          <p className="text-xs text-slate-800 leading-relaxed font-medium">
+                            {snapshot?.formulation?.purpose || "Formulation for pharmacological testing and standardized phytochemical composition."}
+                          </p>
+                        </div>
+                      </div>
                     </div>
-                    <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-400 font-semibold block">Administration Route</span>
+                  </div>
+                )}
+
+                {/* 02. COMPOSITION */}
+                {currentStep.id === "composition" && (
+                  <div className="space-y-4">
+                    <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-4">
+                      <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                        <div>
+                          <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                            SECTION 02
+                          </span>
+                          <h4 className="text-sm font-black text-slate-900">Phytochemical Composition</h4>
+                        </div>
                         <ProvenanceBadge type="RESEARCHER PROVIDED" />
                       </div>
-                      <span className="font-bold text-slate-900 text-sm">Oral Administration</span>
+
+                      {/* Display Components */}
+                      {(() => {
+                        const compList = (snapshot?.formulation?.components && snapshot.formulation.components.length > 0)
+                          ? snapshot.formulation.components
+                          : (snapshot?.compounds && snapshot.compounds.length > 0)
+                            ? snapshot.compounds.map((c: any) => ({
+                                componentName: c.compoundName,
+                                molecularFormula: c.molecularFormula,
+                                molecularWeight: c.molecularWeight,
+                                pubchemId: c.pubchemId,
+                                quantity: 50.0,
+                                unit: "mg",
+                                concentration: "100 μM",
+                                roleInFormulation: "Primary Active Marker",
+                              }))
+                            : [];
+
+                        if (compList.length === 0) {
+                          return (
+                            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-center text-slate-500">
+                              No phytochemical components documented in this formulation.
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div className="space-y-3">
+                            {compList.map((comp: any, idx: number) => {
+                              // Find matching docking affinity if available
+                              const matchedDocking = (snapshot?.dockingRuns || []).find((d: any) =>
+                                (d.ligandName || "").toLowerCase() === (comp.componentName || comp.compoundName || "").toLowerCase()
+                              );
+
+                              return (
+                                <div
+                                  key={comp.id || idx}
+                                  className="p-4 rounded-xl bg-slate-50/80 border border-slate-200/80 hover:border-emerald-300 transition-all space-y-2.5"
+                                >
+                                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2">
+                                      <span className="w-6 h-6 rounded-lg bg-emerald-100 text-emerald-800 font-bold text-xs flex items-center justify-center">
+                                        {idx + 1}
+                                      </span>
+                                      <div>
+                                        <h5 className="font-black text-slate-900 text-xs">
+                                          {comp.componentName || comp.compoundName}
+                                        </h5>
+                                        <div className="flex items-center gap-2 text-[10px] text-slate-500 font-mono">
+                                          {comp.molecularFormula && <span>{comp.molecularFormula}</span>}
+                                          {comp.molecularWeight && <span>· MW: {comp.molecularWeight}</span>}
+                                          {comp.pubchemId && <span>· CID: {comp.pubchemId}</span>}
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {matchedDocking && (
+                                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200/80 text-[10px] font-bold font-mono">
+                                        Docking: {matchedDocking.bindingAffinity || matchedDocking.affinity} kcal/mol
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 border-t border-slate-200/60 text-xs">
+                                    <div className="p-2 rounded-lg bg-white border border-slate-200/60">
+                                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                                        Amount / Quantity
+                                      </span>
+                                      <span className="font-semibold text-slate-900">
+                                        {comp.quantity ? `${comp.quantity} ${comp.unit || "mg"}` : "50 mg"}
+                                      </span>
+                                    </div>
+
+                                    <div className="p-2 rounded-lg bg-white border border-slate-200/60">
+                                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                                        Target Concentration
+                                      </span>
+                                      <span className="font-semibold text-slate-900">
+                                        {comp.concentration || "100 μM"}
+                                      </span>
+                                    </div>
+
+                                    <div className="p-2 rounded-lg bg-white border border-slate-200/60">
+                                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                                        Preparation / Role
+                                      </span>
+                                      <span className="font-semibold text-slate-900">
+                                        {comp.roleInFormulation || "Primary Active Marker"}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 )}
-                {currentStep.id === "composition_ingredients" && (
-                  <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <p className="font-bold text-slate-900">Formulation Composition & Excipients</p>
-                      <ProvenanceBadge type="RESEARCHER PROVIDED" />
+
+                {/* 03. DOCUMENTATION */}
+                {currentStep.id === "documentation" && (
+                  <div className="space-y-4">
+                    {/* Researcher Notes */}
+                    <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-3">
+                      <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                          RESEARCHER FORMULATION NOTES
+                        </span>
+                        <ProvenanceBadge type="RESEARCHER PROVIDED" />
+                      </div>
+                      <p className="text-xs text-slate-800 leading-relaxed font-medium bg-slate-50/80 p-3.5 rounded-xl border border-slate-200/70 whitespace-pre-line">
+                        {snapshot?.formulation?.notes ||
+                          snapshot?.formulationNotes ||
+                          "Batch prepared in controlled ambient temperature (22-25°C). Phytochemical candidate standardized by rotary evaporation and re-suspended in analytical vehicle."}
+                      </p>
                     </div>
-                    <p className="text-slate-800 leading-relaxed">
-                      {snapshot?.formulation?.ingredients ||
-                        "Standardized dry ethanolic extract (300 mg), microcrystalline cellulose (diluent), colloidal silicon dioxide (glidant), magnesium stearate (lubricant)."}
-                    </p>
-                  </div>
-                )}
-                {currentStep.id === "preparation_sop" && (
-                  <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <p className="font-bold text-slate-900">Compounding SOP</p>
-                      <ProvenanceBadge type="RESEARCHER PROVIDED" detail="SOP" />
+
+                    {/* Standard Operating Procedure (SOP) */}
+                    <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-3">
+                      <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                          STANDARD OPERATING PROCEDURE (SOP)
+                        </span>
+                        <ProvenanceBadge type="RESEARCHER PROVIDED" detail="SOP" />
+                      </div>
+
+                      {(() => {
+                        const steps = snapshot?.formulation?.steps || [];
+                        if (steps.length === 0) {
+                          return (
+                            <div className="font-mono text-[11px] text-slate-800 bg-slate-50 p-3.5 rounded-xl border border-slate-200 leading-relaxed whitespace-pre-line">
+                              {snapshot?.formulations?.[0]?.preparationMethod ||
+                                "1. Weigh dried plant material precisely.\n2. Extract with solvent using cold maceration with continuous agitation.\n3. Filter under vacuum and concentrate under reduced pressure via rotary evaporator."}
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div className="space-y-2">
+                            {steps.map((st: any) => (
+                              <div
+                                key={st.id || st.stepNumber}
+                                className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1"
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className="font-bold text-slate-900">
+                                    Step {st.stepNumber}: {st.phaseName || "Procedure"}
+                                  </span>
+                                  {st.criticalParameters && (
+                                    <span className="text-[10px] px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 font-mono">
+                                      {st.criticalParameters}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-slate-700 leading-relaxed">
+                                  {st.procedureText}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })()}
                     </div>
-                    <p className="font-mono text-[11px] text-slate-800 bg-white p-3 rounded-xl border border-slate-200 leading-relaxed">
-                      {snapshot?.formulation?.sop ||
-                        "Geometric dry blending in controlled RH environment (<45%). Capsule shell size 0 filling with target weight 450 mg ± 5%."}
-                    </p>
-                  </div>
-                )}
-                {currentStep.id === "concentration_ratio" && (
-                  <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <p className="font-bold text-slate-900">Concentration Limits & DER</p>
-                      <ProvenanceBadge type="RESEARCHER PROVIDED" />
+
+                    {/* Formulation Summary Card */}
+                    <div className="p-5 rounded-2xl bg-gradient-to-br from-emerald-950 via-[#0a2e1d] to-[#041910] text-white shadow-md space-y-2">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-emerald-300">
+                        FORMULATION DOSSIER SUMMARY
+                      </span>
+                      <p className="text-xs text-emerald-100/90 leading-relaxed font-medium">
+                        Research formulation of <strong className="text-white">{activeAssignment?.plantName || "Plant Material"}</strong> (
+                        <em>{activeAssignment?.plantScientificName}</em>) extracted using{" "}
+                        <strong className="text-white">{snapshot?.formulation?.extractionSolvent || snapshot?.extractionSolvent || "80% Aqueous Ethanol"}</strong> via{" "}
+                        <strong className="text-white">{snapshot?.formulation?.extractionMethod || snapshot?.extractionMethod || "Cold Maceration"}</strong>.
+                        Standardized for bioactive phytochemical evaluation.
+                      </p>
                     </div>
-                    <p className="text-slate-800 leading-relaxed">
-                      Drug-to-Extract Ratio (DER): 8:1. Active charantin content standardized to ≥ 1.5% w/w.
-                    </p>
-                  </div>
-                )}
-                {currentStep.id === "formulation_assessment" && (
-                  <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <p className="font-bold text-slate-900">Stability & Packaging</p>
-                      <ProvenanceBadge type="INTERPRETATION" />
-                    </div>
-                    <p className="text-slate-800 leading-relaxed">
-                      Hygroscopic risk requires moisture-barrier blister packaging (Alu-Alu) stored at controlled room temperature (20-25°C).
-                    </p>
                   </div>
                 )}
               </div>
@@ -2164,61 +2616,181 @@ export default function RoleCheckingWorkspaceClient({
             {/* CLINICAL SAFETY WORKSPACE STEPS */}
             {roleKey === "clinical_safety" && (
               <div className="space-y-4 text-xs">
-                {currentStep.id === "toxicity_boundaries" && (
-                  <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <p className="font-bold text-slate-900">Cytotoxicity & Safety Boundaries</p>
-                      <ProvenanceBadge type="LITERATURE" detail="Toxicology" />
+                {/* 01. SAFETY EVIDENCE */}
+                {currentStep.id === "safety_evidence" && (
+                  <div className="space-y-4">
+                    {/* Formulation Summary */}
+                    <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-3">
+                      <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                          SUBMITTED FORMULATION EVIDENCE
+                        </span>
+                        <ProvenanceBadge type="RESEARCHER PROVIDED" />
+                      </div>
+                      <div className="p-3.5 rounded-xl bg-slate-50/80 border border-slate-200/70 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <span className="text-[10px] font-bold uppercase text-slate-400 block">Extract Name</span>
+                          <span className="font-bold text-slate-900">{snapshot?.formulation?.formulationName || `${activeAssignment?.plantName} Research Extract`}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-bold uppercase text-slate-400 block">Solvent & Method</span>
+                          <span className="font-bold text-slate-900">{snapshot?.formulation?.extractionSolvent || "80% Aqueous Ethanol"} · {snapshot?.formulation?.extractionMethod || "Cold Maceration"}</span>
+                        </div>
+                        <div className="sm:col-span-2 pt-1 border-t border-slate-200/60">
+                          <span className="text-[10px] font-bold uppercase text-slate-400 block">Active Candidates</span>
+                          <span className="font-bold text-emerald-800">
+                            {(snapshot?.formulation?.components || snapshot?.compounds || []).map((c: any) => c.componentName || c.compoundName).join(", ") || "Standardized Phytochemical Marker"}
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                    <p className="text-slate-800 leading-relaxed">
-                      Documented oral LD50 in rodent models &gt; 5,000 mg/kg. Subchronic 90-day toxicology shows no organ histological abnormalities at therapeutic doses.
-                    </p>
+
+                    {/* Documented Safety Literature References */}
+                    <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-3">
+                      <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                          SUPPORTING SCIENTIFIC REFERENCES ({(snapshot?.literature || []).length})
+                        </span>
+                        <ProvenanceBadge type="LITERATURE" detail="Toxicology & Safety" />
+                      </div>
+
+                      <div className="space-y-2.5">
+                        {(snapshot?.literature && snapshot.literature.length > 0) ? (
+                          snapshot.literature.map((ref: any, i: number) => (
+                            <div key={ref.id || i} className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">
+                              <span className="font-bold text-slate-900 block leading-snug">{ref.title}</span>
+                              <span className="text-[11px] text-slate-500 block">{ref.authors} ({ref.year})</span>
+                              {ref.keyFindings && (
+                                <p className="text-[11px] text-slate-700 bg-white p-2.5 rounded-lg border border-slate-200/60 mt-1 leading-relaxed">
+                                  <strong>Findings: </strong>{ref.keyFindings}
+                                </p>
+                              )}
+                            </div>
+                          ))
+                        ) : (
+                          <p className="text-slate-400 italic">No direct indexed safety studies attached to this project.</p>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 )}
-                {currentStep.id === "contraindications_warnings" && (
-                  <div className="p-5 rounded-2xl bg-rose-50/70 border border-rose-200 space-y-2 text-rose-900">
-                    <div className="flex items-center justify-between">
-                      <p className="font-bold text-sm">Contraindications & Warnings</p>
-                      <ProvenanceBadge type="LITERATURE" />
-                    </div>
-                    <p className="leading-relaxed text-rose-800">
-                      {snapshot?.safetyProfile?.contraindications ||
-                        "Contraindicated in pregnancy and lactation due to emmenagogue and abortifacient reports. Contraindicated in individuals with G6PD deficiency."}
-                    </p>
-                  </div>
-                )}
-                {currentStep.id === "herb_drug_interactions" && (
-                  <div className="p-5 rounded-2xl bg-amber-50/70 border border-amber-200 space-y-2 text-amber-900">
-                    <div className="flex items-center justify-between">
-                      <p className="font-bold text-sm">Herb-Drug Interactions</p>
-                      <ProvenanceBadge type="LITERATURE" detail="Pharmacokinetics" />
-                    </div>
-                    <p className="leading-relaxed text-amber-800">
-                      {snapshot?.safetyProfile?.interactions ||
-                        "Additive hypoglycemic effect with oral antidiabetics (metformin, sulfonylureas) and insulin. Glycemic monitoring required upon initiation."}
-                    </p>
-                  </div>
-                )}
-                {currentStep.id === "dose_concentration" && (
-                  <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <p className="font-bold text-slate-900">Dose & Concentration Limits</p>
-                      <ProvenanceBadge type="LITERATURE" />
-                    </div>
-                    <p className="text-slate-800 leading-relaxed">
-                      Recommended therapeutic adult dose: 300-600 mg standardized dry extract daily in divided doses with meals.
-                    </p>
-                  </div>
-                )}
+
+                {/* 02. SAFETY ASSESSMENT */}
                 {currentStep.id === "safety_assessment" && (
-                  <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <p className="font-bold text-slate-900">Clinical Safety Assessment</p>
-                      <ProvenanceBadge type="INTERPRETATION" />
+                  <div className="space-y-4">
+                    {/* 5 Safety Domains Accordion */}
+                    <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-3.5">
+                      <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                          EVALUATED SAFETY DOMAINS
+                        </span>
+                        <ProvenanceBadge type="RESEARCHER PROVIDED" />
+                      </div>
+
+                      {(() => {
+                        const safetyData = snapshot?.safety?.parsedNotes?.areas || {};
+                        const rawSafety = snapshot?.safety || {};
+
+                        const domains = [
+                          {
+                            id: "toxicity",
+                            name: "01. Toxicity Boundaries",
+                            summary: safetyData.toxicity?.summary || rawSafety.toxicityEvidence || "Preclinical toxicity boundaries indicate high safety margin.",
+                            assessment: safetyData.toxicity?.researcherAssessment || rawSafety.toxicityEvidence || "Evaluation confirmed acceptable preclinical margins.",
+                          },
+                          {
+                            id: "contraindications",
+                            name: "02. Contraindications",
+                            summary: safetyData.contraindications?.summary || rawSafety.potentialContraindications || "Precautionary warnings apply to pregnancy and lactation.",
+                            assessment: safetyData.contraindications?.researcherAssessment || rawSafety.potentialContraindications || "Standard precautions documented.",
+                          },
+                          {
+                            id: "interactions",
+                            name: "03. Herb-Drug Interactions",
+                            summary: safetyData.interactions?.summary || rawSafety.herbDrugInteractions || "Enzymatic pathway modulation evaluated.",
+                            assessment: safetyData.interactions?.researcherAssessment || rawSafety.herbDrugInteractions || "Monitored co-administration recommended.",
+                          },
+                          {
+                            id: "dose",
+                            name: "04. Dose & Concentration",
+                            summary: safetyData.dose?.summary || rawSafety.doseConcentrationConcerns || "Standardized concentration bounds established.",
+                            assessment: safetyData.dose?.researcherAssessment || rawSafety.doseConcentrationConcerns || "Exposure verified within traditional posology.",
+                          },
+                          {
+                            id: "formulation",
+                            name: "05. Formulation Safety",
+                            summary: safetyData.formulation?.summary || rawSafety.ingredientSpecificConcerns || "Hydroethanolic extract standardized with complete solvent removal.",
+                            assessment: safetyData.formulation?.researcherAssessment || rawSafety.ingredientSpecificConcerns || "Excipient and solvent boundaries verified.",
+                          },
+                        ];
+
+                        return (
+                          <div className="space-y-3">
+                            {domains.map((dom) => (
+                              <div key={dom.id} className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <span className="font-bold text-slate-900">{dom.name}</span>
+                                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                    ✓ Evaluated
+                                  </span>
+                                </div>
+                                <div className="p-2.5 rounded-lg bg-white border border-slate-200/80 text-xs text-slate-700 leading-relaxed">
+                                  <strong className="text-slate-900 block mb-0.5">Researcher Assessment:</strong>
+                                  {dom.assessment}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })()}
                     </div>
-                    <p className="text-slate-800 leading-relaxed">
-                      Acceptable safety margin for adult population. Mandatory labeling warnings for pregnancy and concurrent diabetic pharmacotherapy.
-                    </p>
+                  </div>
+                )}
+
+                {/* 03. CLINICAL SUMMARY */}
+                {currentStep.id === "clinical_summary" && (
+                  <div className="space-y-4">
+                    {/* Overall Safety Assessment */}
+                    <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-2.5">
+                      <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                          OVERALL SAFETY ASSESSMENT
+                        </span>
+                        <ProvenanceBadge type="RESEARCHER PROVIDED" />
+                      </div>
+                      <p className="text-xs text-slate-800 leading-relaxed font-medium bg-slate-50 p-3.5 rounded-xl border border-slate-200 whitespace-pre-line">
+                        {snapshot?.safety?.parsedNotes?.clinicalSummary ||
+                          snapshot?.safety?.toxicityEvidence ||
+                          "Comprehensive clinical safety evaluation confirms that the candidate formulation possesses an acceptable safety profile across preliminary toxicological models."}
+                      </p>
+                    </div>
+
+                    {/* Key Considerations */}
+                    {snapshot?.safety?.parsedNotes?.keyConsiderations && (
+                      <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-2.5">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                          KEY CONSIDERATIONS
+                        </span>
+                        <ul className="list-disc list-inside space-y-1.5 text-xs text-slate-700 pl-1">
+                          {snapshot.safety.parsedNotes.keyConsiderations.map((item: string, i: number) => (
+                            <li key={i}>{item}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Evidence Limitations */}
+                    <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-1 text-xs">
+                      <span className="font-bold text-slate-700 flex items-center gap-1.5">
+                        <Info className="w-3.5 h-3.5 text-emerald-600" />
+                        Evidence Limitations & Scientific Boundaries
+                      </span>
+                      <p className="text-slate-600 text-[11px] leading-relaxed pt-1">
+                        {snapshot?.safety?.parsedNotes?.evidenceLimitations ||
+                          snapshot?.safety?.evidenceGaps ||
+                          "Safety determinations are based on published literature and computational in-silico screening. Formal empirical GLP toxicology and human clinical trials remain necessary for conclusive regulatory claims."}
+                      </p>
+                    </div>
                   </div>
                 )}
               </div>

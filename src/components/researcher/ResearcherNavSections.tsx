@@ -7,7 +7,6 @@ import {
   LayoutDashboard,
   FolderKanban,
   FlaskConical,
-  Route,
   UserRound,
   Sparkles,
 } from "lucide-react";
@@ -140,7 +139,6 @@ export default function ResearcherNavSections({
   const isWorkspaceActive =
     routeProjectId !== null && (activeSubpath === "" || activeSubpath === undefined);
 
-  // Research Journey is active if on #research-journey or inside any of the 12 stage routes
   const isJourneyActive =
     routeProjectId !== null &&
     (activeSubpath === "journey" ||
@@ -162,7 +160,7 @@ export default function ResearcherNavSections({
       ? projectData.completedStagesCount
       : WORKFLOW_STAGES.filter((s) => stageStatusMap[s.key] === "COMPLETED").length;
 
-  const progressPercent = Math.min(100, Math.round((completedCount / 7) * 100));
+  const progressPercent = Math.min(100, Math.round((completedCount / 6) * 100));
 
   // Current stage info
   const rawCurrentStage = String(projectData?.project?.currentStage || "plant-literature");
@@ -177,21 +175,21 @@ export default function ResearcherNavSections({
     currentStageIndex !== -1 ? WORKFLOW_STAGES[currentStageIndex] : WORKFLOW_STAGES[0];
   const currentStageNumber = currentStageObj.number;
 
-  const projectTitle = projectData?.project?.title || "In-Silico & Phytochemical Evaluation";
+  const projectTitle = projectData?.project?.title || "Phytochemical & In-Silico Study";
   const scientificName =
     projectData?.project?.plantScientificName ||
     projectData?.project?.plantName ||
-    "Blumea balsamifera";
+    "Botanical Specimen";
 
   return (
-    <nav className="space-y-5 text-white select-none" aria-label="Researcher Platform Navigation">
+    <nav className="space-y-4 text-white select-none" aria-label="Researcher Platform Navigation">
       {/* ================================================== */}
-      {/* 1. RESEARCH SECTION                                */}
+      {/* 1. WORKSPACE SECTION                               */}
       {/* ================================================== */}
       <div className="space-y-1">
         {!collapsed && (
-          <p className="px-3 pb-1 text-[11px] font-heading font-extrabold uppercase tracking-wider text-emerald-400/90">
-            Research
+          <p className="px-3 pb-1 text-[11px] font-medium uppercase tracking-wider text-emerald-400/70">
+            Workspace
           </p>
         )}
 
@@ -199,16 +197,16 @@ export default function ResearcherNavSections({
         <Link
           href="/researcher"
           onClick={onNavigate}
-          className={`relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-[14px] font-medium transition-all group ${
+          className={`relative flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
             isDashboardActive
-              ? "bg-emerald-500/20 text-white font-bold border-l-[3px] border-emerald-400 shadow-xs"
-              : "text-[#d0e5da] hover:text-white hover:bg-white/10"
+              ? "bg-emerald-600/25 text-emerald-300 font-semibold border-l-2 border-emerald-400"
+              : "text-slate-300 hover:text-white hover:bg-white/5"
           }`}
           title={collapsed ? "Dashboard" : undefined}
         >
           <LayoutDashboard
-            className={`w-[18px] h-[18px] shrink-0 transition-colors ${
-              isDashboardActive ? "text-emerald-300" : "text-emerald-300/60 group-hover:text-emerald-200"
+            className={`w-4 h-4 shrink-0 transition-colors ${
+              isDashboardActive ? "text-emerald-300" : "text-slate-400"
             }`}
           />
           {!collapsed && <span className="truncate">Dashboard</span>}
@@ -218,16 +216,16 @@ export default function ResearcherNavSections({
         <Link
           href="/researcher/projects"
           onClick={onNavigate}
-          className={`relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-[14px] font-medium transition-all group ${
+          className={`relative flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
             isProjectsActive
-              ? "bg-emerald-500/20 text-white font-bold border-l-[3px] border-emerald-400 shadow-xs"
-              : "text-[#d0e5da] hover:text-white hover:bg-white/10"
+              ? "bg-emerald-600/25 text-emerald-300 font-semibold border-l-2 border-emerald-400"
+              : "text-slate-300 hover:text-white hover:bg-white/5"
           }`}
           title={collapsed ? "My Research Projects" : undefined}
         >
           <FolderKanban
-            className={`w-[18px] h-[18px] shrink-0 transition-colors ${
-              isProjectsActive ? "text-emerald-300" : "text-emerald-300/60 group-hover:text-emerald-200"
+            className={`w-4 h-4 shrink-0 transition-colors ${
+              isProjectsActive ? "text-emerald-300" : "text-slate-400"
             }`}
           />
           {!collapsed && <span className="truncate">My Research Projects</span>}
@@ -237,22 +235,22 @@ export default function ResearcherNavSections({
         <Link
           href="/researcher/assistant"
           onClick={onNavigate}
-          className={`relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-[14px] font-medium transition-all group ${
+          className={`relative flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
             isAssistantActive
-              ? "bg-emerald-500/20 text-white font-bold border-l-[3px] border-emerald-400 shadow-xs"
-              : "text-[#d0e5da] hover:text-white hover:bg-white/10"
+              ? "bg-emerald-600/25 text-emerald-300 font-semibold border-l-2 border-emerald-400"
+              : "text-slate-300 hover:text-white hover:bg-white/5"
           }`}
           title={collapsed ? "Ask NatureAide" : undefined}
         >
           <Sparkles
-            className={`w-[18px] h-[18px] shrink-0 transition-colors ${
-              isAssistantActive ? "text-emerald-300" : "text-emerald-300/60 group-hover:text-emerald-200"
+            className={`w-4 h-4 shrink-0 transition-colors ${
+              isAssistantActive ? "text-emerald-300" : "text-slate-400"
             }`}
           />
           {!collapsed && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between flex-1 min-w-0">
               <span className="truncate">Ask NatureAide</span>
-              <span className="text-[10px] font-semibold tracking-wider px-1.5 py-0.2 rounded-full bg-emerald-400/25 text-emerald-200 border border-emerald-400/30">
+              <span className="text-[10px] font-mono font-medium text-emerald-300/80 bg-emerald-950/60 px-1.5 py-0.2 rounded border border-emerald-700/40">
                 AI
               </span>
             </div>
@@ -261,53 +259,53 @@ export default function ResearcherNavSections({
       </div>
 
       {/* ================================================== */}
-      {/* 2. CURRENT PROJECT SECTION                         */}
+      {/* 2. CURRENT INVESTIGATION SECTION                   */}
       {/* ================================================== */}
-      <div className="space-y-1.5 pt-2 border-t border-white/10">
+      <div className="space-y-1.5 pt-3 border-t border-emerald-900/50">
         {!collapsed && (
-          <p className="px-2.5 pb-0.5 text-[10px] font-heading font-extrabold uppercase tracking-wider text-emerald-400/80">
-            Current Project
+          <p className="px-3 pb-1 text-[11px] font-medium uppercase tracking-wider text-emerald-400/70">
+            Current Investigation
           </p>
         )}
 
-        {/* Dynamic Project Container Card */}
+        {/* Dynamic Project Anchor Card */}
         {activeProjectId && projectData?.project ? (
           <div className="space-y-1.5">
             {!collapsed && (
-              <div className="mx-1 p-2.5 rounded-xl bg-white/[0.07] backdrop-blur-xs border border-emerald-500/25 shadow-2xs space-y-1.5 hover:bg-white/[0.09] transition-colors">
-                <div className="flex items-center justify-between text-[9.5px] font-heading font-extrabold uppercase tracking-wider text-emerald-300/90">
+              <div className="mx-1 p-3 rounded-lg bg-emerald-950/40 border border-emerald-900/60 space-y-2">
+                <div className="flex items-center justify-between text-[10px] font-medium uppercase tracking-wider text-emerald-300/80">
                   <span className="flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    Active Project
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                    Active Study
                   </span>
-                  <span className="font-mono font-bold text-emerald-300 bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-500/30 text-[10px]">
+                  <span className="font-mono text-emerald-300 font-semibold">
                     {progressPercent}%
                   </span>
                 </div>
 
                 <div className="space-y-0.5">
                   <h3
-                    className="font-heading font-semibold text-[12px] text-white leading-tight line-clamp-2"
+                    className="font-medium text-xs text-white leading-snug line-clamp-2"
                     title={projectTitle}
                   >
                     {projectTitle}
                   </h3>
                   <p
-                    className="text-[11px] italic text-emerald-300/80 font-normal truncate"
+                    className="text-[11px] italic text-emerald-300/70 font-normal truncate"
                     title={scientificName}
                   >
                     {scientificName}
                   </p>
                 </div>
 
-                <div className="pt-0.5 space-y-1">
-                  <div className="flex items-center justify-between text-[10px] text-emerald-200/65">
-                    <span className="font-medium">Stage {currentStageNumber} of 6</span>
-                    <span className="font-mono font-semibold text-white/90">{completedCount}/6</span>
+                <div className="space-y-1 pt-0.5">
+                  <div className="flex items-center justify-between text-[10px] text-emerald-300/60">
+                    <span>Stage {currentStageNumber} of 6</span>
+                    <span className="font-mono">{completedCount}/6</span>
                   </div>
-                  <div className="w-full h-1 rounded-full bg-white/10 overflow-hidden">
+                  <div className="w-full h-1 rounded-full bg-emerald-950 overflow-hidden">
                     <div
-                      className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-teal-300 transition-all duration-500"
+                      className="h-full rounded-full bg-emerald-500 transition-all duration-300"
                       style={{ width: `${progressPercent}%` }}
                     />
                   </div>
@@ -315,30 +313,27 @@ export default function ResearcherNavSections({
               </div>
             )}
 
-            {/* Current Project Sub-Navigation Links */}
+            {/* Current Project Sub-Navigation */}
             <div className="space-y-1">
-              {/* Unified Project Workspace */}
               <Link
                 href={`/researcher/projects/${activeProjectId}`}
                 onClick={onNavigate}
-                className={`relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-[14px] font-medium transition-all group ${
+                className={`relative flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
                   isWorkspaceActive || isJourneyActive
-                    ? "bg-emerald-500/20 text-white font-bold border-l-[3px] border-emerald-400 shadow-xs"
-                    : "text-[#d0e5da] hover:text-white hover:bg-white/10"
+                    ? "bg-emerald-600/25 text-emerald-300 font-semibold border-l-2 border-emerald-400"
+                    : "text-slate-300 hover:text-white hover:bg-white/5"
                 }`}
-                title={collapsed ? "Project Workspace (6 Stages)" : undefined}
+                title={collapsed ? "Project Workspace" : undefined}
               >
                 <FlaskConical
-                  className={`w-[18px] h-[18px] shrink-0 transition-colors ${
-                    isWorkspaceActive || isJourneyActive
-                      ? "text-emerald-300"
-                      : "text-emerald-300/60 group-hover:text-emerald-200"
+                  className={`w-4 h-4 shrink-0 transition-colors ${
+                    isWorkspaceActive || isJourneyActive ? "text-emerald-300" : "text-slate-400"
                   }`}
                 />
                 {!collapsed && (
                   <div className="flex items-center justify-between flex-1 min-w-0">
                     <span className="truncate">Project Workspace</span>
-                    <span className="text-[10px] font-bold text-emerald-200 bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-500/50">
+                    <span className="text-[10px] font-mono font-medium text-emerald-300/70 bg-emerald-950/60 px-1.5 py-0.2 rounded border border-emerald-700/40">
                       6 Stages
                     </span>
                   </div>
@@ -348,12 +343,12 @@ export default function ResearcherNavSections({
           </div>
         ) : (
           !collapsed && (
-            <div className="mx-1 p-3 rounded-2xl bg-white/5 border border-white/15 border-dashed text-center space-y-1">
-              <p className="text-[11px] font-heading font-bold text-white/80">
+            <div className="mx-1 p-3 rounded-lg bg-emerald-950/30 border border-emerald-900/40 border-dashed text-center space-y-1">
+              <p className="text-xs font-medium text-slate-300">
                 No Project Selected
               </p>
-              <p className="text-[10px] text-emerald-300/60 leading-snug">
-                Open a project from My Research Projects to access its workspace &amp; journey.
+              <p className="text-[11px] text-slate-400 leading-snug">
+                Open a project from My Research Projects to access its workspace.
               </p>
             </div>
           )
@@ -361,11 +356,11 @@ export default function ResearcherNavSections({
       </div>
 
       {/* ================================================== */}
-      {/* 3. ACCOUNT SECTION                                 */}
+      {/* 3. SETTINGS & ACCOUNT SECTION                      */}
       {/* ================================================== */}
-      <div className="space-y-1 pt-2 border-t border-white/10">
+      <div className="space-y-1 pt-3 border-t border-emerald-900/50">
         {!collapsed && (
-          <p className="px-3 pb-1 text-[11px] font-heading font-extrabold uppercase tracking-wider text-emerald-400/90">
+          <p className="px-3 pb-1 text-[11px] font-medium uppercase tracking-wider text-emerald-400/70">
             Account
           </p>
         )}
@@ -374,19 +369,19 @@ export default function ResearcherNavSections({
         <Link
           href="/researcher/profile"
           onClick={onNavigate}
-          className={`relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-[14px] font-medium transition-all group ${
+          className={`relative flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
             isProfileActive
-              ? "bg-emerald-500/20 text-white font-bold border-l-[3px] border-emerald-400 shadow-xs"
-              : "text-[#d0e5da] hover:text-white hover:bg-white/10"
+              ? "bg-emerald-600/25 text-emerald-300 font-semibold border-l-2 border-emerald-400"
+              : "text-slate-300 hover:text-white hover:bg-white/5"
           }`}
           title={collapsed ? "Profile" : undefined}
         >
           <UserRound
-            className={`w-[18px] h-[18px] shrink-0 transition-colors ${
-              isProfileActive ? "text-emerald-300" : "text-emerald-300/60 group-hover:text-emerald-200"
+            className={`w-4 h-4 shrink-0 transition-colors ${
+              isProfileActive ? "text-emerald-300" : "text-slate-400"
             }`}
           />
-          {!collapsed && <span className="truncate">Profile</span>}
+          {!collapsed && <span className="truncate">Profile &amp; Credentials</span>}
         </Link>
       </div>
     </nav>

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import {
+  AlertCircle,
   AlertTriangle,
   ArrowLeft,
   BookOpen,
@@ -18,11 +19,41 @@ import {
   Loader2,
   Microscope,
   Plus,
+  Search,
+  ChevronDown,
+  Sparkles,
   Sprout,
   X,
 } from "lucide-react";
 import ResearchStageFooter from "@/components/researcher/stage/ResearchStageFooter";
 import ResearchStageHeader from "@/components/researcher/stage/ResearchStageHeader";
+
+
+export interface AvailablePlantCompound {
+  id: number;
+  plantId?: string | null;
+  plantScientificName: string;
+  plantCommonName: string;
+  compoundName: string;
+  iupacName?: string | null;
+  molecularFormula?: string | null;
+  molecularWeight?: number | string | null;
+  compoundClass?: string | null;
+  pubchemId?: string | null;
+  smiles?: string | null;
+  plantPartReported?: string | null;
+  references: Array<{
+    title: string;
+    authors?: string;
+    journal?: string;
+    year?: number | string;
+    volume?: string;
+    pages?: string;
+    doi?: string;
+    pubmedId?: string;
+  }>;
+  verificationStatus?: "VERIFIED_DATABASE" | "RESEARCHER_SUBMITTED";
+}
 
 interface CompoundItem {
   id: number;
@@ -101,6 +132,7 @@ interface InSilicoWorkspaceClientProps {
   initialResults: InsilicoResultItem[];
   initialSynthesis: InsilicoSynthesisData;
   initialLiterature?: LiteratureReferenceItem[];
+  initialAvailableCompounds?: AvailablePlantCompound[];
 }
 
 interface MetricField {
@@ -442,12 +474,14 @@ function CenteredModal({
   subtitle,
   onClose,
   wide = false,
+  extraWide = false,
   children,
 }: {
   title: string;
   subtitle?: string;
   onClose: () => void;
   wide?: boolean;
+  extraWide?: boolean;
   children: React.ReactNode;
 }) {
   useEffect(() => {
@@ -480,7 +514,7 @@ function CenteredModal({
         exit={{ opacity: 0, scale: 0.98, y: 8 }}
         transition={{ duration: 0.28, ease: "easeOut" }}
         className={`relative z-10 flex max-h-[min(86vh,780px)] w-full flex-col overflow-hidden rounded-3xl border border-[#dde6df] bg-white shadow-2xl ${
-          wide ? "max-w-2xl" : "max-w-lg"
+          extraWide ? "max-w-4xl" : wide ? "max-w-2xl" : "max-w-lg"
         }`}
       >
         <div className="flex items-start justify-between gap-4 border-b border-[#edf2ee] bg-gradient-to-r from-emerald-50/80 via-teal-50/30 to-transparent px-6 py-4">
@@ -506,39 +540,63 @@ function CenteredModal({
 }
 
 function ResearchSection({
+  id,
+  number,
+  badge,
   icon: Icon,
   title,
   subtitle,
   action,
   children,
+  headerGradient = "from-emerald-50/80 via-teal-50/30 to-transparent",
+  iconBg = "bg-gradient-to-br from-emerald-500 to-teal-600 shadow-emerald-500/20",
+  borderColor = "border-[#dde6df]",
+  hoverBorderColor = "hover:border-emerald-400/80",
 }: {
+  id?: string;
+  number?: string;
+  badge?: string;
   icon: React.ComponentType<{ className?: string }>;
   title: string;
   subtitle?: string;
   action?: React.ReactNode;
   children: React.ReactNode;
+  headerGradient?: string;
+  iconBg?: string;
+  borderColor?: string;
+  hoverBorderColor?: string;
 }) {
   return (
-    <motion.section
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35, delay: 0.05 }}
-      className="w-full overflow-hidden rounded-3xl border border-[#dde6df] bg-white shadow-md"
+    <section
+      id={id}
+      className={`w-full overflow-hidden rounded-3xl bg-white border ${borderColor} shadow-md ${hoverBorderColor} transition-all duration-300`}
     >
-      <div className="flex flex-col items-start justify-between gap-3 border-b border-[#edf2ee] bg-gradient-to-r from-emerald-50/80 via-teal-50/30 to-transparent px-6 py-4 sm:flex-row sm:items-center">
+      <div className={`flex flex-col items-start justify-between gap-3 border-b border-[#edf2ee] bg-gradient-to-r ${headerGradient} px-6 py-4.5 sm:flex-row sm:items-center`}>
         <div className="flex items-center gap-3">
-          <div className="rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 p-2.5 text-white shadow-md shadow-emerald-500/20">
+          <div className={`rounded-xl p-2.5 text-white shadow-md ${iconBg}`}>
             <Icon className="h-5 w-5" />
           </div>
           <div>
-            <h2 className="text-base font-black text-[#0f2c20] sm:text-lg">{title}</h2>
-            {subtitle && <p className="text-xs font-medium text-[#78997f]">{subtitle}</p>}
+            <div className="flex items-center gap-2">
+              {number && (
+                <span className="font-mono text-xs font-black text-emerald-800 uppercase tracking-wider">
+                  {number}
+                </span>
+              )}
+              <h2 className="text-base font-black text-[#0f2c20] sm:text-lg">{title}</h2>
+              {badge && (
+                <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-bold text-emerald-800">
+                  {badge}
+                </span>
+              )}
+            </div>
+            {subtitle && <p className="text-xs font-medium text-[#78997f] mt-0.5">{subtitle}</p>}
           </div>
         </div>
-        {action}
+        {action && <div className="shrink-0">{action}</div>}
       </div>
-      <div className="px-4 py-3 sm:px-6 sm:py-4">{children}</div>
-    </motion.section>
+      <div className="px-4 py-4 sm:px-6 sm:py-5">{children}</div>
+    </section>
   );
 }
 
@@ -591,6 +649,7 @@ export default function InSilicoWorkspaceClient({
   initialResults,
   initialSynthesis,
   initialLiterature = [],
+  initialAvailableCompounds = [],
 }: InSilicoWorkspaceClientProps) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -601,6 +660,23 @@ export default function InSilicoWorkspaceClient({
   const [selectionRationale, setSelectionRationale] = useState(initialSynthesis.selectionRationale || "");
   const [rationaleApproved, setRationaleApproved] = useState(initialSynthesis.status === "APPROVED");
   const [step, setStep] = useState<StepId>(() => inferStep(initialCompounds, initialResults, initialSynthesis));
+  const [activeAnchor, setActiveAnchor] = useState<string>("sec-compounds");
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const sectionIds = ["sec-compounds", "sec-screening", "sec-docking", "sec-summary"];
+      const scrollY = window.scrollY + 200;
+      for (let i = sectionIds.length - 1; i >= 0; i--) {
+        const el = document.getElementById(sectionIds[i]);
+        if (el && el.offsetTop <= scrollY) {
+          setActiveAnchor(sectionIds[i]);
+          break;
+        }
+      }
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   const [screeningIds, setScreeningIds] = useState<number[]>([]);
   const [screeningErrors, setScreeningErrors] = useState<Record<number, string>>({});
@@ -612,7 +688,23 @@ export default function InSilicoWorkspaceClient({
   const [removingId, setRemovingId] = useState<number | null>(null);
 
   const [modalSearchTerm, setModalSearchTerm] = useState("");
+  const [selectedClassFilter, setSelectedClassFilter] = useState("ALL");
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState<"ALL" | "NOT_ADDED" | "ADDED">("ALL");
+  const [selectedCompoundIds, setSelectedCompoundIds] = useState<Set<number>>(new Set());
+  const [inspectingCompound, setInspectingCompound] = useState<AvailablePlantCompound | null>(null);
+  const [showAdvancedCustomForm, setShowAdvancedCustomForm] = useState(false);
+
+  const [availableCompounds, setAvailableCompounds] = useState<AvailablePlantCompound[]>(
+    initialAvailableCompounds || []
+  );
+  const [loadingAvailable, setLoadingAvailable] = useState(false);
+
   const [customCompoundName, setCustomCompoundName] = useState("");
+  const [customCompoundClass, setCustomCompoundClass] = useState("");
+  const [customMolecularFormula, setCustomMolecularFormula] = useState("");
+  const [customPubchemId, setCustomPubchemId] = useState("");
+  const [customSmiles, setCustomSmiles] = useState("");
+  const [customPlantEvidence, setCustomPlantEvidence] = useState("");
   const [customSourceReference, setCustomSourceReference] = useState("");
   const [customError, setCustomError] = useState<string | null>(null);
   const [addingCompound, setAddingCompound] = useState(false);
@@ -636,14 +728,104 @@ export default function InSilicoWorkspaceClient({
 
   const closeModal = useCallback(() => setModal(null), []);
 
-  const plantKey = (project.plantScientificName || project.plantName || "momordica charantia")
-    .toLowerCase()
-    .trim();
-  const plantSuggestions =
-    VERIFIED_PLANT_SUGGESTIONS[plantKey] || VERIFIED_PLANT_SUGGESTIONS["momordica charantia"];
-  const filteredSuggestions = plantSuggestions.filter((suggestion) =>
-    suggestion.name.toLowerCase().includes(modalSearchTerm.toLowerCase())
-  );
+  const loadAvailableCompounds = useCallback(async () => {
+    setLoadingAvailable(true);
+    try {
+      const res = await fetch(`/api/researcher/projects/${projectId}/in-silico`);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.availablePlantCompounds)) {
+          setAvailableCompounds(data.availablePlantCompounds);
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to fetch available compounds:", e);
+    } finally {
+      setLoadingAvailable(false);
+    }
+  }, [projectId]);
+
+  useEffect(() => {
+    if (modal?.type === "add" && availableCompounds.length === 0) {
+      void loadAvailableCompounds();
+    }
+  }, [modal?.type, availableCompounds.length, loadAvailableCompounds]);
+
+  const availableClasses = useMemo(() => {
+    const set = new Set<string>();
+    for (const c of availableCompounds) {
+      if (c.compoundClass && c.compoundClass.trim()) {
+        set.add(c.compoundClass.trim());
+      }
+    }
+    return Array.from(set).sort();
+  }, [availableCompounds]);
+
+  const filteredCompounds = useMemo(() => {
+    const term = modalSearchTerm.toLowerCase().trim();
+    return availableCompounds.filter((compound) => {
+      // 1. Search term (name, formula, class, pubchem CID)
+      if (term) {
+        const matchName = compound.compoundName?.toLowerCase().includes(term);
+        const matchFormula = compound.molecularFormula?.toLowerCase().includes(term);
+        const matchClass = compound.compoundClass?.toLowerCase().includes(term);
+        const matchCid = compound.pubchemId?.toString().toLowerCase().includes(term);
+        if (!matchName && !matchFormula && !matchClass && !matchCid) {
+          return false;
+        }
+      }
+
+      // 2. Class filter
+      if (selectedClassFilter !== "ALL") {
+        if (compound.compoundClass?.toLowerCase() !== selectedClassFilter.toLowerCase()) {
+          return false;
+        }
+      }
+
+      // 3. Status filter
+      if (selectedStatusFilter !== "ALL") {
+        const isAdded = compounds.some(
+          (c) => c.compoundName.toLowerCase() === compound.compoundName.toLowerCase()
+        );
+        if (selectedStatusFilter === "NOT_ADDED" && isAdded) return false;
+        if (selectedStatusFilter === "ADDED" && !isAdded) return false;
+      }
+
+      return true;
+    });
+  }, [availableCompounds, modalSearchTerm, selectedClassFilter, selectedStatusFilter, compounds]);
+
+  const selectableVisibleCompounds = useMemo(() => {
+    return filteredCompounds.filter(
+      (c) => !compounds.some((item) => item.compoundName.toLowerCase() === c.compoundName.toLowerCase())
+    );
+  }, [filteredCompounds, compounds]);
+
+  const allVisibleSelected = useMemo(() => {
+    if (selectableVisibleCompounds.length === 0) return false;
+    return selectableVisibleCompounds.every((c) => selectedCompoundIds.has(c.id));
+  }, [selectableVisibleCompounds, selectedCompoundIds]);
+
+  const toggleSelectAllVisible = () => {
+    setSelectedCompoundIds((prev) => {
+      const next = new Set(prev);
+      if (allVisibleSelected) {
+        for (const c of selectableVisibleCompounds) next.delete(c.id);
+      } else {
+        for (const c of selectableVisibleCompounds) next.add(c.id);
+      }
+      return next;
+    });
+  };
+
+  const toggleSelectCompound = (id: number) => {
+    setSelectedCompoundIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const screenedIds = useMemo(() => {
     const ids = new Set<number>();
@@ -815,77 +997,97 @@ export default function InSilicoWorkspaceClient({
   const goToCompounds = () => {
     setValidationError(null);
     setStep(1);
+    setActiveAnchor("sec-compounds");
+    document.getElementById("sec-compounds")?.scrollIntoView({ behavior: "smooth" });
   };
 
   const goToScreening = () => {
     if (compounds.length === 0) {
-      setValidationError("Add a compound to continue.");
-      setStep(1);
+      setValidationError("Add a candidate compound to continue.");
+      goToCompounds();
       return;
     }
     setValidationError(null);
     screenMissing(compounds);
     setStep(2);
+    setActiveAnchor("sec-screening");
+    document.getElementById("sec-screening")?.scrollIntoView({ behavior: "smooth" });
   };
 
   const goToDocking = () => {
     if (compounds.length === 0) {
-      setValidationError("Add a compound to continue.");
-      setStep(1);
+      setValidationError("Add a candidate compound to continue.");
+      goToCompounds();
       return;
     }
     if (screeningIds.length > 0) {
-      setValidationError("Screening is still running.");
-      setStep(2);
+      setValidationError("Screening is still running. Please wait for results.");
+      setActiveAnchor("sec-screening");
+      document.getElementById("sec-screening")?.scrollIntoView({ behavior: "smooth" });
       return;
     }
     if (results.length === 0) {
-      setValidationError("Screening needs to finish before you choose docking compounds.");
+      setValidationError("Screening needs to finish before choosing docking compounds.");
       screenMissing(compounds);
-      setStep(2);
+      setActiveAnchor("sec-screening");
+      document.getElementById("sec-screening")?.scrollIntoView({ behavior: "smooth" });
       return;
     }
     setValidationError(null);
     setStep(3);
+    setActiveAnchor("sec-docking");
+    document.getElementById("sec-docking")?.scrollIntoView({ behavior: "smooth" });
   };
 
-  const handleAddSuggestedCompound = async (suggestion: (typeof plantSuggestions)[number]) => {
+  const handleAddSingleCompound = async (compound: AvailablePlantCompound) => {
     setAddingCompound(true);
     setCustomError(null);
     try {
+      const sourceRef = compound.references?.[0]
+        ? `${compound.references[0].authors || ""} (${compound.references[0].year || ""}), ${compound.references[0].journal || ""}`.trim()
+        : `Documented for ${project.plantName}`;
+
       const response = await fetch(`/api/researcher/projects/${projectId}/in-silico`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "add-compound",
-          compoundName: suggestion.name,
+          compoundName: compound.compoundName,
           sourceProvenance: "VERIFIED_DATABASE",
-          sourceReference: suggestion.source,
+          sourceReference: sourceRef,
           plantSource: project.plantName,
-          molecularFormula: suggestion.formula,
-          molecularWeight: suggestion.mw,
-          pubchemId: suggestion.cid,
+          molecularFormula: compound.molecularFormula,
+          molecularWeight: compound.molecularWeight,
+          pubchemId: compound.pubchemId,
+          smiles: compound.smiles,
+          iupacName: compound.iupacName,
         }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Failed to add compound");
 
-      const created: CompoundItem = {
+      const created: CompoundItem = data.compound || {
         id: data.insertedId || Date.now(),
         projectId,
-        compoundName: suggestion.name,
-        molecularFormula: suggestion.formula,
-        molecularWeight: suggestion.mw,
-        pubchemId: suggestion.cid,
+        compoundName: compound.compoundName,
+        molecularFormula: compound.molecularFormula,
+        molecularWeight: compound.molecularWeight,
+        pubchemId: compound.pubchemId,
+        smiles: compound.smiles,
+        iupacName: compound.iupacName,
         sourceProvenance: "VERIFIED_DATABASE",
-        sourceReference: suggestion.source,
+        sourceReference: sourceRef,
         plantSource: project.plantName,
         selectedForDocking: 0,
         preparationStatus: "UNPREPARED",
       };
+
       setCompounds((current) => [...current, created]);
-      setModal(null);
-      setModalSearchTerm("");
+      setSelectedCompoundIds((prev) => {
+        const next = new Set(prev);
+        next.delete(compound.id);
+        return next;
+      });
       void runScreening(created.id);
     } catch (error) {
       setCustomError(error instanceof Error ? error.message : "Failed to add compound.");
@@ -894,13 +1096,65 @@ export default function InSilicoWorkspaceClient({
     }
   };
 
-  const handleAddCustomCompound = async () => {
+  const handleBatchAddCompounds = async () => {
+    if (selectedCompoundIds.size === 0) return;
+    setAddingCompound(true);
+    setCustomError(null);
+    try {
+      const itemsToAdd = availableCompounds
+        .filter((c) => selectedCompoundIds.has(c.id))
+        .map((c) => ({
+          compoundName: c.compoundName,
+          sourceProvenance: "VERIFIED_DATABASE",
+          sourceReference: c.references?.[0]
+            ? `${c.references[0].authors || ""} (${c.references[0].year || ""}), ${c.references[0].journal || ""}`.trim()
+            : `Documented for ${project.plantName}`,
+          plantSource: project.plantName,
+          molecularFormula: c.molecularFormula,
+          molecularWeight: c.molecularWeight,
+          pubchemId: c.pubchemId,
+          smiles: c.smiles,
+          iupacName: c.iupacName,
+        }));
+
+      const response = await fetch(`/api/researcher/projects/${projectId}/in-silico`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "add-compounds",
+          compounds: itemsToAdd,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Failed to add compounds");
+
+      const inserted: CompoundItem[] = data.insertedCompounds || [];
+      if (inserted.length > 0) {
+        setCompounds((current) => [...current, ...inserted]);
+        for (const item of inserted) {
+          void runScreening(item.id);
+        }
+      }
+      setSelectedCompoundIds(new Set());
+      setModal(null);
+    } catch (error) {
+      setCustomError(error instanceof Error ? error.message : "Failed to add compounds.");
+    } finally {
+      setAddingCompound(false);
+    }
+  };
+
+  const handleSubmitCustomCompound = async () => {
     if (!customCompoundName.trim()) {
       setCustomError("Compound name is required.");
       return;
     }
     if (!customSourceReference.trim()) {
-      setCustomError("A supporting reference is required for a compound you add.");
+      setCustomError("A supporting literature citation or verifiable reference is required.");
+      return;
+    }
+    if (!customPlantEvidence.trim()) {
+      setCustomError(`Documented evidence associating this compound with ${project.plantName} is required.`);
       return;
     }
 
@@ -911,33 +1165,35 @@ export default function InSilicoWorkspaceClient({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action: "add-compound",
+          action: "submit-custom-compound",
           compoundName: customCompoundName.trim(),
-          sourceProvenance: "RESEARCHER_ENTERED",
+          compoundClass: customCompoundClass.trim() || undefined,
+          molecularFormula: customMolecularFormula.trim() || undefined,
+          pubchemId: customPubchemId.trim() || undefined,
+          smiles: customSmiles.trim() || undefined,
+          plantAssociationEvidence: customPlantEvidence.trim(),
           sourceReference: customSourceReference.trim(),
-          plantSource: project.plantName,
         }),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Failed to add custom compound");
+      if (!response.ok) throw new Error(data.error || "Failed to submit custom compound");
 
-      const created: CompoundItem = {
-        id: data.insertedId || Date.now(),
-        projectId,
-        compoundName: customCompoundName.trim(),
-        sourceProvenance: "RESEARCHER_ENTERED",
-        sourceReference: customSourceReference.trim(),
-        plantSource: project.plantName,
-        selectedForDocking: 0,
-        preparationStatus: "UNPREPARED",
-      };
-      setCompounds((current) => [...current, created]);
+      if (data.compound) {
+        setCompounds((current) => [...current, data.compound]);
+        void runScreening(data.compound.id);
+      }
       setCustomCompoundName("");
+      setCustomCompoundClass("");
+      setCustomMolecularFormula("");
+      setCustomPubchemId("");
+      setCustomSmiles("");
+      setCustomPlantEvidence("");
       setCustomSourceReference("");
+      setShowAdvancedCustomForm(false);
       setModal(null);
-      void runScreening(created.id);
+      void loadAvailableCompounds();
     } catch (error) {
-      setCustomError(error instanceof Error ? error.message : "Failed to add custom compound.");
+      setCustomError(error instanceof Error ? error.message : "Failed to submit compound.");
     } finally {
       setAddingCompound(false);
     }
@@ -1062,23 +1318,23 @@ export default function InSilicoWorkspaceClient({
   const handleCompleteAndContinue = async () => {
     setValidationError(null);
     if (compounds.length === 0) {
-      setValidationError("Add a compound to continue.");
-      setStep(1);
+      setValidationError("Add at least one candidate compound to continue.");
+      goToCompounds();
       return;
     }
     if (results.length === 0) {
-      setValidationError("Screening needs to finish before molecular docking.");
-      setStep(2);
+      setValidationError("Computational screening must finish before continuing to molecular docking.");
+      goToScreening();
       return;
     }
     if (selectedCompounds.length === 0) {
       setValidationError("Select at least one compound for molecular docking.");
-      setStep(3);
+      goToDocking();
       return;
     }
     if (!selectionRationale.trim()) {
-      setValidationError("A short selection rationale is required.");
-      setStep(3);
+      setValidationError("A selection rationale is required before advancing.");
+      goToDocking();
       return;
     }
 
@@ -1129,227 +1385,352 @@ export default function InSilicoWorkspaceClient({
         statusLabel="In Progress"
       />
 
-      <nav aria-label="In-silico steps" className="rounded-2xl border border-[#dde6df] bg-white px-4 py-3.5 shadow-md">
-        <ol className="flex items-center">
-          {STEPS.map((item, index) => {
-            const current = step === item.id;
-            const done = step > item.id;
-            return (
-              <li key={item.id} className={`flex min-w-0 items-center ${index < STEPS.length - 1 ? "flex-1" : ""}`}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (item.id === 1) goToCompounds();
-                    if (item.id === 2) goToScreening();
-                    if (item.id === 3) goToDocking();
-                  }}
-                  aria-current={current ? "step" : undefined}
-                  className="flex min-w-0 items-center gap-2.5 rounded-xl px-1 py-1 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
-                >
-                  <span
-                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-black ${
-                      done
-                        ? "bg-emerald-500 text-white shadow-sm shadow-emerald-500/30"
-                        : current
-                          ? "bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-md shadow-emerald-500/20"
-                          : "border border-[#dde6df] bg-[#f7faf8] text-[#78997f]"
-                    }`}
-                  >
-                    {done ? <Check className="h-3.5 w-3.5 stroke-[3]" /> : String(item.id).padStart(2, "0")}
-                  </span>
-                  <span
-                    className={`truncate text-xs sm:text-sm ${
-                      current ? "font-black text-[#0f2c20]" : done ? "font-bold text-emerald-800" : "font-semibold text-[#78997f]"
-                    }`}
-                  >
-                    {item.label}
-                  </span>
-                </button>
-                {index < STEPS.length - 1 && (
-                  <span className={`mx-2 h-px min-w-4 flex-1 ${done ? "bg-emerald-400" : "bg-[#dde6df]"}`} aria-hidden />
-                )}
-              </li>
-            );
-          })}
-        </ol>
-      </nav>
-
-      <motion.section
-        key={step}
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.22 }}
-        className="space-y-6"
-      >
-          {step === 1 && (
-            <ResearchSection
-              icon={Leaf}
-              title="Compounds"
-              subtitle="Select the compounds to evaluate."
-              action={
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCustomError(null);
-                    setModal({ type: "add" });
-                  }}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-1.5 text-xs font-bold text-emerald-900 transition-all hover:bg-emerald-100"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  Add Compound
-                </button>
-              }
+      {/* STICKY TAB NAVIGATION (CONTINUOUS ONE-PAGE SCROLL) */}
+      <div className="sticky top-4 z-20 flex items-center justify-between gap-2 overflow-x-auto rounded-2xl border border-slate-200/90 bg-white/95 p-2 shadow-xs backdrop-blur-md no-scrollbar">
+        <div className="flex items-center gap-1 sm:gap-2">
+          {[
+            { id: "sec-compounds", number: "01", label: "Compounds", count: compounds.length },
+            { id: "sec-screening", number: "02", label: "Screening & ADMET", count: screenedIds.size },
+            { id: "sec-docking", number: "03", label: "Docking Selection", count: selectedCompounds.length },
+            { id: "sec-summary", number: "04", label: "Stage Summary" },
+          ].map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => {
+                setActiveAnchor(item.id);
+                document.getElementById(item.id)?.scrollIntoView({ behavior: "smooth" });
+              }}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                activeAnchor === item.id
+                  ? "bg-[#0f2c20] text-emerald-300 shadow-2xs"
+                  : "bg-slate-50 hover:bg-slate-100 text-slate-700 hover:text-slate-900 border border-slate-200/60"
+              }`}
             >
-              {compounds.length === 0 ? (
-                <p className="py-6 text-center text-xs font-medium text-[#78997f]">Add a compound to begin.</p>
-              ) : (
-                <ul className="space-y-2">
-                  {compounds.map((compound) => {
-                    const screening = screeningIds.includes(compound.id);
-                    const screened = screenedIds.has(compound.id);
-                    const ready = Boolean(
-                      compound.molecularFormula || compound.molecularWeight || compound.pubchemId || compound.smiles
-                    );
-                    const failed = Boolean(screeningErrors[compound.id]) && !screening && !screened;
-                    const status = screening
-                      ? "Screening…"
-                      : failed
-                        ? "Screening needs another try"
-                        : screened
-                          ? "Screened"
-                          : ready
-                            ? "Screening available"
-                            : "Waiting for properties";
-                    return (
-                      <li
-                        key={compound.id}
-                        className="flex items-center justify-between gap-4 rounded-2xl border border-[#e7eee9] bg-gradient-to-br from-emerald-50/40 via-[#faf9f5] to-white px-4 py-3"
-                      >
-                        <div className="min-w-0">
-                          <p className="text-base font-black text-[#0f2c20]">{compound.compoundName}</p>
-                          <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs font-medium text-[#78997f]">
-                            {compound.molecularFormula && (
-                              <span className="font-mono text-[#3d5248]">{compound.molecularFormula}</span>
-                            )}
-                            {compound.molecularFormula && <span>·</span>}
-                            {screening && <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-700" />}
-                            {(screened || ready) && !screening && !failed && <Check className="h-3.5 w-3.5 text-emerald-600" />}
-                            {(failed || (!screening && !screened && !ready)) && (
-                              <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
-                            )}
-                            <span>{status}</span>
-                          </p>
-                          {failed && <p className="mt-1 text-xs font-semibold text-rose-700">{screeningErrors[compound.id]}</p>}
-                        </div>
-                        {pendingDeleteId === compound.id ? (
-                          <div className="flex shrink-0 items-center gap-2 text-xs font-bold">
-                            <button
-                              type="button"
-                              onClick={() => void handleRemoveCompound(compound)}
-                              disabled={removingId === compound.id}
-                              className="text-rose-700 disabled:opacity-50"
-                            >
-                              {removingId === compound.id ? "Removing…" : "Remove"}
-                            </button>
-                            <button type="button" onClick={() => setPendingDeleteId(null)} className="text-[#78997f]">
-                              Cancel
-                            </button>
-                          </div>
+              <span className="font-mono text-[10px] opacity-75">{item.number}</span>
+              <span>{item.label}</span>
+              {item.count !== undefined && (
+                <span
+                  className={`ml-0.5 rounded-full px-1.5 py-0.2 text-[10px] font-black ${
+                    activeAnchor === item.id
+                      ? "bg-emerald-800 text-emerald-100"
+                      : "bg-slate-200/80 text-slate-700"
+                  }`}
+                >
+                  {item.count}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0 pr-1 text-xs">
+          <span className="text-[11px] font-mono text-slate-500 hidden sm:inline">
+            {compounds.length} cmp · {screenedIds.size} screened · {selectedCompounds.length} selected
+          </span>
+          {saveState === "saved" && (
+            <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700 border border-emerald-200">
+              <Check className="h-3 w-3" />
+              Saved
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div className="space-y-8">
+        {/* ========================================================
+            SECTION 01: CANDIDATE COMPOUNDS
+            ======================================================== */}
+        <ResearchSection
+          id="sec-compounds"
+          number="01"
+          icon={Leaf}
+          title="Selected Research Compounds"
+          subtitle={`Bioactive phytochemicals curated for ${project.plantName} in-silico computational screening and ADMET evaluation.`}
+          action={
+            <button
+              type="button"
+              onClick={() => {
+                setCustomError(null);
+                setModal({ type: "add" });
+              }}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-300 bg-emerald-700 hover:bg-emerald-800 px-3.5 py-1.5 text-xs font-bold text-white transition-all cursor-pointer shadow-xs"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add Compounds
+            </button>
+          }
+        >
+          {compounds.length === 0 ? (
+            <div className="flex flex-col items-center justify-center p-8 text-center rounded-2xl bg-slate-50 border border-dashed border-slate-200 text-slate-500 space-y-2">
+              <Leaf className="w-8 h-8 text-slate-400 stroke-1" />
+              <p className="text-xs font-semibold text-slate-700">No candidate compounds selected yet</p>
+              <p className="text-[11px] text-slate-500 max-w-md">
+                Click &quot;Add Compounds&quot; above to browse and select documented phytochemicals reported for {project.plantName}.
+              </p>
+            </div>
+          ) : (
+            <ul className="space-y-2.5">
+              {compounds.map((compound) => {
+                const screening = screeningIds.includes(compound.id);
+                const screened = screenedIds.has(compound.id);
+                const ready = Boolean(
+                  compound.molecularFormula || compound.molecularWeight || compound.pubchemId || compound.smiles
+                );
+                const failed = Boolean(screeningErrors[compound.id]) && !screening && !screened;
+                const status = screening
+                  ? "Screening…"
+                  : failed
+                    ? "Screening needs another try"
+                    : screened
+                      ? "Screened"
+                      : ready
+                        ? "Screening available"
+                        : "Waiting for properties";
+                return (
+                  <li
+                    key={compound.id}
+                    className="flex items-center justify-between gap-4 rounded-2xl border border-[#e7eee9] bg-gradient-to-br from-emerald-50/40 via-[#faf9f5] to-white px-4 py-3 shadow-2xs hover:border-emerald-300 transition-all"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-base font-black text-[#0f2c20]">{compound.compoundName}</p>
+                      <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs font-medium text-[#78997f]">
+                        {compound.molecularFormula && (
+                          <span className="font-mono text-[#3d5248] font-bold">{compound.molecularFormula}</span>
+                        )}
+                        {compound.molecularFormula && compound.molecularWeight && <span>·</span>}
+                        {compound.molecularWeight && (
+                          <span className="font-mono text-slate-600">{Number(compound.molecularWeight).toFixed(2)} g/mol</span>
+                        )}
+                        <span>·</span>
+                        {screening && <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-700" />}
+                        {(screened || ready) && !screening && !failed && <Check className="h-3.5 w-3.5 text-emerald-600" />}
+                        {(failed || (!screening && !screened && !ready)) && (
+                          <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
+                        )}
+                        <span className={screened ? "font-bold text-emerald-800" : ""}>{status}</span>
+                      </p>
+                      {failed && <p className="mt-1 text-xs font-semibold text-rose-700">{screeningErrors[compound.id]}</p>}
+                    </div>
+                    {pendingDeleteId === compound.id ? (
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 text-xs font-bold bg-amber-50/90 border border-amber-200 p-2.5 rounded-xl">
+                        {screenedIds.has(compound.id) ? (
+                          <span className="text-[11px] text-amber-900 font-semibold max-w-xs">
+                            This compound already has screening results. Removing it will erase its screening metrics.
+                          </span>
                         ) : (
+                          <span className="text-[11px] text-amber-900 font-semibold">
+                            Remove this compound from project?
+                          </span>
+                        )}
+                        <div className="flex items-center gap-1.5 self-end sm:self-auto shrink-0">
                           <button
                             type="button"
-                            onClick={() => setPendingDeleteId(compound.id)}
-                            className="shrink-0 text-xs font-bold text-[#78997f] transition hover:text-rose-700"
+                            onClick={() => void handleRemoveCompound(compound)}
+                            disabled={removingId === compound.id}
+                            className="rounded-lg bg-rose-600 px-2.5 py-1 text-white hover:bg-rose-700 disabled:opacity-50 cursor-pointer shadow-2xs font-bold"
                           >
-                            Remove
+                            {removingId === compound.id ? "Removing…" : "Confirm Remove"}
                           </button>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </ResearchSection>
-          )}
-
-          {step === 2 && (
-            <ResearchSection icon={Microscope} title="Screening" subtitle="Review the screening result for each compound.">
-              <ul className="space-y-2">
-                {compounds.map((compound) => {
-                  const result = resultForCompound(results, compound.id);
-                  const profile = profileFor(result);
-                  const screening = screeningIds.includes(compound.id);
-                  const papers = papersForCompound(literature, compound.compoundName);
-                  const failed = Boolean(screeningErrors[compound.id]) && !result && !screening;
-                  return (
-                    <li
-                      key={compound.id}
-                      className="flex flex-col gap-2 rounded-2xl border border-[#e7eee9] bg-gradient-to-br from-emerald-50/40 via-[#faf9f5] to-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-                    >
-                      <div className="min-w-0">
-                        <p className="text-base font-black text-[#0f2c20]">{compound.compoundName}</p>
-                        {compound.molecularFormula && (
-                          <p className="font-mono text-xs text-[#78997f]">{compound.molecularFormula}</p>
-                        )}
-                        {screening && (
-                          <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-[#78997f]">
-                            <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-700" />
-                            Screening…
-                          </p>
-                        )}
-                        {failed && (
-                          <p className="mt-1 text-xs font-semibold text-rose-700">
-                            Screening needs another try.
-                            {screeningErrors[compound.id] ? ` ${screeningErrors[compound.id]}` : ""}
-                          </p>
-                        )}
-                        {result && (
-                          <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs font-semibold text-[#234237]">
-                            {profile.violations === 0 ? (
-                              <Check className="h-3.5 w-3.5 text-emerald-600" />
-                            ) : (
-                              <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
-                            )}
-                            <span>{profile.violations === 0 ? "Lipinski Pass" : `${profile.violations} Lipinski violation${profile.violations === 1 ? "" : "s"}`}</span>
-                            <span className="font-medium text-[#9aada2]">·</span>
-                            <span>GI {profile.gi}</span>
-                            <span className="font-medium text-[#9aada2]">·</span>
-                            <span className={profile.badge === "Recommended" ? "text-emerald-800" : "text-amber-800"}>{profile.verdict}</span>
-                          </p>
-                        )}
+                          <button
+                            type="button"
+                            onClick={() => setPendingDeleteId(null)}
+                            className="rounded-lg bg-white border border-slate-200 px-2.5 py-1 text-slate-700 hover:bg-slate-100 cursor-pointer"
+                          >
+                            Cancel
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex shrink-0 items-center gap-1">
-                        {failed && (
-                          <SubtleAction onClick={() => void runScreening(compound.id)}>Try again</SubtleAction>
-                        )}
-                        {result && (
-                          <>
-                            <SubtleAction onClick={() => setModal({ type: "results", compoundId: compound.id })}>
-                              <FlaskConical className="h-3.5 w-3.5" />
-                              Screening Results
-                            </SubtleAction>
-                            <SubtleAction onClick={() => setModal({ type: "research", compoundId: compound.id })}>
-                              <BookOpen className="h-3.5 w-3.5" />
-                              Research ({papers.length})
-                            </SubtleAction>
-                          </>
-                        )}
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            </ResearchSection>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setPendingDeleteId(compound.id)}
+                        className="shrink-0 text-xs font-bold text-[#78997f] transition hover:text-rose-700 cursor-pointer"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
           )}
+        </ResearchSection>
 
-          {step === 3 && (
-            <>
-              <ResearchSection
-                icon={FlaskConical}
-                title="Docking Selection"
-                subtitle="Choose compounds to investigate further. NatureAide may recommend; the researcher decides."
+        {/* ========================================================
+            SECTION 02: COMPUTATIONAL SCREENING & ADMET
+            ======================================================== */}
+        <ResearchSection
+          id="sec-screening"
+          number="02"
+          icon={Microscope}
+          headerGradient="from-cyan-50/80 via-blue-50/30 to-transparent"
+          iconBg="bg-gradient-to-br from-cyan-500 to-blue-600 shadow-cyan-500/20"
+          hoverBorderColor="hover:border-cyan-400/80"
+          title="Computational Screening & ADMET"
+          subtitle="Screen candidate compounds for Lipinski Rule of 5 compliance, molecular properties, and pharmacokinetic predictions."
+          action={
+            compounds.length > 0 && screenedIds.size < compounds.length ? (
+              <button
+                type="button"
+                onClick={() => screenMissing(compounds)}
+                disabled={screeningIds.length > 0}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-cyan-200 bg-cyan-50 px-3.5 py-1.5 text-xs font-bold text-cyan-900 transition-all hover:bg-cyan-100 cursor-pointer shadow-2xs disabled:opacity-50"
               >
-                <ul className="space-y-2">
+                {screeningIds.length > 0 ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-cyan-700" />
+                ) : (
+                  <Microscope className="h-3.5 w-3.5 text-cyan-700" />
+                )}
+                Screen All Compounds
+              </button>
+            ) : undefined
+          }
+        >
+          {compounds.length === 0 ? (
+            <div className="flex flex-col items-center justify-center p-8 text-center rounded-2xl bg-slate-50 border border-dashed border-slate-200 text-slate-500 space-y-2">
+              <Microscope className="w-8 h-8 text-slate-400 stroke-1" />
+              <p className="text-xs font-semibold text-slate-700">No candidate compounds to screen</p>
+              <p className="text-[11px] text-slate-500 max-w-md">
+                Add bioactive molecules in Section 01 above. Once added, NatureAide can calculate molecular descriptors, Lipinski compliance, and ADMET profiles.
+              </p>
+            </div>
+          ) : (
+            <ul className="space-y-2.5">
+              {compounds.map((compound) => {
+                const result = resultForCompound(results, compound.id);
+                const profile = profileFor(result);
+                const screening = screeningIds.includes(compound.id);
+                const papers = papersForCompound(literature, compound.compoundName);
+                const failed = Boolean(screeningErrors[compound.id]) && !result && !screening;
+                return (
+                  <li
+                    key={compound.id}
+                    className="flex flex-col gap-2 rounded-2xl border border-[#e7eee9] bg-gradient-to-br from-emerald-50/40 via-[#faf9f5] to-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between shadow-2xs hover:border-cyan-300 transition-all"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-base font-black text-[#0f2c20]">{compound.compoundName}</p>
+                      {compound.molecularFormula && (
+                        <p className="font-mono text-xs text-[#78997f] font-semibold">
+                          {compound.molecularFormula}
+                          {compound.molecularWeight && ` · ${Number(compound.molecularWeight).toFixed(2)} g/mol`}
+                        </p>
+                      )}
+                      {screening && (
+                        <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-[#78997f]">
+                          <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-700" />
+                          Screening molecular descriptors & ADMET…
+                        </p>
+                      )}
+                      {failed && (
+                        <p className="mt-1 text-xs font-semibold text-rose-700">
+                          Screening needs another try.
+                          {screeningErrors[compound.id] ? ` ${screeningErrors[compound.id]}` : ""}
+                        </p>
+                      )}
+                      {result && (
+                        <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs font-semibold text-[#234237]">
+                          {profile.violations === 0 ? (
+                            <Check className="h-3.5 w-3.5 text-emerald-600" />
+                          ) : (
+                            <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
+                          )}
+                          <span className={profile.violations === 0 ? "text-emerald-800" : "text-amber-800"}>
+                            {profile.violations === 0
+                              ? "Lipinski Pass (0 violations)"
+                              : `${profile.violations} Lipinski violation${profile.violations === 1 ? "" : "s"}`}
+                          </span>
+                          <span className="font-medium text-[#9aada2]">·</span>
+                          <span>GI Absorption: {profile.gi}</span>
+                          <span className="font-medium text-[#9aada2]">·</span>
+                          <span className={profile.badge === "Recommended" ? "text-emerald-800 font-bold" : "text-amber-800 font-bold"}>
+                            {profile.verdict}
+                          </span>
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      {(!result || failed) && !screening && (
+                        <SubtleAction onClick={() => void runScreening(compound.id)}>
+                          <Microscope className="h-3.5 w-3.5" />
+                          {failed ? "Try again" : "Run Screening"}
+                        </SubtleAction>
+                      )}
+                      {result && (
+                        <>
+                          <SubtleAction onClick={() => setModal({ type: "results", compoundId: compound.id })}>
+                            <FlaskConical className="h-3.5 w-3.5" />
+                            Screening Results
+                          </SubtleAction>
+                          <SubtleAction onClick={() => setModal({ type: "research", compoundId: compound.id })}>
+                            <BookOpen className="h-3.5 w-3.5" />
+                            Research ({papers.length})
+                          </SubtleAction>
+                        </>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </ResearchSection>
+
+        {/* ========================================================
+            SECTION 03: DOCKING SELECTION & RATIONALE
+            ======================================================== */}
+        <ResearchSection
+          id="sec-docking"
+          number="03"
+          icon={FlaskConical}
+          headerGradient="from-amber-50/80 via-orange-50/30 to-transparent"
+          iconBg="bg-gradient-to-br from-amber-500 to-orange-500 shadow-amber-500/20"
+          hoverBorderColor="hover:border-amber-400/80"
+          title="Docking Selection & Rationale"
+          subtitle="Choose compounds to investigate in Stage 3 Molecular Docking and document the mechanistic selection rationale."
+          action={
+            rationaleApproved ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-100/80 px-3.5 py-1.5 text-[11px] font-extrabold uppercase tracking-wider text-emerald-900">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                Rationale Approved
+              </span>
+            ) : undefined
+          }
+        >
+          {compounds.length === 0 ? (
+            <div className="flex flex-col items-center justify-center p-8 text-center rounded-2xl bg-slate-50 border border-dashed border-slate-200 text-slate-500 space-y-2">
+              <FlaskConical className="w-8 h-8 text-slate-400 stroke-1" />
+              <p className="text-xs font-semibold text-slate-700">Docking selection requires screened compounds</p>
+              <p className="text-[11px] text-slate-500 max-w-md">
+                Add compounds and perform screening above to unlock docking candidate selection.
+              </p>
+            </div>
+          ) : screenedIds.size === 0 ? (
+            <div className="flex flex-col items-center justify-center p-8 text-center rounded-2xl bg-amber-50/50 border border-amber-200/80 text-amber-900 space-y-2">
+              <AlertTriangle className="w-8 h-8 text-amber-500 stroke-1" />
+              <p className="text-xs font-bold text-amber-950">Screening pending for candidates</p>
+              <p className="text-[11px] text-amber-800 max-w-md">
+                Please complete computational screening in Section 02 above to evaluate drug-likeness before selecting docking candidates.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  screenMissing(compounds);
+                  document.getElementById("sec-screening")?.scrollIntoView({ behavior: "smooth" });
+                }}
+                className="mt-1 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 text-xs font-bold cursor-pointer transition-colors"
+              >
+                <Microscope className="w-3.5 h-3.5 text-amber-700" />
+                Run Screening Now
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <p className="text-xs font-bold text-slate-700">
+                  Select candidates for molecular docking ({selectedCompounds.length} selected):
+                </p>
+                <ul className="space-y-2.5">
                   {compounds.map((compound) => {
                     const checked = isSelected(compound);
                     const profile = profileFor(resultForCompound(results, compound.id));
@@ -1375,7 +1756,7 @@ export default function InSilicoWorkspaceClient({
                           }}
                           className={`cursor-pointer rounded-2xl border px-4 py-3 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 ${
                             checked
-                              ? "border-emerald-400 bg-emerald-50/80"
+                              ? "border-emerald-400 bg-emerald-50/80 shadow-2xs"
                               : "border-[#e7eee9] bg-gradient-to-br from-white via-[#faf9f5] to-white hover:border-emerald-200"
                           }`}
                         >
@@ -1393,7 +1774,10 @@ export default function InSilicoWorkspaceClient({
                                 <div>
                                   <p className="text-base font-black leading-tight text-[#0f2c20]">{compound.compoundName}</p>
                                   {compound.molecularFormula && (
-                                    <p className="mt-0.5 font-mono text-xs text-[#78997f]">{compound.molecularFormula}</p>
+                                    <p className="mt-0.5 font-mono text-xs text-[#78997f]">
+                                      {compound.molecularFormula}
+                                      {compound.molecularWeight && ` · ${Number(compound.molecularWeight).toFixed(2)} g/mol`}
+                                    </p>
                                   )}
                                 </div>
                                 <span
@@ -1438,27 +1822,30 @@ export default function InSilicoWorkspaceClient({
                     );
                   })}
                 </ul>
-              </ResearchSection>
+              </div>
 
-              <ResearchSection
-                icon={FileText}
-                title="Selection Rationale"
-                subtitle="A short record of why these compounds continue."
-                action={
-                  rationaleApproved ? (
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-100/80 px-3.5 py-1.5 text-[11px] font-extrabold uppercase tracking-wider text-emerald-900">
-                      <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+              {/* SELECTION RATIONALE CARD */}
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-emerald-800" />
+                    <h3 className="text-xs font-extrabold text-[#0f2c20] uppercase tracking-wider">
+                      Selection Rationale
+                    </h3>
+                  </div>
+                  {rationaleApproved && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                      <Check className="h-3 w-3" />
                       Approved
                     </span>
-                  ) : undefined
-                }
-              >
-                <p className="line-clamp-3 text-sm font-medium leading-6 text-[#234237]">
+                  )}
+                </div>
+                <p className="text-xs sm:text-sm font-medium leading-relaxed text-[#234237] whitespace-pre-wrap">
                   {selectionRationale.trim()
                     ? selectionRationale
-                    : "Select a compound and a short rationale will appear here."}
+                    : "Select candidate compounds above and a scientific selection rationale will be generated automatically."}
                 </p>
-                <div className="mt-4 flex items-center justify-between gap-3">
+                <div className="flex items-center justify-between pt-2 border-t border-slate-200/80">
                   <div className="flex items-center gap-3">
                     <button
                       type="button"
@@ -1467,9 +1854,9 @@ export default function InSilicoWorkspaceClient({
                         setModal({ type: "rationale" });
                       }}
                       disabled={!selectionRationale.trim()}
-                      className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-xs font-black text-[#0f2c20] shadow-xs transition-all hover:bg-slate-50 disabled:opacity-40"
+                      className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-[#0f2c20] shadow-xs transition-all hover:bg-slate-50 disabled:opacity-40 cursor-pointer"
                     >
-                      Edit
+                      Edit Rationale
                     </button>
                     {saveState === "saved" && <span className="text-[11px] font-bold text-emerald-700">Saved</span>}
                   </div>
@@ -1478,16 +1865,99 @@ export default function InSilicoWorkspaceClient({
                       type="button"
                       onClick={() => void handleApproveRationale()}
                       disabled={approving || !selectionRationale.trim()}
-                      className="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-[#0f3626] to-[#16a34a] px-5 py-2.5 text-xs font-black text-white shadow-lg shadow-emerald-700/20 transition-all hover:from-[#0c2c1f] hover:to-[#15803d] disabled:opacity-50"
+                      className="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-[#0f3626] to-[#16a34a] px-4 py-2 text-xs font-bold text-white shadow-md shadow-emerald-700/20 transition-all hover:from-[#0c2c1f] hover:to-[#15803d] disabled:opacity-50 cursor-pointer"
                     >
-                      {approving ? "Approving…" : "Approve"}
+                      {approving ? "Approving…" : "Approve Rationale"}
                     </button>
                   )}
                 </div>
-              </ResearchSection>
-            </>
+              </div>
+            </div>
           )}
-      </motion.section>
+        </ResearchSection>
+
+        {/* ========================================================
+            SECTION 04: IN-SILICO SYNTHESIS & STAGE SUMMARY
+            ======================================================== */}
+        <ResearchSection
+          id="sec-summary"
+          number="04"
+          icon={Sparkles}
+          headerGradient="from-purple-50/80 via-indigo-50/30 to-transparent"
+          iconBg="bg-gradient-to-br from-purple-500 to-indigo-600 shadow-purple-500/20"
+          hoverBorderColor="hover:border-purple-400/80"
+          title="In-Silico Synthesis & Stage Summary"
+          subtitle="Stage 2 metrics summary and readiness criteria for advancing to Stage 3 Molecular Docking."
+        >
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="p-3.5 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-1">
+                <span className="text-[11px] font-semibold text-slate-500">Target Botanical</span>
+                <p className="font-bold text-slate-900 text-sm truncate">{project.plantName}</p>
+                {project.plantScientificName && (
+                  <p className="italic text-[11px] text-slate-500 truncate">{project.plantScientificName}</p>
+                )}
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-1">
+                <span className="text-[11px] font-semibold text-slate-500">Candidate Compounds</span>
+                <p className="font-bold text-slate-900 text-base">{compounds.length}</p>
+                <p className="text-[11px] text-slate-500">Identified in Stage 2</p>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-1">
+                <span className="text-[11px] font-semibold text-slate-500">Screening Status</span>
+                <p className="font-bold text-slate-900 text-base">{screenedIds.size} / {compounds.length}</p>
+                <p className="text-[11px] text-slate-500">
+                  {screenedIds.size === compounds.length && compounds.length > 0
+                    ? "All compounds screened"
+                    : "Screening in progress"}
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-1">
+                <span className="text-[11px] font-semibold text-slate-500">Docking Candidates</span>
+                <p className="font-bold text-emerald-800 text-base">{selectedCompounds.length} Selected</p>
+                <p className="text-[11px] text-slate-500">
+                  Rationale: {rationaleApproved ? "Approved" : "Draft"}
+                </p>
+              </div>
+            </div>
+
+            {selectedCompounds.length > 0 && rationaleApproved ? (
+              <div className="flex items-center gap-3 p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-950 text-xs">
+                <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
+                <div>
+                  <p className="font-bold">Stage 2 In-Silico Analysis Complete</p>
+                  <p className="text-emerald-800 text-[11px] mt-0.5">
+                    {selectedCompounds.length} compound{selectedCompounds.length === 1 ? "" : "s"} validated and approved for Stage 3 Molecular Docking simulations.
+                  </p>
+                </div>
+              </div>
+            ) : selectedCompounds.length > 0 && !rationaleApproved ? (
+              <div className="flex items-center gap-3 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-950 text-xs">
+                <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
+                <div>
+                  <p className="font-bold">Selection Rationale Pending Approval</p>
+                  <p className="text-amber-800 text-[11px] mt-0.5">
+                    Review and click &quot;Approve Rationale&quot; in Section 03 above to advance to Molecular Docking.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3 p-4 rounded-2xl bg-slate-50 border border-slate-200 text-slate-700 text-xs">
+                <AlertCircle className="h-5 w-5 text-slate-400 shrink-0" />
+                <div>
+                  <p className="font-bold">Docking Candidates Required</p>
+                  <p className="text-slate-500 text-[11px] mt-0.5">
+                    Please select at least one compound for molecular docking in Section 03 above.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        </ResearchSection>
+      </div>
 
       {validationError && (
         <div role="alert" className="flex items-center gap-3 rounded-2xl border-2 border-rose-300 bg-rose-50 p-4 text-xs font-extrabold text-rose-900 shadow-md">
@@ -1496,9 +1966,9 @@ export default function InSilicoWorkspaceClient({
         </div>
       )}
 
-      {step === 3 && selectedCompounds.length === 0 && !validationError && (
+      {selectedCompounds.length === 0 && !validationError && compounds.length > 0 && (
         <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-medium text-amber-800">
-          <span>Please select at least one compound to advance to Molecular Docking.</span>
+          <span>Please select at least one candidate compound in Section 03 to advance to Molecular Docking.</span>
         </div>
       )}
 
@@ -1506,117 +1976,654 @@ export default function InSilicoWorkspaceClient({
         projectId={project.id}
         stageNumber={2}
         stageTitle="In-Silico Analysis"
-        backLabel={step > 1 ? `Back to Step ${step - 1}` : "Back to Plant & Literature"}
-        onBack={
-          step > 1
-            ? () => {
-                setValidationError(null);
-                setStep((current) => (current === 3 ? 2 : 1));
-              }
-            : undefined
-        }
-        statusMessage={`${compounds.length} compounds · ${screenedIds.size} screened · ${selectedCompounds.length} selected`}
-        primaryAction={
-          step === 1
-            ? {
-                label: "Continue to Screening",
-                onClick: goToScreening,
-                disabled: compounds.length === 0,
-              }
-            : step === 2
-            ? {
-                label: screeningIds.length > 0 ? "Screening…" : "Continue to Compound Selection",
-                onClick: goToDocking,
-                disabled: step2Blocked,
-                loading: screeningIds.length > 0,
-              }
-            : {
-                label: rationaleApproved ? "Continue to Molecular Docking" : "Approve & Continue to Molecular Docking",
-                onClick: () => void handleCompleteAndContinue(),
-                disabled: !dockingReady || completingStage || screeningIds.length > 0,
-                loading: completingStage,
-              }
-        }
+        backHref={`/researcher/projects/${projectId}`}
+        backLabel="Back to Project"
+        saveStatus={saveState}
+        onSave={() => void handleSaveRationaleDraft()}
+        primaryAction={{
+          label: "Continue to Molecular Docking",
+          onClick: () => void handleCompleteAndContinue(),
+          disabled: selectedCompounds.length === 0 || !selectionRationale.trim() || completingStage || screeningIds.length > 0,
+          loading: completingStage,
+          loadingLabel: "Advancing to Molecular Docking...",
+        }}
       />
 
       <AnimatePresence>
         {modal?.type === "add" && (
           <CenteredModal
-            title="Add Compound"
-            subtitle={project.plantName}
+            title="ADD COMPOUNDS"
+            subtitle={`${project.plantName}${project.plantScientificName ? ` · ${project.plantScientificName}` : ""}`}
             onClose={closeModal}
-            wide
+            extraWide
           >
             {customError && (
-              <p className="mb-4 rounded-2xl bg-rose-50 px-3 py-2 text-sm font-medium text-rose-800">{customError}</p>
+              <div className="mb-4 flex items-center justify-between gap-2 rounded-xl bg-rose-50 border border-rose-200 px-3.5 py-2.5 text-xs font-semibold text-rose-800">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>{customError}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCustomError(null)}
+                  className="text-rose-500 hover:text-rose-700"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
             )}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-[#52645d]" htmlFor="compound-search">
-                Reported for this plant
-              </label>
-              <input
-                id="compound-search"
-                value={modalSearchTerm}
-                onChange={(event) => setModalSearchTerm(event.target.value)}
-                placeholder="Search compounds"
-                className="w-full rounded-2xl border border-[#d7e3db] px-3 py-2.5 text-sm outline-none focus:border-emerald-600"
-              />
-              <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
-                {filteredSuggestions.map((suggestion) => {
-                  const alreadyAdded = compounds.some(
-                    (compound) => compound.compoundName.toLowerCase() === suggestion.name.toLowerCase()
-                  );
-                  return (
-                    <div
-                      key={suggestion.name}
-                      className="flex items-center justify-between gap-3 rounded-2xl border border-[#e7eee9] px-3 py-3"
+
+            {/* Context Header */}
+            <div className="pb-3 border-b border-[#e7eee9]">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-base font-black text-[#0f2c20] font-heading flex items-center gap-1.5">
+                    <FlaskConical className="w-4 h-4 text-emerald-600" />
+                    Reported Phytochemicals
+                  </h3>
+                  <p className="text-xs text-[#52645d] mt-0.5">
+                    Select compounds documented for <strong className="text-[#0f2c20]">{project.plantName}</strong> from our peer-reviewed botanical database.
+                  </p>
+                </div>
+                {loadingAvailable && (
+                  <span className="inline-flex items-center gap-1.5 text-xs text-slate-500">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-600" />
+                    <span>Loading compound library…</span>
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Search and Filters Bar */}
+            <div className="pt-3 pb-2 space-y-2.5">
+              <div className="flex flex-col sm:flex-row gap-2.5">
+                {/* Search input */}
+                <div className="relative flex-1">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    value={modalSearchTerm}
+                    onChange={(e) => setModalSearchTerm(e.target.value)}
+                    placeholder="Search compounds by name, formula, class, PubChem CID..."
+                    className="w-full pl-9 pr-8 py-2 rounded-xl border border-[#d7e3db] bg-slate-50/50 text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none transition-all"
+                  />
+                  {modalSearchTerm && (
+                    <button
+                      type="button"
+                      onClick={() => setModalSearchTerm("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
                     >
-                      <div>
-                        <p className="font-semibold">{suggestion.name}</p>
-                        <p className="text-sm text-[#52645d]">{suggestion.formula}</p>
-                      </div>
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Filter selects */}
+                <div className="flex items-center gap-2 shrink-0">
+                  {availableClasses.length > 0 && (
+                    <div className="relative">
+                      <select
+                        value={selectedClassFilter}
+                        onChange={(e) => setSelectedClassFilter(e.target.value)}
+                        className="appearance-none pl-3 pr-8 py-2 rounded-xl border border-[#d7e3db] bg-white text-xs font-semibold text-slate-700 outline-none focus:border-emerald-600 cursor-pointer shadow-2xs"
+                      >
+                        <option value="ALL">All Classes ({availableClasses.length})</option>
+                        {availableClasses.map((cls) => (
+                          <option key={cls} value={cls}>
+                            {cls}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    </div>
+                  )}
+
+                  {availableCompounds.length > 0 && (
+                    <div className="relative">
+                      <select
+                        value={selectedStatusFilter}
+                        onChange={(e) => setSelectedStatusFilter(e.target.value as any)}
+                        className="appearance-none pl-3 pr-8 py-2 rounded-xl border border-[#d7e3db] bg-white text-xs font-semibold text-slate-700 outline-none focus:border-emerald-600 cursor-pointer shadow-2xs"
+                      >
+                        <option value="ALL">All Status</option>
+                        <option value="NOT_ADDED">Not Yet Added</option>
+                        <option value="ADDED">Already Added</option>
+                      </select>
+                      <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Dynamic Counts & Select All Visible */}
+              <div className="flex items-center justify-between text-xs py-1.5 px-1 text-slate-600 border-b border-[#e7eee9]">
+                <div className="flex items-center gap-3">
+                  {selectableVisibleCompounds.length > 0 && (
+                    <label className="inline-flex items-center gap-1.5 cursor-pointer font-semibold text-slate-700 hover:text-emerald-800 transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={allVisibleSelected}
+                        onChange={toggleSelectAllVisible}
+                        className="w-3.5 h-3.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                      />
+                      <span>Select all visible ({selectableVisibleCompounds.length})</span>
+                    </label>
+                  )}
+                  {selectableVisibleCompounds.length > 0 && <span className="text-slate-300">|</span>}
+                  <span className="font-medium">
+                    <strong className="font-bold text-slate-900">{filteredCompounds.length}</strong> compound{filteredCompounds.length === 1 ? "" : "s"} available
+                  </span>
+                </div>
+
+                <div>
+                  <span className="text-[11.5px] font-semibold text-emerald-800">
+                    <strong>{selectedCompoundIds.size}</strong> selected
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Compounds List */}
+            {filteredCompounds.length === 0 ? (
+              <div className="text-center py-12 px-4 rounded-2xl bg-slate-50/70 border border-dashed border-[#cfe0d5] space-y-3">
+                {availableCompounds.length === 0 ? (
+                  <div className="max-w-md mx-auto space-y-3">
+                    <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-200/70 mx-auto flex items-center justify-center text-emerald-700 shadow-2xs">
+                      <FlaskConical className="w-6 h-6 stroke-1.5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-800">No curated compounds yet</h4>
+                      <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                        NatureAide does not currently have referenced phytochemical records for <strong className="text-slate-800">{project.plantName}</strong>. You can catalog an ethnobotanical phytochemical candidate by submitting documented evidence.
+                      </p>
+                    </div>
+                    {!showAdvancedCustomForm && (
                       <button
                         type="button"
-                        onClick={() => void handleAddSuggestedCompound(suggestion)}
-                        disabled={addingCompound || alreadyAdded}
-                        className="rounded-full bg-[#12382a] px-3 py-1.5 text-sm font-semibold text-white disabled:bg-[#d7e0da] disabled:text-[#5c6f63]"
+                        onClick={() => setShowAdvancedCustomForm(true)}
+                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#0f2c20] text-white text-xs font-bold hover:bg-[#184433] transition-all cursor-pointer shadow-sm hover:shadow-md"
                       >
-                        {alreadyAdded ? "Added" : addingCompound ? "Adding…" : "Add"}
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Submit Compound With Evidence</span>
                       </button>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    <Search className="w-6 h-6 mx-auto text-slate-300" />
+                    <p className="text-xs font-semibold text-slate-700">No compounds match your search or filter</p>
+                    <p className="text-[11px] text-slate-400">Try adjusting your keyword or resetting the filter controls.</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setModalSearchTerm("");
+                        setSelectedClassFilter("ALL");
+                        setSelectedStatusFilter("ALL");
+                      }}
+                      className="mt-2 text-xs font-bold text-emerald-700 underline cursor-pointer"
+                    >
+                      Reset Search & Filters
+                    </button>
+                  </>
+                )}
+              </div>
+            ) : (
+              <div className="max-h-[46vh] overflow-y-auto divide-y divide-[#edf2ee] pr-1 space-y-1 custom-scrollbar">
+                {filteredCompounds.map((compound) => {
+                  const isAdded = compounds.some(
+                    (c) => c.compoundName.toLowerCase() === compound.compoundName.toLowerCase()
+                  );
+                  const isChecked = selectedCompoundIds.has(compound.id);
+
+                  return (
+                    <div
+                      key={compound.id}
+                      className={`group flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-2xl transition-all border ${
+                        isAdded
+                          ? "bg-slate-50/70 border-slate-100 opacity-80"
+                          : isChecked
+                          ? "bg-emerald-50/60 border-emerald-300/80 shadow-xs"
+                          : "bg-white border-transparent hover:bg-slate-50/80 hover:border-slate-200"
+                      }`}
+                    >
+                      {/* Checkbox and Info */}
+                      <div className="flex items-start gap-3 min-w-0 flex-1">
+                        <div className="pt-0.5 shrink-0">
+                          {isAdded ? (
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                          ) : (
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => toggleSelectCompound(compound.id)}
+                              className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                            />
+                          )}
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h4 className="font-heading font-black text-sm text-[#0f2c20]">
+                              {compound.compoundName}
+                            </h4>
+                            {compound.molecularFormula && (
+                              <span className="font-mono text-xs font-bold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200/60">
+                                {compound.molecularFormula}
+                              </span>
+                            )}
+                            {compound.compoundClass && (
+                              <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">
+                                {compound.compoundClass}
+                              </span>
+                            )}
+                            {/* Documented Badge */}
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-teal-800 bg-teal-50 px-2 py-0.5 rounded-full border border-teal-200/60" title="Botanical occurrence documented in scientific literature">
+                              <FileText className="w-2.5 h-2.5 text-teal-600" />
+                              Documented
+                            </span>
+                            {/* Structure Ready Badge */}
+                            {compound.smiles || compound.pubchemId ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60" title="Canonical SMILES / 3D coordinates ready for molecular docking simulation">
+                                <Check className="w-2.5 h-2.5 text-emerald-600" />
+                                Structure Ready
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200/60" title="3D Structure pending retrieval">
+                                Structure Pending
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 mt-1 text-[11px] text-slate-500">
+                            {compound.molecularWeight && (
+                              <span>{Number(compound.molecularWeight).toFixed(2)} g/mol</span>
+                            )}
+                            {compound.pubchemId && (
+                              <>
+                                <span>·</span>
+                                <span>PubChem CID: {compound.pubchemId}</span>
+                              </>
+                            )}
+                            <span>·</span>
+                            <span className="italic text-emerald-900/80 font-medium">
+                              Reported in {compound.plantCommonName}
+                            </span>
+                            {compound.references && compound.references.length > 0 && (
+                              <>
+                                <span>·</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setInspectingCompound(compound)}
+                                  className="inline-flex items-center gap-1 font-semibold text-emerald-700 hover:text-emerald-900 hover:underline cursor-pointer"
+                                >
+                                  <span>{compound.references.length} source{compound.references.length > 1 ? "s" : ""} · View evidence</span>
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Action Button */}
+                      <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                        {isAdded ? (
+                          <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold text-emerald-800 bg-emerald-100/70 border border-emerald-200">
+                            <Check className="w-3.5 h-3.5 text-emerald-700" />
+                            Added
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => void handleAddSingleCompound(compound)}
+                            disabled={addingCompound}
+                            className="inline-flex items-center gap-1 px-3.5 py-1.5 rounded-xl text-xs font-bold text-white bg-[#0f2c20] hover:bg-[#184433] disabled:opacity-50 transition-colors cursor-pointer shadow-xs"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            Add
+                          </button>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
               </div>
-            </div>
+            )}
 
-            <form
-              className="mt-6 space-y-3 border-t border-[#e7eee9] pt-5"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void handleAddCustomCompound();
-              }}
-            >
-              <p className="text-sm font-medium">Or add your own</p>
-              <input
-                value={customCompoundName}
-                onChange={(event) => setCustomCompoundName(event.target.value)}
-                placeholder="Compound name"
-                className="w-full rounded-2xl border border-[#d7e3db] px-3 py-2.5 text-sm outline-none focus:border-emerald-600"
-              />
-              <input
-                value={customSourceReference}
-                onChange={(event) => setCustomSourceReference(event.target.value)}
-                placeholder="Supporting reference"
-                className="w-full rounded-2xl border border-[#d7e3db] px-3 py-2.5 text-sm outline-none focus:border-emerald-600"
-              />
-              <button
-                type="submit"
-                disabled={addingCompound}
-                className="rounded-full bg-[#12382a] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-              >
-                {addingCompound ? "Adding…" : "Add Compound"}
-              </button>
-            </form>
+            {/* Sticky Multi-Select Bottom Bar */}
+            {selectedCompoundIds.size > 0 && (
+              <div className="sticky bottom-0 -mx-6 -mb-5 mt-4 px-6 py-3.5 bg-gradient-to-r from-[#072418] via-[#0d3626] to-[#041910] text-white flex items-center justify-between shadow-2xl border-t border-emerald-700/40">
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-bold text-emerald-200">
+                    <strong>{selectedCompoundIds.size}</strong> compound{selectedCompoundIds.size > 1 ? "s" : ""} selected
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCompoundIds(new Set())}
+                    className="text-xs text-slate-300 hover:text-white underline cursor-pointer"
+                  >
+                    Clear
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => void handleBatchAddCompounds()}
+                  disabled={addingCompound}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-extrabold text-[#051a11] bg-gradient-to-r from-emerald-400 to-teal-300 hover:from-emerald-300 hover:to-teal-200 disabled:opacity-50 transition-all cursor-pointer shadow-md shadow-emerald-500/25"
+                >
+                  {addingCompound ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Adding Compounds…</span>
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add {selectedCompoundIds.size} Compound{selectedCompoundIds.size > 1 ? "s" : ""}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+
+            {/* Secondary Advanced Submission Workflow (accessible if library has compounds or user opened form) */}
+            {(availableCompounds.length > 0 || showAdvancedCustomForm) && (
+              <div className="mt-4 pt-4 border-t border-[#edf2ee]">
+                {!showAdvancedCustomForm ? (
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600">
+                    <div>
+                      <p className="font-semibold text-slate-800">Can&apos;t find a reported compound?</p>
+                      <p className="text-[11px] text-slate-500">
+                        Submit a novel phytochemical with verifiable literature references for audit and inclusion.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowAdvancedCustomForm(true)}
+                      className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white font-bold text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition-colors cursor-pointer shrink-0"
+                    >
+                      Submit Compound With Evidence
+                    </button>
+                  </div>
+                ) : (
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      void handleSubmitCustomCompound();
+                    }}
+                    className="p-4 rounded-2xl bg-slate-50 border border-emerald-200/80 space-y-3 text-xs"
+                  >
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+                      <div>
+                        <h4 className="font-bold text-sm text-slate-900">Submit Compound With Evidence</h4>
+                        <p className="text-[11px] text-slate-500">
+                          Requires documented proof associating this compound with {project.plantName}.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowAdvancedCustomForm(false)}
+                        className="text-slate-400 hover:text-slate-600 text-xs font-semibold cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Compound Name *
+                      </label>
+                      <input
+                        value={customCompoundName}
+                        onChange={(e) => setCustomCompoundName(e.target.value)}
+                        placeholder="e.g., Vitedoin A"
+                        required
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs text-slate-800 focus:border-emerald-600 outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Compound Class
+                      </label>
+                      <input
+                        value={customCompoundClass}
+                        onChange={(e) => setCustomCompoundClass(e.target.value)}
+                        placeholder="e.g., Flavonoid, Terpenoid, Lignan"
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs text-slate-800 focus:border-emerald-600 outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Molecular Formula
+                      </label>
+                      <input
+                        value={customMolecularFormula}
+                        onChange={(e) => setCustomMolecularFormula(e.target.value)}
+                        placeholder="e.g., C22H24O8"
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs text-slate-800 focus:border-emerald-600 outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        PubChem CID (if available)
+                      </label>
+                      <input
+                        value={customPubchemId}
+                        onChange={(e) => setCustomPubchemId(e.target.value)}
+                        placeholder="e.g., 10427847"
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs text-slate-800 focus:border-emerald-600 outline-none"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Canonical SMILES
+                      </label>
+                      <input
+                        value={customSmiles}
+                        onChange={(e) => setCustomSmiles(e.target.value)}
+                        placeholder="e.g., COC1=CC=C(C=C1)..."
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-mono text-slate-800 focus:border-emerald-600 outline-none"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Evidence of Association with {project.plantName} *
+                      </label>
+                      <textarea
+                        value={customPlantEvidence}
+                        onChange={(e) => setCustomPlantEvidence(e.target.value)}
+                        placeholder="Explain the botanical isolation / chromatographic identification of this phytochemical from this plant species..."
+                        rows={2}
+                        required
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs text-slate-800 focus:border-emerald-600 outline-none"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Scientific Reference / DOI / Source *
+                      </label>
+                      <input
+                        value={customSourceReference}
+                        onChange={(e) => setCustomSourceReference(e.target.value)}
+                        placeholder="e.g., Author et al. (2020), Journal Name 15(2): 100-105. DOI: 10.1016/..."
+                        required
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs text-slate-800 focus:border-emerald-600 outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2">
+                    <span className="text-[10px] text-slate-500 italic">
+                      Will be cataloged as: &quot;Researcher Submitted (Verification Pending)&quot;
+                    </span>
+                    <button
+                      type="submit"
+                      disabled={addingCompound}
+                      className="px-4 py-2 rounded-xl bg-emerald-800 text-white font-bold hover:bg-emerald-900 transition-colors shadow-xs cursor-pointer"
+                    >
+                      {addingCompound ? "Submitting…" : "Submit & Add to Project"}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+            )}
+          </CenteredModal>
+        )}
+
+        {/* Evidence Inspection Modal */}
+        {inspectingCompound && (
+          <CenteredModal
+            title={`Reported Evidence: ${inspectingCompound.compoundName}`}
+            subtitle={`${inspectingCompound.plantCommonName} (${inspectingCompound.plantScientificName})`}
+            onClose={() => setInspectingCompound(null)}
+            wide
+          >
+            <div className="space-y-4 text-xs">
+              {/* Chemical summary */}
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 block">
+                      Chemical Specification
+                    </span>
+                    <h4 className="font-heading font-black text-base text-[#0f2c20]">
+                      {inspectingCompound.compoundName}
+                    </h4>
+                  </div>
+                  {inspectingCompound.compoundClass && (
+                    <span className="text-[10.5px] font-extrabold uppercase tracking-wider text-emerald-800 bg-emerald-100/70 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                      {inspectingCompound.compoundClass}
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-2 border-t border-slate-200/60 text-slate-600">
+                  {inspectingCompound.molecularFormula && (
+                    <div>
+                      <span className="text-[10px] text-slate-400 block">Formula</span>
+                      <span className="font-mono font-bold text-slate-800">{inspectingCompound.molecularFormula}</span>
+                    </div>
+                  )}
+                  {inspectingCompound.molecularWeight && (
+                    <div>
+                      <span className="text-[10px] text-slate-400 block">Molecular Weight</span>
+                      <span className="font-mono font-bold text-slate-800">{Number(inspectingCompound.molecularWeight).toFixed(2)} g/mol</span>
+                    </div>
+                  )}
+                  {inspectingCompound.pubchemId && (
+                    <div>
+                      <span className="text-[10px] text-slate-400 block">PubChem CID</span>
+                      <a
+                        href={`https://pubchem.ncbi.nlm.nih.gov/compound/${inspectingCompound.pubchemId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-mono font-bold text-emerald-700 hover:underline inline-flex items-center gap-1"
+                      >
+                        <span>{inspectingCompound.pubchemId}</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                  )}
+                </div>
+
+                {inspectingCompound.iupacName && (
+                  <div className="pt-1.5 text-[11px] text-slate-600">
+                    <span className="text-slate-400 font-semibold">IUPAC:</span> {inspectingCompound.iupacName}
+                  </div>
+                )}
+                {inspectingCompound.smiles && (
+                  <div className="pt-1 text-[10.5px] font-mono text-slate-500 break-all bg-white p-2 rounded-lg border border-slate-200/60">
+                    {inspectingCompound.smiles}
+                  </div>
+                )}
+              </div>
+
+              {/* Botanical occurrence */}
+              <div className="p-3.5 rounded-2xl bg-emerald-50/50 border border-emerald-200/60 text-emerald-950 space-y-1">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-700 block">
+                  Botanical Documentation
+                </span>
+                <p className="font-semibold text-xs">
+                  Documented constituent of <span className="font-bold">{inspectingCompound.plantCommonName}</span> (<em>{inspectingCompound.plantScientificName}</em>)
+                </p>
+                {inspectingCompound.plantPartReported && (
+                  <p className="text-[11px] text-emerald-800">
+                    Reported Plant Part: <strong className="font-bold">{inspectingCompound.plantPartReported}</strong>
+                  </p>
+                )}
+              </div>
+
+              {/* Documented Scientific References */}
+              <div>
+                <h5 className="font-bold text-xs text-slate-800 uppercase tracking-wider mb-2">
+                  Documented Scientific References ({inspectingCompound.references?.length || 0})
+                </h5>
+                {inspectingCompound.references && inspectingCompound.references.length > 0 ? (
+                  <div className="space-y-2">
+                    {inspectingCompound.references.map((ref, idx) => (
+                      <div
+                        key={idx}
+                        className="p-3 rounded-xl bg-white border border-slate-200 shadow-2xs space-y-1 text-xs"
+                      >
+                        <p className="font-bold text-slate-900 leading-snug">{ref.title}</p>
+                        <p className="text-slate-600 text-[11px]">
+                          {ref.authors && <span className="font-medium text-slate-700">{ref.authors}. </span>}
+                          {ref.journal && <span className="italic">{ref.journal} </span>}
+                          {ref.year && <span>({ref.year})</span>}
+                          {ref.volume && <span> {ref.volume}</span>}
+                          {ref.pages && <span>: {ref.pages}</span>}
+                        </p>
+                        {ref.doi && (
+                          <p className="pt-0.5">
+                            <a
+                              href={ref.doi.startsWith("http") ? ref.doi : `https://doi.org/${ref.doi}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[11px] font-bold text-emerald-700 hover:underline inline-flex items-center gap-1"
+                            >
+                              <span>DOI: {ref.doi}</span>
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          </p>
+                        )}
+                        {ref.pubmedId && (
+                          <p className="pt-0.5">
+                            <a
+                              href={`https://pubmed.ncbi.nlm.nih.gov/${ref.pubmedId}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[11px] font-bold text-sky-700 hover:underline inline-flex items-center gap-1"
+                            >
+                              <span>PMID: {ref.pubmedId}</span>
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-slate-400 italic">No direct citation links stored for this phytochemical.</p>
+                )}
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={() => setInspectingCompound(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs cursor-pointer"
+                >
+                  Close Evidence
+                </button>
+              </div>
+            </div>
           </CenteredModal>
         )}
 

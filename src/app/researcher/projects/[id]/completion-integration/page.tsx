@@ -1,25 +1,12 @@
-import React from "react";
 import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth";
-import CompletionIntegrationClient from "@/components/researcher/completion-integration/CompletionIntegrationClient";
-
-interface Props {
-  params: Promise<{ id: string }>;
-}
 
 export const instant = false;
 
-export default async function CompletionIntegrationStagePage({ params }: Props) {
-  const session = await getSession();
-  if (!session || session.role !== "RESEARCHER") {
-    redirect("/login");
-  }
-
+export default async function LegacyCompletionIntegrationPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const { id } = await params;
-  const projectId = parseInt(id, 10);
-  if (isNaN(projectId)) {
-    redirect("/researcher/projects");
-  }
-
-  return <CompletionIntegrationClient projectId={projectId} />;
+  redirect(`/researcher/projects/${id}/safety`);
 }

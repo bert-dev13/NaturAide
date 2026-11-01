@@ -946,26 +946,17 @@ export default function CompletionIntegrationClient({ projectId }: Props) {
       <ResearchStageFooter
         projectId={projectId}
         stageNumber={5}
-        stageTitle="Research Integration"
-        backHref={`/researcher/projects/${projectId}/formulation-safety`}
-        backLabel="Back to Stage 4"
-        statusMessage={
-          isSynthesisApproved
-            ? "Research Synthesis Approved"
-            : "Synthesis Review Required"
-        }
+        stageTitle="Safety / Clinical"
+        backHref={`/researcher/projects/${projectId}`}
+        backLabel="Back to Project"
         onSave={() => handleSaveDraft()}
         isSaving={saving}
-        secondaryAction={{
-          label: "Preview Dossier",
-          onClick: () => setShowDossierModal(true),
-          icon: Eye,
-        }}
         primaryAction={{
-          label: "Finalize & Continue to Professional Review",
+          label: "Continue to Knowledge Integration",
           onClick: handleFinalizeStage5,
           disabled: (!isReadyToFinalize && !isStage5Complete) || finalizing,
           loading: finalizing,
+          loadingLabel: "Advancing to Knowledge Integration...",
         }}
       />
 

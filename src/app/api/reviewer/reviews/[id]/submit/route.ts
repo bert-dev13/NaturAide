@@ -180,6 +180,33 @@ export async function POST(
       [assessment === "ACCEPTABLE" ? "REVIEWED" : "NEEDS_ATTENTION", submissionId, areaKey]
     );
 
+    // Update Stage 3 research status for pharmacology review
+    if (areaKey === "pharmacology") {
+      if (assessment === "ACCEPTABLE") {
+        await pool.query(
+          `UPDATE research_project_stages SET status = 'COMPLETED', completedAt = CURRENT_TIMESTAMP(3), updatedAt = CURRENT_TIMESTAMP(3) WHERE projectId = ? AND stageKey = 'docking'`,
+          [projectId]
+        );
+        await pool.query(
+          `UPDATE research_project_stages SET status = CASE WHEN status = 'NOT_STARTED' THEN 'IN_PROGRESS' ELSE status END, updatedAt = CURRENT_TIMESTAMP(3) WHERE projectId = ? AND stageKey = 'formulation-safety'`,
+          [projectId]
+        );
+        await pool.query(
+          `UPDATE research_projects SET currentStage = CASE WHEN currentStage = 'docking' THEN 'formulation-safety' ELSE currentStage END, updatedAt = CURRENT_TIMESTAMP(3) WHERE id = ?`,
+          [projectId]
+        );
+      } else {
+        await pool.query(
+          `UPDATE research_project_stages SET status = 'REVISION_REQUIRED', updatedAt = CURRENT_TIMESTAMP(3) WHERE projectId = ? AND stageKey = 'docking'`,
+          [projectId]
+        );
+        await pool.query(
+          `UPDATE research_projects SET status = 'REVISIONS_REQUESTED', updatedAt = CURRENT_TIMESTAMP(3) WHERE id = ?`,
+          [projectId]
+        );
+      }
+    }
+
     // 3. Log review activity
     await pool.query(
       `

@@ -8,10 +8,7 @@ import {
   Menu,
   X,
   Bell,
-  Clock,
-  FileCheck2,
-  RotateCcw,
-  CheckCircle2,
+  Layers,
   User,
   Sparkles,
   LayoutDashboard,
@@ -68,29 +65,26 @@ export default function ReviewerHeader({
 
   const navLinks = [
     { name: "Review Workspace", href: "/reviewer", icon: LayoutDashboard },
-    { name: "Pending", href: "/reviewer?status=PENDING", icon: Clock },
-    { name: "In Review", href: "/reviewer?status=IN_REVIEW", icon: FileCheck2 },
-    { name: "Revisions", href: "/reviewer/revisions", icon: RotateCcw },
-    { name: "Completed", href: "/reviewer/completed", icon: CheckCircle2 },
+    { name: "All Research Projects", href: "/reviewer/projects", icon: Layers },
     { name: "Ask NatureAide", href: "/reviewer/assistant", icon: Sparkles },
     { name: "Profile", href: "/reviewer/profile", icon: User },
   ];
 
   return (
-    <header className="sticky top-0 z-40 bg-gradient-to-r from-[#071930]/95 via-[#0b2447]/95 to-[#0f3460]/95 backdrop-blur-md border-b border-blue-500/20 px-4 sm:px-6 lg:px-8 py-3 text-white shadow-md select-none transition-colors">
+    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 sm:px-6 lg:px-8 py-3 text-slate-800 shadow-2xs select-none transition-colors">
       <div className="flex items-center justify-between gap-4">
         {/* Left: Mobile hamburger & brand */}
         <div className="flex items-center gap-3">
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="lg:hidden p-2 rounded-xl text-blue-200 hover:text-white hover:bg-white/10 border border-white/15 transition-colors cursor-pointer"
+            className="lg:hidden p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
             aria-label="Toggle navigation menu"
           >
             {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
 
           <Link href="/reviewer" className="flex items-center gap-2.5 group">
-            <div className="relative w-8 h-8 rounded-xl overflow-hidden bg-white/10 p-0.5 border border-white/20 shadow-xs group-hover:scale-105 group-hover:border-blue-400 transition-all shrink-0 backdrop-blur-sm">
+            <div className="relative w-8 h-8 rounded-xl overflow-hidden bg-slate-50 p-0.5 border border-slate-200 shadow-2xs group-hover:scale-105 group-hover:border-blue-400 transition-all shrink-0">
               <Image
                 src="/images/nature-logo.png"
                 alt="NatureAide Logo"
@@ -102,15 +96,15 @@ export default function ReviewerHeader({
             </div>
             <div className="hidden sm:flex flex-col">
               <div className="flex items-center gap-1.5">
-                <span className="font-heading font-extrabold text-sm text-white tracking-tight flex items-center gap-1.5">
+                <span className="font-heading font-extrabold text-sm text-slate-900 tracking-tight flex items-center gap-1.5">
                   NatureAide
-                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.9)] animate-pulse" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)] animate-pulse" />
                 </span>
-                <span className="px-1.5 py-0.2 rounded-md bg-blue-500/30 text-blue-200 border border-blue-400/30 text-[10px] font-extrabold uppercase tracking-wider">
+                <span className="px-1.5 py-0.2 rounded-md bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-extrabold uppercase tracking-wider">
                   Professional
                 </span>
               </div>
-              <span className="text-[10px] text-blue-300/80 font-medium">
+              <span className="text-[10px] text-slate-500 font-medium">
                 Scientific Review Platform
               </span>
             </div>
@@ -123,13 +117,13 @@ export default function ReviewerHeader({
           <div className="relative">
             <button
               onClick={() => setNotifOpen(!notifOpen)}
-              className="relative p-2 rounded-xl text-blue-200 hover:text-white hover:bg-white/10 transition-colors border border-white/15 bg-white/5 cursor-pointer shadow-2xs"
+              className="relative p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors border border-slate-200 bg-white cursor-pointer shadow-2xs"
               title="Review Notifications"
               aria-label="Review Notifications"
             >
               <Bell className="w-4 h-4 transition-transform group-hover:scale-110" />
               {unreadCount > 0 && (
-                <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-blue-400 ring-2 ring-[#0b2447] animate-pulse shadow-[0_0_8px_rgba(96,165,250,0.9)]" />
+                <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-blue-500 ring-2 ring-white animate-pulse" />
               )}
             </button>
 
@@ -186,18 +180,18 @@ export default function ReviewerHeader({
           <div className="relative">
             <button
               onClick={() => setUserMenuOpen(!userMenuOpen)}
-              className="flex items-center gap-2.5 pl-3 border-l border-white/15 hover:opacity-90 transition-opacity cursor-pointer text-left"
+              className="flex items-center gap-2.5 pl-3 border-l border-slate-200 hover:opacity-90 transition-opacity cursor-pointer text-left"
               title="Professional Reviewer Menu"
               aria-label="Professional Reviewer Menu"
             >
-              <div className="w-8 h-8 rounded-full bg-blue-500/30 text-blue-300 flex items-center justify-center border border-blue-400/40 shadow-xs">
-                <ShieldCheck className="w-4 h-4 text-blue-300" />
+              <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-700 flex items-center justify-center border border-blue-200 shadow-2xs">
+                <ShieldCheck className="w-4 h-4 text-blue-600" />
               </div>
               <div className="hidden sm:flex flex-col">
-                <span className="text-xs font-bold text-white leading-tight">
+                <span className="text-xs font-bold text-slate-800 leading-tight">
                   Professional Reviewer
                 </span>
-                <span className="text-[10px] font-medium text-blue-300/80 leading-tight">
+                <span className="text-[10px] font-medium text-slate-500 leading-tight">
                   Scientific Review Platform
                 </span>
               </div>
@@ -246,7 +240,7 @@ export default function ReviewerHeader({
 
       {/* Mobile Drawer */}
       {mobileMenuOpen && (
-        <div className="lg:hidden mt-3 pt-3 border-t border-white/10 space-y-1 animate-in fade-in">
+        <div className="lg:hidden mt-3 pt-3 border-t border-slate-200 space-y-1 animate-in fade-in">
           {navLinks.map((link) => {
             const NavIcon = link.icon;
             const isActive = pathname === link.href;
@@ -257,17 +251,17 @@ export default function ReviewerHeader({
                 onClick={() => setMobileMenuOpen(false)}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
                   isActive
-                    ? "bg-blue-600 text-white shadow-md shadow-blue-950/40"
-                    : "text-blue-200 hover:text-white hover:bg-white/10"
+                    ? "bg-blue-600 text-white shadow-xs"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
                 }`}
               >
-                <NavIcon className="w-4 h-4 shrink-0 text-blue-400" />
+                <NavIcon className="w-4 h-4 shrink-0 text-blue-600" />
                 <span>{link.name}</span>
               </Link>
             );
           })}
           <div className="pt-2">
-            <LogoutButton className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-rose-300 bg-rose-500/20 hover:bg-rose-500/30 border border-rose-400/30 transition-colors" />
+            <LogoutButton className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-colors" />
           </div>
         </div>
       )}

@@ -104,6 +104,7 @@ interface PlantLiteratureProps {
     computationalStudies: number;
     safetyEvidence: number;
   };
+  initialReviewFeedback?: any[];
 }
 
 export function parseVerifiedPlantParts(partsStr?: string | null): string[] {
@@ -143,9 +144,13 @@ export default function PlantLiteratureClient({
   initialPlantData,
   initialReferences,
   initialSynthesis,
+  initialReviewFeedback = [],
 }: PlantLiteratureProps) {
   const router = useRouter();
   const [, startTransition] = useTransition();
+
+  // Navigation anchors for continuous scroll
+  const [activeAnchor, setActiveAnchor] = useState<string>("sec-identity");
 
   // 1. Specimen & Research Material State
   const availableParts = React.useMemo(
@@ -188,6 +193,9 @@ export default function PlantLiteratureClient({
   const [voucherSpecimenNumber, setVoucherSpecimenNumber] = useState(
     initialPlantData.voucherSpecimenNumber || "PNH-2024-MC01"
   );
+  const [sampleIdentifier, setSampleIdentifier] = useState(
+    initialPlantData.sampleIdentifier || "SAM-2026-001"
+  );
   const [authenticationMethod, setAuthenticationMethod] = useState(
     initialPlantData.authenticationMethod || "Macro-morphological & Taxonomic Key"
   );
@@ -198,6 +206,22 @@ export default function PlantLiteratureClient({
     initialPlantData.selectionRationale ||
       `Selected ${verifiedPlant.commonName} (${verifiedPlant.scientificName || ""}) based on documented ethnobotanical relevance and historical pharmacological precedent.`
   );
+
+  // Review Feedback for Two-Way Reviewer Integration
+  const openReviewFeedback = React.useMemo(() => {
+    return (initialReviewFeedback || []).filter(
+      (f: any) => (f.status || "OPEN").toUpperCase() !== "RESOLVED"
+    );
+  }, [initialReviewFeedback]);
+
+  const getFieldFeedback = (fieldName: string, aliases: string[] = []) => {
+    return openReviewFeedback.filter((f: any) => {
+      const text = `${f.sectionName || ""} ${f.title || ""} ${f.comment || ""} ${f.recommendation || ""}`.toLowerCase();
+      const matchName = text.includes(fieldName.toLowerCase());
+      const matchAlias = aliases.some((a) => text.includes(a.toLowerCase()));
+      return matchName || matchAlias;
+    });
+  };
 
   // 2. Material & Extraction State
   const [materialType, setMaterialType] = useState(
@@ -320,6 +344,7 @@ export default function PlantLiteratureClient({
           collectionDate,
           collectionLocation,
           voucherSpecimenNumber,
+          sampleIdentifier,
           authenticationMethod,
           authenticatedBy,
           storageHandlingNotes,
@@ -417,6 +442,39 @@ export default function PlantLiteratureClient({
     }
   };
 
+  const ReviewFindingCallout = ({ findings }: { findings: any[] }) => {
+    if (!findings || findings.length === 0) return null;
+    return (
+      <div className="mt-2 space-y-2">
+        {findings.map((f, i) => (
+          <div
+            key={f.id || i}
+            className="p-3 rounded-xl bg-amber-50/90 border border-amber-300 text-xs text-amber-950 space-y-1 shadow-2xs"
+          >
+            <div className="flex items-center justify-between">
+              <span className="inline-flex items-center gap-1 font-bold text-[10px] text-amber-800 uppercase tracking-wider bg-amber-100 px-2 py-0.5 rounded-md border border-amber-200">
+                <AlertCircle className="w-3 h-3 text-amber-600" />
+                Reviewer Finding · {f.severity || "Revision Required"}
+              </span>
+              {f.reviewerDisplayName && (
+                <span className="text-[10px] text-slate-500 font-medium">
+                  By {f.reviewerDisplayName}
+                </span>
+              )}
+            </div>
+            <p className="font-semibold text-slate-800">{f.comment}</p>
+            {f.recommendation && (
+              <p className="text-slate-600 italic">
+                <span className="font-bold text-amber-900 not-italic">Requested action: </span>
+                {f.recommendation}
+              </p>
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   return (
     <div className="w-full max-w-full px-2 sm:px-4 lg:px-6 py-6 space-y-8 font-sans">
       {/* ========================================================
@@ -428,15 +486,21 @@ export default function PlantLiteratureClient({
         stageTitle="Plant & Literature Research"
         plantCommonName={verifiedPlant.commonName}
         plantScientificName={verifiedPlant.scientificName}
-        statusLabel="In Progress"
+        statusLabel={
+          openReviewFeedback.length > 0 || project.status === "REVISIONS_REQUIRED"
+            ? "Revisions Required"
+            : project.currentStage === "plant-literature"
+            ? "In Progress"
+            : "Completed"
+        }
         contextualAction={
           <button
             type="button"
             onClick={() => {
-              const el = document.getElementById("evidence-synthesis-section") || document.querySelector("section");
+              const el = document.getElementById("sec-synthesis");
               if (el) el.scrollIntoView({ behavior: "smooth" });
             }}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-emerald-200 hover:text-white text-xs font-bold backdrop-blur-md transition-all hover:scale-[1.02] active:scale-[0.98] shadow-xs"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-emerald-200 hover:text-white text-xs font-bold backdrop-blur-md transition-all hover:scale-[1.02] active:scale-[0.98] shadow-xs cursor-pointer"
           >
             <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
             <span>Ask NatureAide</span>
@@ -444,10 +508,82 @@ export default function PlantLiteratureClient({
         }
       />
 
+      {/* Pharmacognosy Review Revision Alert Banner (Two-Way Feedback Loop) */}
+      {openReviewFeedback.length > 0 && (
+        <div className="rounded-2xl bg-amber-50/95 border-2 border-amber-300 p-4 sm:p-5 shadow-xs space-y-2">
+          <div className="flex items-start sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-xl bg-amber-500 text-white shrink-0 shadow-2xs">
+                <AlertCircle className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-extrabold text-amber-950">
+                  Pharmacognosy Review: Revisions Requested ({openReviewFeedback.length} finding{openReviewFeedback.length > 1 ? "s" : ""})
+                </h3>
+                <p className="text-xs text-amber-800 mt-0.5">
+                  The reviewer has flagged specific botanical / extraction records for correction. Inline feedback callouts are displayed beside the affected fields below.
+                </p>
+              </div>
+            </div>
+            <span className="px-2.5 py-1 rounded-full bg-amber-200 text-amber-900 text-[10px] font-black uppercase tracking-wider shrink-0">
+              Revision Active
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================
+          STICKY ANCHOR NAVIGATION (CONTINUOUS ONE-PAGE SCROLL)
+          ======================================================== */}
+      <div className="sticky top-4 z-20 bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200/90 p-2 shadow-xs flex items-center justify-between gap-2 overflow-x-auto no-scrollbar">
+        <div className="flex items-center gap-1 sm:gap-2">
+          {[
+            { id: "sec-identity", number: "01", label: "Plant Identity" },
+            { id: "sec-material", number: "02", label: "Research Material" },
+            { id: "sec-extraction", number: "03", label: "Extraction" },
+            { id: "sec-literature", number: "04", label: "Literature" },
+            { id: "sec-synthesis", number: "05", label: "Synthesis" },
+          ].map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => {
+                setActiveAnchor(item.id);
+                document.getElementById(item.id)?.scrollIntoView({ behavior: "smooth" });
+              }}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                activeAnchor === item.id
+                  ? "bg-[#0f2c20] text-emerald-300 shadow-2xs"
+                  : "bg-slate-50 hover:bg-slate-100 text-slate-700 hover:text-slate-900 border border-slate-200/60"
+              }`}
+            >
+              <span className="font-mono text-[10px] opacity-75">{item.number}</span>
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0 pr-1">
+          <span className="text-[11px] font-mono text-slate-400 hidden sm:inline">
+            {lastSaved}
+          </span>
+          <button
+            type="button"
+            onClick={() => handleSave(true)}
+            disabled={saving}
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold cursor-pointer transition-colors"
+          >
+            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+            <span>Save Draft</span>
+          </button>
+        </div>
+      </div>
+
       {/* ========================================================
           CONTAINER 1: BOTANICAL PROFILE (EMERALD THEME)
           ======================================================== */}
       <motion.section
+        id="sec-identity"
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35, delay: 0.05 }}
@@ -459,13 +595,13 @@ export default function PlantLiteratureClient({
               <Leaf className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base sm:text-lg font-black text-[#0f2c20]">Botanical Profile</h2>
+              <h2 className="text-base sm:text-lg font-black text-[#0f2c20]">01 Botanical Identity</h2>
               <p className="text-xs text-[#78997f] font-medium">Taxonomic Identity & Specimen Overview</p>
             </div>
           </div>
           <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-emerald-100/80 text-emerald-900 border border-emerald-300 text-[11px] font-extrabold tracking-wider uppercase shadow-2xs">
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-            Official Registry Verified
+            PITAHC Verified Monograph
           </span>
         </div>
 
@@ -534,9 +670,14 @@ export default function PlantLiteratureClient({
                     </span>
                   </div>
                 </div>
-                <span className="text-[11px] font-mono font-bold text-emerald-800 bg-white px-3.5 py-1.5 rounded-xl border border-emerald-300 shrink-0 shadow-2xs">
-                  Registry Status: Verified
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-mono font-bold text-emerald-800 bg-white px-3 py-1.5 rounded-xl border border-emerald-300 shrink-0 shadow-2xs">
+                    POWO / WFO Verified
+                  </span>
+                  <span className="text-[11px] font-mono font-bold text-emerald-800 bg-white px-3 py-1.5 rounded-xl border border-emerald-300 shrink-0 shadow-2xs">
+                    Registry: PITAHC Monograph
+                  </span>
+                </div>
               </div>
             </div>
           </div>
@@ -547,6 +688,7 @@ export default function PlantLiteratureClient({
           CONTAINER 2: RESEARCH MATERIAL (CYAN / BLUE THEME)
           ======================================================== */}
       <motion.section
+        id="sec-material"
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35, delay: 0.1 }}
@@ -558,7 +700,7 @@ export default function PlantLiteratureClient({
               <Microscope className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base sm:text-lg font-black text-[#0f2c20]">Research Material</h2>
+              <h2 className="text-base sm:text-lg font-black text-[#0f2c20]">02 Research Material & Provenance</h2>
               <p className="text-xs text-[#78997f] font-medium">Specimen Provenance & Authentication Methodology</p>
             </div>
           </div>
@@ -623,6 +765,8 @@ export default function PlantLiteratureClient({
                 <span>Plant Part Used in This Study is required.</span>
               </p>
             )}
+
+            <ReviewFindingCallout findings={getFieldFeedback("part", ["partsStudied", "plant part"])} />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -636,9 +780,10 @@ export default function PlantLiteratureClient({
                 type="text"
                 value={specimenSource}
                 onChange={(e) => setSpecimenSource(e.target.value)}
-                placeholder="e.g., Institutional Herbarium"
+                placeholder="e.g., Institutional Herbarium or Davao City"
                 className="w-full mt-2 bg-transparent border-0 text-sm font-bold text-[#0f2c20] p-0 focus:outline-none focus:ring-0 placeholder:text-slate-400 placeholder:font-normal"
               />
+              <ReviewFindingCallout findings={getFieldFeedback("source", ["specimenSource"])} />
             </div>
 
             <div className="p-4 rounded-2xl bg-slate-50/70 hover:bg-white border border-slate-200 hover:border-cyan-400 focus-within:border-cyan-600 focus-within:ring-4 focus-within:ring-cyan-500/10 focus-within:bg-white transition-all shadow-2xs">
@@ -663,7 +808,7 @@ export default function PlantLiteratureClient({
                 type="text"
                 value={collectionLocation}
                 onChange={(e) => setCollectionLocation(e.target.value)}
-                placeholder="e.g., Benguet, Philippines"
+                placeholder="e.g., Bago Oshiro, Davao City"
                 className="w-full mt-2 bg-transparent border-0 text-sm font-bold text-[#0f2c20] p-0 focus:outline-none focus:ring-0 placeholder:text-slate-400 placeholder:font-normal"
               />
             </div>
@@ -671,15 +816,31 @@ export default function PlantLiteratureClient({
             <div className="p-4 rounded-2xl bg-slate-50/70 hover:bg-white border border-slate-200 hover:border-cyan-400 focus-within:border-cyan-600 focus-within:ring-4 focus-within:ring-cyan-500/10 focus-within:bg-white transition-all shadow-2xs">
               <label className="text-[11px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
                 <Hash className="w-3.5 h-3.5 text-cyan-600" />
-                <span>Voucher Number</span>
+                <span>Voucher Specimen Number</span>
               </label>
               <input
                 type="text"
                 value={voucherSpecimenNumber}
                 onChange={(e) => setVoucherSpecimenNumber(e.target.value)}
-                placeholder="e.g., PNH-184920"
+                placeholder="e.g., USTH-04821 or PNH-184920"
                 className="w-full mt-2 bg-transparent border-0 text-sm font-bold text-[#0f2c20] p-0 focus:outline-none focus:ring-0 placeholder:text-slate-400 placeholder:font-normal"
               />
+              <ReviewFindingCallout findings={getFieldFeedback("voucher", ["voucherSpecimenNumber"])} />
+            </div>
+
+            <div className="p-4 rounded-2xl bg-slate-50/70 hover:bg-white border border-slate-200 hover:border-cyan-400 focus-within:border-cyan-600 focus-within:ring-4 focus-within:ring-cyan-500/10 focus-within:bg-white transition-all shadow-2xs">
+              <label className="text-[11px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                <Hash className="w-3.5 h-3.5 text-cyan-600" />
+                <span>Sample Identifier</span>
+              </label>
+              <input
+                type="text"
+                value={sampleIdentifier}
+                onChange={(e) => setSampleIdentifier(e.target.value)}
+                placeholder="e.g., SAM-2026-001"
+                className="w-full mt-2 bg-transparent border-0 text-sm font-bold text-[#0f2c20] p-0 focus:outline-none focus:ring-0 placeholder:text-slate-400 placeholder:font-normal"
+              />
+              <ReviewFindingCallout findings={getFieldFeedback("sample", ["sampleIdentifier"])} />
             </div>
 
             <div className="p-4 rounded-2xl bg-slate-50/70 hover:bg-white border border-slate-200 hover:border-cyan-400 focus-within:border-cyan-600 focus-within:ring-4 focus-within:ring-cyan-500/10 focus-within:bg-white transition-all shadow-2xs">
@@ -698,6 +859,7 @@ export default function PlantLiteratureClient({
                 <option value="TLC / HPLC Chemical Fingerprinting">TLC / HPLC Chemical Fingerprinting</option>
                 <option value="Certified Herbarium Deposition">Certified Herbarium Deposition</option>
               </select>
+              <ReviewFindingCallout findings={getFieldFeedback("authentication", ["authenticationMethod"])} />
             </div>
 
             <div className="p-4 rounded-2xl bg-slate-50/70 hover:bg-white border border-slate-200 hover:border-cyan-400 focus-within:border-cyan-600 focus-within:ring-4 focus-within:ring-cyan-500/10 focus-within:bg-white transition-all shadow-2xs">
@@ -709,9 +871,10 @@ export default function PlantLiteratureClient({
                 type="text"
                 value={authenticatedBy}
                 onChange={(e) => setAuthenticatedBy(e.target.value)}
-                placeholder="e.g., Herbarium Curator"
+                placeholder="e.g., National Museum Botany Division"
                 className="w-full mt-2 bg-transparent border-0 text-sm font-bold text-[#0f2c20] p-0 focus:outline-none focus:ring-0 placeholder:text-slate-400 placeholder:font-normal"
               />
+              <ReviewFindingCallout findings={getFieldFeedback("authenticated", ["authenticatedBy"])} />
             </div>
           </div>
 
@@ -728,6 +891,7 @@ export default function PlantLiteratureClient({
               placeholder="Describe the therapeutic alignment and scientific rationale for selecting this specimen..."
               className="w-full mt-2 bg-transparent border-0 text-sm font-semibold text-[#0f2c20] p-0 focus:outline-none focus:ring-0 leading-relaxed placeholder:text-slate-400 placeholder:font-normal"
             />
+            <ReviewFindingCallout findings={getFieldFeedback("rationale", ["selectionRationale"])} />
           </div>
         </div>
       </motion.section>
@@ -736,6 +900,7 @@ export default function PlantLiteratureClient({
           CONTAINER 3: MATERIAL & EXTRACTION (AMBER / GOLD THEME)
           ======================================================== */}
       <motion.section
+        id="sec-extraction"
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35, delay: 0.15 }}
@@ -747,7 +912,7 @@ export default function PlantLiteratureClient({
               <FlaskConical className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base sm:text-lg font-black text-[#0f2c20]">Material & Extraction</h2>
+              <h2 className="text-base sm:text-lg font-black text-[#0f2c20]">03 Material & Extraction</h2>
               <p className="text-xs text-[#78997f] font-medium">Sample Standardization & Solvent Conditions</p>
             </div>
           </div>
@@ -774,6 +939,7 @@ export default function PlantLiteratureClient({
                 <option value="Dried Whole Plant Part">Dried Whole Plant Part</option>
                 <option value="Decoction / Infusion">Decoction / Infusion</option>
               </select>
+              <ReviewFindingCallout findings={getFieldFeedback("material", ["materialType"])} />
             </div>
 
             <div className="p-4 rounded-2xl bg-slate-50/70 hover:bg-white border border-slate-200 hover:border-amber-400 focus-within:border-amber-600 focus-within:ring-4 focus-within:ring-amber-500/10 focus-within:bg-white transition-all shadow-2xs">
@@ -788,6 +954,7 @@ export default function PlantLiteratureClient({
                 placeholder="e.g., 80% Aqueous Ethanol"
                 className="w-full mt-2 bg-transparent border-0 text-sm font-bold text-[#0f2c20] p-0 focus:outline-none focus:ring-0 placeholder:text-slate-400 placeholder:font-normal"
               />
+              <ReviewFindingCallout findings={getFieldFeedback("solvent", ["extractionSolvent"])} />
             </div>
 
             <div className="p-4 rounded-2xl bg-slate-50/70 hover:bg-white border border-slate-200 hover:border-amber-400 focus-within:border-amber-600 focus-within:ring-4 focus-within:ring-amber-500/10 focus-within:bg-white transition-all shadow-2xs">
@@ -802,6 +969,7 @@ export default function PlantLiteratureClient({
                 placeholder="e.g., Cold Maceration"
                 className="w-full mt-2 bg-transparent border-0 text-sm font-bold text-[#0f2c20] p-0 focus:outline-none focus:ring-0 placeholder:text-slate-400 placeholder:font-normal"
               />
+              <ReviewFindingCallout findings={getFieldFeedback("method", ["extractionMethod"])} />
             </div>
 
             <div className="p-4 rounded-2xl bg-slate-50/70 hover:bg-white border border-slate-200 hover:border-amber-400 focus-within:border-amber-600 focus-within:ring-4 focus-within:ring-amber-500/10 focus-within:bg-white transition-all shadow-2xs">
@@ -816,6 +984,7 @@ export default function PlantLiteratureClient({
                 placeholder="e.g., MC-CE-01"
                 className="w-full mt-2 bg-transparent border-0 text-sm font-bold text-[#0f2c20] p-0 focus:outline-none focus:ring-0 placeholder:text-slate-400 placeholder:font-normal"
               />
+              <ReviewFindingCallout findings={getFieldFeedback("fraction", ["extractFractionName"])} />
             </div>
           </div>
 
@@ -831,6 +1000,7 @@ export default function PlantLiteratureClient({
               placeholder="e.g., Stored in light-resistant amber vials at -20°C in an inert desiccated atmosphere..."
               className="w-full mt-2 bg-transparent border-0 text-sm font-semibold text-[#0f2c20] p-0 focus:outline-none focus:ring-0 leading-relaxed placeholder:text-slate-400 placeholder:font-normal"
             />
+            <ReviewFindingCallout findings={getFieldFeedback("storage", ["storageHandlingNotes"])} />
           </div>
         </div>
       </motion.section>
@@ -839,6 +1009,7 @@ export default function PlantLiteratureClient({
           CONTAINER 4: SCIENTIFIC EVIDENCE (SHOWSTOPPER PUBMED CARDS)
           ======================================================== */}
       <motion.section
+        id="sec-literature"
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35, delay: 0.2 }}
@@ -851,7 +1022,7 @@ export default function PlantLiteratureClient({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base sm:text-lg font-black text-[#0f2c20]">Scientific Evidence</h2>
+                <h2 className="text-base sm:text-lg font-black text-[#0f2c20]">04 Scientific Literature</h2>
                 <span className="px-2.5 py-0.5 rounded-md bg-emerald-100 text-emerald-900 border border-emerald-300 font-mono text-[10px] font-black uppercase tracking-wider">
                   LITERATURE
                 </span>
@@ -1058,6 +1229,7 @@ export default function PlantLiteratureClient({
               ))}
             </div>
           )}
+          <ReviewFindingCallout findings={getFieldFeedback("literature", ["citation", "reference", "pubmed"])} />
         </div>
       </motion.section>
 
@@ -1065,6 +1237,7 @@ export default function PlantLiteratureClient({
           CONTAINER 5: RESEARCH SYNTHESIS (ROYAL VIOLET THEME)
           ======================================================== */}
       <motion.section
+        id="sec-synthesis"
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35, delay: 0.25 }}
@@ -1077,7 +1250,7 @@ export default function PlantLiteratureClient({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base sm:text-lg font-black text-[#0f2c20]">Research Synthesis</h2>
+                <h2 className="text-base sm:text-lg font-black text-[#0f2c20]">05 Research Synthesis</h2>
                 <span className="px-2.5 py-0.5 rounded-md bg-purple-100 text-purple-900 border border-purple-300 font-mono text-[10px] font-black uppercase tracking-wider">
                   INTERPRETATION
                 </span>
@@ -1108,6 +1281,7 @@ export default function PlantLiteratureClient({
               placeholder="Key findings from literature consensus..."
               className="w-full bg-transparent border-0 text-xs font-medium text-[#0f2c20] p-0 focus:outline-none focus:ring-0 leading-relaxed placeholder:text-slate-400 placeholder:font-normal"
             />
+            <ReviewFindingCallout findings={getFieldFeedback("finding", ["key findings", "consensus"])} />
           </div>
 
           <div className="p-5 rounded-2xl bg-indigo-50/20 border border-indigo-200/80 hover:border-indigo-400 focus-within:border-indigo-600 focus-within:ring-4 focus-within:ring-indigo-500/10 focus-within:bg-white transition-all shadow-2xs space-y-2">
@@ -1127,6 +1301,7 @@ export default function PlantLiteratureClient({
               placeholder="Identified gaps in published literature..."
               className="w-full bg-transparent border-0 text-xs font-medium text-[#0f2c20] p-0 focus:outline-none focus:ring-0 leading-relaxed placeholder:text-slate-400 placeholder:font-normal"
             />
+            <ReviewFindingCallout findings={getFieldFeedback("gap", ["remaining gaps", "knowledge gaps"])} />
           </div>
 
           <div className="p-5 rounded-2xl bg-violet-50/20 border border-violet-200/80 hover:border-violet-400 focus-within:border-violet-600 focus-within:ring-4 focus-within:ring-violet-500/10 focus-within:bg-white transition-all shadow-2xs space-y-2">
@@ -1146,6 +1321,7 @@ export default function PlantLiteratureClient({
               placeholder="Why this in-silico screening and subsequent empirical validation is necessary..."
               className="w-full bg-transparent border-0 text-xs font-medium text-[#0f2c20] p-0 focus:outline-none focus:ring-0 leading-relaxed placeholder:text-slate-400 placeholder:font-normal"
             />
+            <ReviewFindingCallout findings={getFieldFeedback("rationale", ["relevance", "screening"])} />
           </div>
         </div>
       </motion.section>

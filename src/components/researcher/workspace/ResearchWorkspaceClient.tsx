@@ -196,37 +196,30 @@ export default function ResearchWorkspaceClient({ project, stages, activities, l
         initial={{ opacity: 0, y: -6 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
-        className="relative overflow-hidden rounded-3xl border border-emerald-200/80 bg-gradient-to-br from-white via-[#f7faf8] to-emerald-50/30 p-5 sm:p-6 shadow-sm"
+        className="relative overflow-hidden rounded-xl border border-emerald-900/60 bg-[#0f2c20] p-6 text-white shadow-sm"
       >
-        {/* Subtle Ambient Light Glows */}
-        <div className="pointer-events-none absolute -right-12 -top-12 h-44 w-44 rounded-full bg-emerald-500/10 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-10 left-1/3 h-36 w-36 rounded-full bg-teal-500/10 blur-2xl" />
-
         <div className="relative z-10 space-y-4">
           {/* Top Bar: Label, Status, and Options */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-emerald-100/80">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-100/90 px-2.5 py-0.5 text-[11px] font-black uppercase tracking-wider text-emerald-950 shadow-2xs">
-                <FolderGit2 className="h-3.5 w-3.5 text-emerald-700" />
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-emerald-900/60">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <span className="inline-flex items-center gap-1.5 rounded px-2.5 py-0.5 text-xs font-medium uppercase tracking-wider text-emerald-300 bg-emerald-950/80 border border-emerald-500/30">
+                <FolderGit2 className="h-3.5 w-3.5 text-emerald-400" />
                 <span>Project Workspace</span>
               </span>
 
-              <span className="inline-flex items-center gap-1.5 text-xs text-[#204033]">
-                <Leaf className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
-                <span className="font-extrabold text-[#0c2e1f]">{project.plantName || "Ampalaya"}</span>
+              <span className="inline-flex items-center gap-1.5 text-xs text-emerald-200">
+                <Leaf className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span className="font-semibold text-white">{project.plantName || "Botanical Specimen"}</span>
                 {project.plantScientificName && (
-                  <span className="italic text-emerald-800/80 font-mono">({project.plantScientificName})</span>
+                  <span className="italic text-emerald-300/80 font-normal">({project.plantScientificName})</span>
                 )}
               </span>
             </div>
 
             {/* Right Status Badge & Options Menu */}
             <div className="flex items-center gap-2.5 shrink-0">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-300 text-emerald-900 font-mono text-[11px] font-bold uppercase tracking-wider shadow-2xs">
-                <span className="relative flex h-2 w-2">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-75" />
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-600" />
-                </span>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-mono font-medium uppercase tracking-wider bg-emerald-950/80 border border-emerald-500/40 text-emerald-300">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                 <span>{projectStatusLabel(project.status)}</span>
               </span>
 
@@ -236,15 +229,15 @@ export default function ResearchWorkspaceClient({ project, stages, activities, l
                   aria-label="Project options"
                   aria-expanded={menuOpen}
                   onClick={() => setMenuOpen((open) => !open)}
-                  className="rounded-xl border border-slate-200 bg-white/90 p-2 text-slate-600 hover:text-slate-900 shadow-2xs transition-all hover:bg-slate-50"
+                  className="rounded-lg border border-emerald-800/60 bg-emerald-950/60 p-2 text-emerald-300 hover:text-white hover:bg-emerald-900/60 transition-colors cursor-pointer"
                 >
                   <MoreHorizontal className="h-4 w-4" />
                 </button>
                 {menuOpen && (
-                  <div className="absolute right-0 z-20 mt-2 w-44 rounded-2xl border border-emerald-100 bg-white p-1 text-[#0f2c20] shadow-xl">
+                  <div className="absolute right-0 z-20 mt-2 w-44 rounded-lg border border-slate-200 bg-white p-1 text-slate-900 shadow-xl">
                     <button
                       type="button"
-                      className="block w-full rounded-xl px-3 py-2 text-left text-xs font-semibold hover:bg-emerald-50"
+                      className="block w-full rounded-md px-3 py-2 text-left text-xs font-medium hover:bg-slate-50 transition-colors"
                       onClick={() => {
                         setMenuOpen(false);
                         setEditing(true);
@@ -255,7 +248,7 @@ export default function ResearchWorkspaceClient({ project, stages, activities, l
                     </button>
                     <Link
                       href={dossierHref}
-                      className="block rounded-xl px-3 py-2 text-left text-xs font-semibold hover:bg-emerald-50"
+                      className="block rounded-md px-3 py-2 text-left text-xs font-medium hover:bg-slate-50 transition-colors"
                       onClick={() => setMenuOpen(false)}
                     >
                       View Dossier
@@ -269,27 +262,27 @@ export default function ResearchWorkspaceClient({ project, stages, activities, l
           {/* Project Title & Overall Progress */}
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             <div className="space-y-1 max-w-3xl">
-              <h1 className="text-xl sm:text-2xl font-black text-[#0c2e1f] tracking-tight leading-tight">
+              <h1 className="text-xl sm:text-2xl font-semibold text-white tracking-tight leading-tight">
                 {project.title}
               </h1>
-              <p className="text-xs text-[#52645d] line-clamp-1">
+              <p className="text-xs sm:text-sm text-emerald-100/80 line-clamp-1">
                 Integrated botanical, computational, and safety evidence pipeline
               </p>
             </div>
 
             {/* Overall Progress Widget */}
-            <div className="flex items-center gap-3.5 rounded-2xl border border-emerald-100 bg-white/90 px-4 py-2.5 shadow-2xs shrink-0">
-              <div className="space-y-1">
-                <div className="flex items-center justify-between gap-4 text-xs font-bold text-[#143d2c]">
+            <div className="flex items-center gap-3.5 rounded-lg border border-emerald-800/60 bg-emerald-950/70 px-4 py-2.5 shadow-xs shrink-0">
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between gap-4 text-xs font-medium text-emerald-200">
                   <span>{completedCount} of 6 stages completed</span>
-                  <span className="font-mono text-emerald-800">{progress}%</span>
+                  <span className="font-mono font-semibold text-white">{progress}%</span>
                 </div>
-                <div className="w-48 h-2 rounded-full bg-slate-100 overflow-hidden">
+                <div className="w-44 h-1.5 rounded-full bg-emerald-950 overflow-hidden">
                   <motion.div
-                    className="h-full rounded-full bg-gradient-to-r from-emerald-600 to-teal-500 shadow-xs"
+                    className="h-full rounded-full bg-emerald-400"
                     initial={{ width: 0 }}
                     animate={{ width: `${progress}%` }}
-                    transition={{ duration: 0.8, ease: "easeOut" }}
+                    transition={{ duration: 0.6, ease: "easeOut" }}
                   />
                 </div>
               </div>

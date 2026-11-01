@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { PlusCircle, ChevronLeft, ChevronRight, Database, ArrowRight } from "lucide-react";
+import { Plus, ChevronLeft, ChevronRight, Database, ArrowRight, LogOut } from "lucide-react";
 import LogoutButton from "@/components/LogoutButton";
 import ResearcherNavSections from "./ResearcherNavSections";
 
@@ -21,38 +21,37 @@ export default function ResearcherSidebar({
 
   return (
     <aside
-      className={`hidden lg:flex flex-col justify-between bg-gradient-to-b from-[#092218] via-[#0d2a1f] to-[#071a12] text-white border-r border-[#1a4a37]/60 h-screen sticky top-0 transition-all duration-300 z-30 select-none shadow-xl shrink-0 ${
-        collapsed ? "w-20 px-2.5 py-4" : "w-[290px] px-4 py-5"
+      className={`hidden lg:flex flex-col justify-between bg-[#091f16] text-white border-r border-[#143827] h-screen sticky top-0 transition-all duration-200 z-30 select-none shadow-sm shrink-0 ${
+        collapsed ? "w-20 px-3 py-4" : "w-[280px] px-4 py-5"
       }`}
     >
       {/* ================================================== */}
       {/* TOP SECTION: BRAND & MAIN NAV                      */}
       {/* ================================================== */}
       <div className="flex flex-col min-h-0 flex-1">
-        {/* LOGO & BRAND HEADER (Stable Top) */}
-        <div className="flex items-center justify-between pb-4 mb-4 border-b border-white/10 shrink-0">
+        {/* LOGO & BRAND HEADER */}
+        <div className="flex items-center justify-between pb-4 mb-4 border-b border-emerald-900/50 shrink-0">
           <Link
             href="/researcher"
             className="flex items-center gap-3 overflow-hidden group"
             title="NaturAide Research Platform"
           >
-            <div className="w-10 h-10 rounded-xl bg-white p-1.5 shrink-0 flex items-center justify-center shadow-md shadow-black/25 group-hover:scale-105 transition-transform">
+            <div className="w-9 h-9 rounded-lg bg-white p-1.5 shrink-0 flex items-center justify-center shadow-xs">
               <Image
                 src="/images/nature-logo.png"
                 alt="NaturAide Logo"
-                width={28}
-                height={28}
-                className="object-contain w-full h-full"
+                width={24}
+                height={24}
+                className="object-contain"
                 priority
               />
             </div>
             {!collapsed && (
               <div className="flex flex-col min-w-0">
-                <span className="font-heading font-extrabold text-[20px] tracking-tight text-white flex items-center gap-1.5 leading-tight">
+                <span className="font-semibold text-base tracking-tight text-white leading-tight">
                   NaturAide
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)] animate-pulse" />
                 </span>
-                <span className="text-[10px] font-bold text-emerald-300/90 tracking-widest uppercase">
+                <span className="text-[10px] font-medium text-emerald-400/80 tracking-widest uppercase">
                   Research Platform
                 </span>
               </div>
@@ -61,8 +60,9 @@ export default function ResearcherSidebar({
 
           {/* Collapse / Expand Toggle Button */}
           <button
+            type="button"
             onClick={() => setCollapsed(!collapsed)}
-            className="p-1.5 rounded-lg text-emerald-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer shrink-0 border border-white/10"
+            className="p-1.5 rounded-lg text-emerald-400/80 hover:text-white hover:bg-emerald-900/40 transition-colors cursor-pointer shrink-0 border border-emerald-800/40"
             title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
@@ -74,15 +74,15 @@ export default function ResearcherSidebar({
         <div className="mb-4 shrink-0">
           <Link
             href="/researcher/projects?new=true"
-            className={`flex items-center justify-center gap-2 rounded-xl font-heading font-extrabold transition-all shadow-md shadow-emerald-950/40 ${
+            className={`flex items-center justify-center gap-2 rounded-lg font-medium transition-colors shadow-xs ${
               collapsed
-                ? "w-10 h-10 mx-auto bg-gradient-to-r from-emerald-500 to-teal-400 text-[#072015] hover:from-emerald-400 hover:to-teal-300"
-                : "w-full py-2.5 px-3 bg-gradient-to-r from-emerald-500 to-teal-400 text-[#072015] hover:from-emerald-400 hover:to-teal-300 text-xs tracking-wide"
+                ? "w-10 h-10 mx-auto bg-emerald-600 hover:bg-emerald-500 text-white"
+                : "w-full py-2.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white text-xs"
             }`}
             title="Start New Research"
           >
-            <PlusCircle className="w-4 h-4 shrink-0 stroke-[2.5]" />
-            {!collapsed && <span>+ Start New Research</span>}
+            <Plus className="w-4 h-4 shrink-0 stroke-[2.5]" />
+            {!collapsed && <span>Start New Research</span>}
           </Link>
         </div>
 
@@ -95,59 +95,54 @@ export default function ResearcherSidebar({
       {/* ================================================== */}
       {/* BOTTOM SECTION: PROFILE CARD & SYSTEM STATUS       */}
       {/* ================================================== */}
-      <div className="pt-3 border-t border-white/10 shrink-0 space-y-2.5">
+      <div className="pt-3 border-t border-emerald-900/50 shrink-0 space-y-2">
         {!collapsed ? (
           <div className="space-y-2">
             {/* User Profile Card */}
-            <div className="flex items-center justify-between gap-2 p-2.5 rounded-2xl bg-white/10 border border-white/15 hover:border-emerald-500/40 transition-colors shadow-xs backdrop-blur-xs">
+            <div className="flex items-center justify-between gap-2 p-2.5 rounded-lg bg-emerald-950/40 border border-emerald-900/60 transition-colors">
               <Link
                 href="/researcher/profile"
                 className="flex items-center gap-2.5 min-w-0 flex-1 group"
               >
-                <div className="w-8 h-8 rounded-full bg-emerald-500/25 text-emerald-300 font-extrabold text-xs flex items-center justify-center shrink-0 border border-emerald-400/40 ring-2 ring-emerald-500/20 group-hover:scale-105 transition-transform">
+                <div className="w-8 h-8 rounded-lg bg-emerald-900/80 text-emerald-300 font-semibold text-xs flex items-center justify-center shrink-0 border border-emerald-700/50">
                   {user.name.charAt(0).toUpperCase()}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-bold text-white truncate group-hover:text-emerald-300 transition-colors">
+                  <p className="text-xs font-medium text-white truncate group-hover:text-emerald-300 transition-colors">
                     {user.name}
                   </p>
-                  <div className="flex items-center justify-between pr-1">
-                    <span className="text-[10px] text-emerald-300/80 font-bold tracking-wider uppercase truncate">
-                      Investigator
-                    </span>
-                    <span className="text-[10px] text-emerald-300 font-semibold flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                      Profile <ArrowRight className="w-2.5 h-2.5" />
-                    </span>
-                  </div>
+                  <p className="text-[10px] text-emerald-400/70 uppercase tracking-wider truncate">
+                    Investigator
+                  </p>
                 </div>
               </Link>
               <LogoutButton
                 iconOnly
-                className="p-1.5 text-rose-300 hover:text-rose-100 hover:bg-rose-500/20 rounded-lg transition-colors cursor-pointer border border-rose-500/30"
+                className="p-1.5 text-slate-400 hover:text-rose-300 hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer"
               />
             </div>
 
             {/* System Status Pill */}
-            <div className="flex items-center justify-between px-2 text-[10px] text-emerald-400/80 font-medium">
+            <div className="flex items-center justify-between px-2 text-[10px] text-emerald-400/60 font-mono">
               <span className="flex items-center gap-1.5">
-                <Database className="w-3 h-3 text-emerald-400" />
+                <Database className="w-3 h-3 text-emerald-500" />
                 <span>MySQL Active</span>
               </span>
-              <span className="text-[9px] text-emerald-300/60 font-mono">v1.0 Lab</span>
+              <span>v1.0 Lab</span>
             </div>
           </div>
         ) : (
           <div className="flex flex-col items-center gap-2">
             <Link
               href="/researcher/profile"
-              className="w-9 h-9 rounded-full bg-emerald-500/25 text-emerald-300 font-extrabold text-xs flex items-center justify-center border border-emerald-400/40 hover:scale-105 transition-transform shadow-xs"
+              className="w-9 h-9 rounded-lg bg-emerald-900/80 text-emerald-300 font-semibold text-xs flex items-center justify-center border border-emerald-700/50 hover:bg-emerald-800 transition-colors"
               title={`${user.name} (Researcher Profile)`}
             >
               {user.name.charAt(0).toUpperCase()}
             </Link>
             <LogoutButton
               iconOnly
-              className="p-1.5 text-rose-300 hover:text-rose-100 hover:bg-rose-500/20 rounded-lg border border-rose-500/30"
+              className="p-1.5 text-slate-400 hover:text-rose-300 rounded-lg"
             />
           </div>
         )}

@@ -1,5 +1,6 @@
 import path from "path";
 import fs from "fs";
+import os from "os";
 import { execFile } from "child_process";
 import { promisify } from "util";
 
@@ -178,6 +179,20 @@ export async function prepareLigand(smiles: string, outputPrefix: string): Promi
   const { pythonBin, workerScript } = getDockingPaths();
   fs.mkdirSync(path.dirname(outputPrefix), { recursive: true });
 
+  // Reuse existing valid prepared ligand PDBQT without regenerating
+  const existingPdbqt = `${outputPrefix}.pdbqt`;
+  if (fs.existsSync(existingPdbqt)) {
+    const inspection = inspectPdbqt(existingPdbqt, "ligand");
+    if (inspection.ok) {
+      return {
+        ok: true,
+        pdbqt: existingPdbqt,
+        heavyAtoms: inspection.atoms,
+        method: "Pre-prepared ligand structure (cached)",
+      };
+    }
+  }
+
   try {
     const { stdout } = await execFileAsync(
       pythonBin,
@@ -211,6 +226,22 @@ export async function downloadAndPrepReceptor(pdbId: string, outputPrefix: strin
 }> {
   const { pythonBin, workerScript } = getDockingPaths();
   fs.mkdirSync(path.dirname(outputPrefix), { recursive: true });
+
+  // Reuse existing valid prepared receptor PDBQT without re-downloading or re-preparing
+  const existingPdbqt = `${outputPrefix}.pdbqt`;
+  const existingCleanPdb = `${outputPrefix}_clean.pdb`;
+  if (fs.existsSync(existingPdbqt)) {
+    const inspection = inspectPdbqt(existingPdbqt, "receptor");
+    if (inspection.ok) {
+      return {
+        ok: true,
+        pdbqt: existingPdbqt,
+        cleanPdb: fs.existsSync(existingCleanPdb) ? existingCleanPdb : undefined,
+        atoms: inspection.atoms,
+        method: "Pre-prepared receptor structure (cached)",
+      };
+    }
+  }
 
   const cleanPdbId = pdbId.trim().toUpperCase();
   const rawPdbPath = `${outputPrefix}_raw.pdb`;
@@ -337,6 +368,10 @@ export async function runVinaSimulation(params: {
   fs.mkdirSync(path.dirname(params.logPath), { recursive: true });
   if (fs.existsSync(params.outputPdbqtPath)) fs.unlinkSync(params.outputPdbqtPath);
 
+  const cpus = os.cpus()?.length || 4;
+  const maxConcurrency = Math.min(3, Math.max(1, Math.floor(cpus / 3)));
+  const cpuThreads = Math.max(1, Math.min(6, Math.floor(cpus / maxConcurrency)));
+
   const args = [
     "--receptor", params.receptorPdbqt,
     "--ligand", params.ligandPdbqt,
@@ -350,6 +385,7 @@ export async function runVinaSimulation(params: {
     "--num_modes", String(params.numModes),
     "--energy_range", String(params.energyRange ?? 3),
     "--seed", String(params.seed ?? 42),
+    "--cpu", String(cpuThreads),
     "--verbosity", "1",
     "--out", params.outputPdbqtPath,
   ];

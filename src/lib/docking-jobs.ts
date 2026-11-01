@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import os from "os";
 import pool from "@/lib/db";
 import { ensureDockingSchema } from "@/lib/docking-schema";
 import { describeStructure, type StructureHit } from "@/lib/docking-rcsb";
@@ -12,6 +13,11 @@ import {
   runVinaSimulation,
 } from "@/lib/docking-service";
 import { buildStage3LiteratureQuery, queryLiterature } from "@/lib/literature-service";
+import {
+  ensureReviewTables,
+  findDefaultExpertReviewerId,
+  findReviewerForArea,
+} from "@/lib/expert-review-assignment";
 
 export class DockingRequestError extends Error {
   status: number;
@@ -503,11 +509,19 @@ async function reconcileRuns(projectId: number) {
   }
 }
 
+function getMaxConcurrency(): number {
+  const envVal = process.env.MAX_CONCURRENT_DOCKING_JOBS;
+  if (envVal) {
+    const parsed = parseInt(envVal, 10);
+    if (!isNaN(parsed) && parsed > 0) return Math.min(6, parsed);
+  }
+  const cpus = os.cpus()?.length || 4;
+  return Math.min(3, Math.max(1, Math.floor(cpus / 3)));
+}
+
 function enqueueRun(runId: number) {
   const state = queue();
   if (!state.runs.includes(runId) && !state.active.has(runId)) state.runs.push(runId);
-  if (state.draining) return;
-  state.draining = true;
   setImmediate(() => {
     void drainRuns();
   });
@@ -515,33 +529,73 @@ function enqueueRun(runId: number) {
 
 async function drainRuns() {
   const state = queue();
-  try {
-    while (state.runs.length) {
-      const id = state.runs.shift()!;
-      state.active.add(id);
+  const maxConcurrency = getMaxConcurrency();
+
+  while (state.runs.length > 0 && state.active.size < maxConcurrency) {
+    const id = state.runs.shift()!;
+    state.active.add(id);
+
+    (async () => {
       try {
         await executeRun(id);
+      } catch (err) {
+        console.error(`Docking run ${id} execution error:`, err);
       } finally {
         state.active.delete(id);
+        if (state.runs.length > 0) {
+          void drainRuns();
+        }
       }
-    }
-  } finally {
-    state.draining = false;
-    if (state.runs.length) enqueueRun(state.runs[0]);
+    })();
   }
 }
 
 async function pairReady(projectId: number, compoundId: number, targetId: number) {
-  const workspace = await loadDockingWorkspace(projectId);
-  const ligand = workspace.ligands.find((row: any) => row.id === compoundId);
-  const target = workspace.targets.find((row: any) => row.id === targetId);
-  if (!workspace.engine.available) return { ok: false as const, error: workspace.engine.error || "Docking engine unavailable" };
-  if (!ligand?.preparationReady) return { ok: false as const, error: ligand?.issue || "Ligand preparation failed" };
-  if (!target?.receptorPrepared || !target.vinaCompatible) return { ok: false as const, error: target?.issue || "Target is not ready for Vina." };
-  if (!target.grid || !workspace.settings) return { ok: false as const, error: "Binding site configuration required" };
-  const problem = validateSearchBox(target.grid, workspace.settings);
+  const engine = await detectDockingEngine(false);
+  if (!engine.available) return { ok: false as const, error: engine.error || "Docking engine unavailable" };
+
+  const [compounds]: any = await pool.query(
+    `SELECT id, compoundName FROM research_compounds WHERE id = ? AND projectId = ? LIMIT 1`,
+    [compoundId, projectId]
+  );
+  if (!compounds.length) return { ok: false as const, error: "Compound not found in project" };
+
+  const [preps]: any = await pool.query(
+    `SELECT * FROM docking_ligand_preps WHERE projectId = ? AND compoundId = ? LIMIT 1`,
+    [projectId, compoundId]
+  );
+  const prep = preps[0];
+  const ligandFile = prep?.status === "READY" && prep?.pdbqtPath ? inspectPdbqt(prep.pdbqtPath, "ligand") : { ok: false, error: prep?.errorMessage || "Ligand preparation not ready" };
+  if (!ligandFile.ok) return { ok: false as const, error: ligandFile.error || "Ligand preparation failed" };
+
+  const [targets]: any = await pool.query(
+    `SELECT * FROM docking_targets WHERE id = ? AND projectId = ? LIMIT 1`,
+    [targetId, projectId]
+  );
+  const target = targets[0];
+  if (!target) return { ok: false as const, error: "Target not found in project" };
+
+  const receptorFile = target.prepStatus === "READY" && target.receptorPdbqtPath ? inspectPdbqt(target.receptorPdbqtPath, "receptor") : { ok: false, error: target.prepError || "Receptor preparation not ready" };
+  if (!receptorFile.ok) return { ok: false as const, error: receptorFile.error || "Target receptor is not ready for Vina" };
+
+  const [setupRows]: any = await pool.query(
+    `SELECT gridConfigJson FROM docking_setups WHERE projectId = ? LIMIT 1`,
+    [projectId]
+  );
+  const settings = readSettings(setupRows[0]?.gridConfigJson) || { exhaustiveness: 8, numModes: 9, seed: 42, energyRange: 3 };
+  const grid = readGrid(target.gridConfigJson);
+  if (!grid) return { ok: false as const, error: "Binding site configuration required" };
+
+  const problem = validateSearchBox(grid, settings);
   if (problem) return { ok: false as const, error: problem };
-  return { ok: true as const, ligand, target, settings: workspace.settings, grid: target.grid };
+
+  return {
+    ok: true as const,
+    ligand: { id: compoundId, compoundName: compounds[0].compoundName },
+    target: { id: targetId, targetName: target.targetName, pdbId: target.pdbId },
+    settings,
+    grid,
+  };
 }
 
 export async function requestRun(projectId: number, compoundId: number, targetId: number) {
@@ -558,8 +612,11 @@ export async function requestRun(projectId: number, compoundId: number, targetId
   if (active && (queue().runs.includes(existing[0].id) || queue().active.has(existing[0].id))) {
     return { runId: existing[0].id, alreadyRunning: true };
   }
-  let runId = existing[0]?.id as number | undefined;
-  if (runId) {
+
+  // Preserve completed scientific runs: if latest run already finished (COMPLETED or FAILED), insert a NEW run
+  let runId: number;
+  if (existing[0] && !["COMPLETED", "FAILED"].includes(existing[0].jobStatus)) {
+    runId = existing[0].id;
     await pool.query(
       `UPDATE docking_runs
        SET jobStatus = 'QUEUED', engineStatus = 'QUEUED', dataSource = 'VINA', bindingAffinity = NULL,
@@ -579,7 +636,7 @@ export async function requestRun(projectId: number, compoundId: number, targetId
     );
     runId = inserted.insertId;
   }
-  enqueueRun(runId!);
+  enqueueRun(runId);
   return { runId, alreadyRunning: false };
 }
 
@@ -588,7 +645,8 @@ export async function requestRunAll(projectId: number) {
   const started: number[] = [];
   for (const job of workspace.jobs) {
     if (!job.ready || job.active) continue;
-    if (job.status === "COMPLETED") continue;
+    // Prevent duplicate runs: skip completed jobs that already have valid affinity
+    if (job.status === "COMPLETED" && job.affinity != null) continue;
     const result = await requestRun(projectId, job.compoundId, job.targetId);
     started.push(result.runId);
   }
@@ -622,7 +680,7 @@ async function executeRun(runId: number) {
       `UPDATE docking_runs SET jobStatus = 'PREPARING', engineStatus = 'PREPARING', startedAt = COALESCE(startedAt, NOW(3)) WHERE id = ?`,
       [runId]
     );
-    const engine = await detectDockingEngine(true);
+    const engine = await detectDockingEngine(false);
     if (!engine.available || !engine.vinaVersion) {
       await fail(engine.error || "Docking engine unavailable. AutoDock Vina could not be found on the server.");
       return;
@@ -1002,10 +1060,16 @@ export async function completeDockingStage(projectId: number, researcherId: numb
   if (workspace.jobs.some((job) => job.status !== "COMPLETED" || job.affinity == null)) {
     throw new DockingRequestError("Every ligand and target combination must have a completed AutoDock Vina result.");
   }
-  if (!workspace.interpretation.approved || !workspace.interpretation.text.trim()) {
-    throw new DockingRequestError("Approve your interpretation before continuing.");
+
+  // Ensure interpretation is saved
+  if (!workspace.interpretation.text?.trim()) {
+    throw new DockingRequestError("Complete your scientific interpretation before continuing.");
+  }
+  if (!workspace.interpretation.approved) {
+    await saveDockingInterpretation(projectId, workspace.interpretation.text.trim(), true);
   }
 
+  // 1. Mark Stage 3 Research Complete and unlock Stage 4
   await pool.query(
     `UPDATE research_project_stages SET status = 'COMPLETED', completedAt = NOW() WHERE projectId = ? AND stageKey = 'docking'`,
     [projectId]
@@ -1021,16 +1085,146 @@ export async function completeDockingStage(projectId: number, researcherId: numb
            ELSE currentStage
          END,
          progressPercent = GREATEST(progressPercent, 50),
+         status = 'IN_PROGRESS',
          updatedAt = NOW()
      WHERE id = ?`,
     [projectId]
   );
+
+  // 2. Automatically queue Stage 3 Professional Review for Pharmacologist (Pharmacology)
+  await ensureReviewTables();
+  const defaultReviewerId = await findDefaultExpertReviewerId();
+
+  // Find or create review_submissions
+  const [existingSub]: any = await pool.query(
+    `SELECT id FROM review_submissions WHERE projectId = ? ORDER BY id DESC LIMIT 1`,
+    [projectId]
+  );
+  let submissionId = existingSub[0]?.id;
+  if (!submissionId) {
+    const [subInsert]: any = await pool.query(
+      `INSERT INTO review_submissions (
+         projectId, versionTag, reviewRound, status, submittedAt
+       ) VALUES (?, 'v1.0', 1, 'IN_PROGRESS', NOW(3))`,
+      [projectId]
+    );
+    submissionId = subInsert.insertId;
+  }
+
+  const pharmacologyReviewerId = (await findReviewerForArea("pharmacology")) || defaultReviewerId || 1;
+  await pool.query(
+    `INSERT INTO review_assignments (
+       projectId, submissionId, reviewerId, specialtyNeeded, status, reviewRound, assignedAt
+     ) VALUES (?, ?, ?, 'pharmacology', 'PENDING', 1, NOW(3))
+     ON DUPLICATE KEY UPDATE status = 'PENDING', reviewerId = VALUES(reviewerId), updatedAt = NOW(3)`,
+    [projectId, submissionId, pharmacologyReviewerId]
+  );
+
+  await pool.query(
+    `INSERT INTO review_area_coverage (
+       submissionId, projectId, areaKey, reviewerId, status
+     ) VALUES (?, ?, 'pharmacology', ?, 'PENDING')
+     ON DUPLICATE KEY UPDATE status = 'PENDING', reviewerId = VALUES(reviewerId), updatedAt = NOW(3)`,
+    [submissionId, projectId, pharmacologyReviewerId]
+  );
+
+  await pool.query(
+    `INSERT INTO review_section_status (
+       submissionId, reviewerId, sectionKey, status
+     ) VALUES (?, ?, 'pharmacology', 'NOT_REVIEWED')
+     ON DUPLICATE KEY UPDATE status = 'NOT_REVIEWED'`,
+    [submissionId, pharmacologyReviewerId]
+  );
+
   await pool.query(
     `INSERT INTO research_activity_logs (projectId, researcherId, actionType, description)
-     VALUES (?, ?, 'STAGE_COMPLETED', 'Completed Stage 3: Molecular Docking and unlocked Stage 4: Formulation & Safety')`,
+     VALUES (?, ?, 'STAGE_COMPLETED', 'Completed Stage 3: Molecular Docking, queued Pharmacology professional review, and unlocked Stage 4: Formulation & Safety')`,
     [projectId, researcherId]
   );
-  return { redirectUrl: `/researcher/projects/${projectId}/formulation-safety` };
+
+  return { success: true, redirectUrl: `/researcher/projects/${projectId}/formulation-safety` };
+}
+
+export async function submitDockingStageForReview(projectId: number, researcherId: number) {
+  const workspace = await loadDockingWorkspace(projectId);
+  if (!workspace.engine.available) throw new DockingRequestError(workspace.engine.error || "Docking engine unavailable");
+  if (!workspace.ligands.length) throw new DockingRequestError("No docking candidates were received from Stage 2.");
+  if (workspace.ligands.some((ligand) => !ligand.preparationReady)) {
+    throw new DockingRequestError("Every selected ligand must be prepared before submitting for review.");
+  }
+  if (!workspace.targets.length || workspace.targets.some((target: any) => target.status !== "READY")) {
+    throw new DockingRequestError("Every selected target must have a verified structure and a prepared receptor.");
+  }
+  if (!workspace.configuration.configured) throw new DockingRequestError("Binding site configuration required");
+  if (workspace.jobs.some((job) => job.status !== "COMPLETED" || job.affinity == null)) {
+    throw new DockingRequestError("Every ligand and target combination must have a completed AutoDock Vina result.");
+  }
+  if (!workspace.interpretation.approved || !workspace.interpretation.text.trim()) {
+    throw new DockingRequestError("Approve your interpretation before submitting for review.");
+  }
+
+  // Update research_project_stages
+  await pool.query(
+    `UPDATE research_project_stages SET status = 'UNDER_REVIEW', updatedAt = NOW(3) WHERE projectId = ? AND stageKey = 'docking'`,
+    [projectId]
+  );
+
+  // Update project status
+  await pool.query(
+    `UPDATE research_projects SET status = 'UNDER_REVIEW', currentStage = 'docking', updatedAt = NOW(3) WHERE id = ?`,
+    [projectId]
+  );
+
+  // Ensure review tables and assignments
+  await ensureReviewTables();
+  const defaultReviewerId = await findDefaultExpertReviewerId();
+
+  // Find or create review_submissions
+  const [existingSub]: any = await pool.query(
+    `SELECT id FROM review_submissions WHERE projectId = ? ORDER BY id DESC LIMIT 1`,
+    [projectId]
+  );
+  let submissionId = existingSub[0]?.id;
+  if (!submissionId) {
+    const [subInsert]: any = await pool.query(
+      `INSERT INTO review_submissions (
+         projectId, versionTag, reviewRound, status, submittedAt
+       ) VALUES (?, 'v1.0', 1, 'UNDER_REVIEW', NOW(3))`,
+      [projectId]
+    );
+    submissionId = subInsert.insertId;
+  } else {
+    await pool.query(
+      `UPDATE review_submissions SET status = 'UNDER_REVIEW', updatedAt = NOW(3) WHERE id = ?`,
+      [submissionId]
+    );
+  }
+
+  // Assign pharmacology reviewer
+  const pharmacologyReviewerId = (await findReviewerForArea("pharmacology")) || defaultReviewerId || 1;
+  await pool.query(
+    `INSERT INTO review_assignments (
+       projectId, submissionId, reviewerId, specialtyNeeded, status, reviewRound, assignedAt
+     ) VALUES (?, ?, ?, 'pharmacology', 'PENDING', 1, NOW(3))
+     ON DUPLICATE KEY UPDATE status = 'PENDING', reviewerId = VALUES(reviewerId), updatedAt = NOW(3)`,
+    [projectId, submissionId, pharmacologyReviewerId]
+  );
+
+  await pool.query(
+    `INSERT INTO review_area_coverage (
+       submissionId, projectId, areaKey, reviewerId, status
+     ) VALUES (?, ?, 'pharmacology', ?, 'PENDING')
+     ON DUPLICATE KEY UPDATE status = 'PENDING', reviewerId = VALUES(reviewerId), updatedAt = NOW(3)`,
+    [submissionId, projectId, pharmacologyReviewerId]
+  );
+
+  await pool.query(
+    `INSERT INTO research_activity_logs (projectId, researcherId, actionType, description)
+     VALUES (?, ?, 'STAGE_SUBMITTED', 'Stage 3 (Molecular Docking) submitted for Pharmacologist review.')`,
+    [projectId, researcherId]
+  );
+
+  return { success: true };
 }
 
 export async function loadDockingWorkspace(projectId: number) {
@@ -1144,7 +1338,8 @@ export async function loadDockingWorkspace(projectId: number) {
   const vinaRuns = runs.filter((run: any) => run.resultProvenance === "NATUREAIDE_VINA");
   const jobs = ligands.flatMap((ligand) =>
     targetViews.map((target: any) => {
-      const run = vinaRuns.find((row: any) => row.compoundId === ligand.id && row.targetId === target.id);
+      const pairRuns = vinaRuns.filter((row: any) => row.compoundId === ligand.id && row.targetId === target.id);
+      const run = pairRuns[0]; // latest run since runs are ordered by id DESC
       const status = (run?.jobStatus || "IDLE") as string;
       const active = ["QUEUED", "PREPARING", "DOCKING", "PROCESSING"].includes(status);
       const affinity = run?.bindingAffinity != null && run.bindingAffinity !== "" ? Number(run.bindingAffinity) : null;
@@ -1168,6 +1363,17 @@ export async function loadDockingWorkspace(projectId: number) {
         poseCount: run?.poseCount ?? null,
         error: run?.errorMessage || null,
         record: run && status === "COMPLETED" ? serializeRun(run, target) : null,
+        history: pairRuns.map((r: any) => ({
+          runId: r.id,
+          affinity: r.bindingAffinity ? Number(r.bindingAffinity) : null,
+          status: r.jobStatus,
+          poseCount: r.poseCount,
+          completedAt: iso(r.completedAt),
+          startedAt: iso(r.startedAt),
+          vinaVersion: r.vinaVersion,
+          exitCode: r.exitCode,
+          isCurrent: r.id === run?.id,
+        })),
       };
     })
   );
@@ -1188,6 +1394,68 @@ export async function loadDockingWorkspace(projectId: number) {
 
   const synthesis = synthesisRows[0];
   const configurationConfigured = targetViews.length > 0 && targetViews.every((target: any) => target.gridConfigured);
+
+  // Fetch stage status & reviewer feedback for pharmacology
+  let stageStatus = "IN_PROGRESS";
+  let reviewStatus = "NOT_SUBMITTED";
+  let latestReview: any = null;
+  let feedbackItems: any[] = [];
+  try {
+    const [stgRows]: any = await pool.query(
+      `SELECT status FROM research_project_stages WHERE projectId = ? AND stageKey = 'docking' LIMIT 1`,
+      [projectId]
+    );
+    if (stgRows[0]?.status) stageStatus = stgRows[0].status;
+
+    const [revRows]: any = await pool.query(
+      `SELECT pr.id, pr.assessment, pr.comments, pr.submittedAt, u.name as reviewerName
+       FROM professional_reviews pr
+       JOIN users u ON pr.reviewerId = u.id
+       WHERE pr.projectId = ? AND pr.areaKey = 'pharmacology' AND pr.status = 'SUBMITTED'
+       ORDER BY pr.id DESC LIMIT 1`,
+      [projectId]
+    );
+    if (revRows.length > 0) {
+      latestReview = {
+        id: revRows[0].id,
+        assessment: revRows[0].assessment,
+        comments: revRows[0].comments,
+        reviewerName: revRows[0].reviewerName,
+        submittedAt: iso(revRows[0].submittedAt),
+      };
+    }
+
+    const [raRows]: any = await pool.query(
+      `SELECT status FROM review_area_coverage WHERE projectId = ? AND areaKey = 'pharmacology' ORDER BY id DESC LIMIT 1`,
+      [projectId]
+    );
+    if (raRows.length > 0 && raRows[0].status) {
+      reviewStatus = raRows[0].status;
+    } else if (latestReview) {
+      reviewStatus = latestReview.assessment === "ACCEPTED" || latestReview.assessment === "APPROVED"
+        ? "APPROVED"
+        : (latestReview.assessment === "REVISION_REQUIRED" ? "REVISION_REQUIRED" : "PENDING");
+    }
+
+    const [fbRows]: any = await pool.query(
+      `SELECT id, severity, comment, recommendation, status, createdAt
+       FROM review_feedback
+       WHERE projectId = ? AND (areaKey = 'pharmacology' OR affectedStage LIKE '%docking%')
+       ORDER BY id DESC`,
+      [projectId]
+    );
+    feedbackItems = fbRows.map((f: any) => ({
+      id: f.id,
+      severity: f.severity,
+      comment: f.comment,
+      recommendation: f.recommendation,
+      status: f.status,
+      createdAt: iso(f.createdAt),
+    }));
+  } catch (reviewQueryErr) {
+    console.warn("Failed to query review status for docking workspace:", reviewQueryErr);
+  }
+
   return {
     engine: {
       available: engineInfo.available,
@@ -1195,6 +1463,10 @@ export async function loadDockingWorkspace(projectId: number) {
       error: engineInfo.error || null,
     },
     project: projects[0] || { id: projectId, plantName: "Unspecified Plant", plantScientificName: null },
+    stageStatus,
+    reviewStatus,
+    review: latestReview,
+    feedback: feedbackItems,
     ligands,
     targets: targetViews,
     settings,

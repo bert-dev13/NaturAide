@@ -15,6 +15,7 @@ import {
   requestRunAll,
   saveConfiguration,
   saveDockingInterpretation,
+  submitDockingStageForReview,
   useDetectedSite,
 } from "@/lib/docking-jobs";
 
@@ -111,9 +112,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         await saveDockingInterpretation(projectId, String(body.keyFindings || body.interpretation || body.text || ""), body.approve);
         return NextResponse.json({ success: true, workspace: await loadDockingWorkspace(projectId) });
       }
+      case "submit-for-review": {
+        const result = await submitDockingStageForReview(projectId, auth.session.id);
+        return NextResponse.json({ ...result, workspace: await loadDockingWorkspace(projectId) });
+      }
       case "complete-stage": {
         const result = await completeDockingStage(projectId, auth.session.id);
-        return NextResponse.json({ success: true, ...result });
+        return NextResponse.json({ ...result });
       }
       default:
         return NextResponse.json({ error: "Invalid action" }, { status: 400 });

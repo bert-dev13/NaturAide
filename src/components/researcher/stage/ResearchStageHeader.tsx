@@ -44,9 +44,9 @@ const DEFAULT_TITLES: Record<number, string> = {
   1: "Plant & Literature Research",
   2: "In-Silico Analysis",
   3: "Molecular Docking",
-  4: "Formulation & Safety",
-  5: "Research Integration",
-  6: "Final Professional Review",
+  4: "Formulation Development",
+  5: "Safety / Clinical",
+  6: "Knowledge Integration",
 };
 
 const STAGE_ICONS: Record<number, LucideIcon> = {
@@ -54,8 +54,17 @@ const STAGE_ICONS: Record<number, LucideIcon> = {
   2: Dna,
   3: Microscope,
   4: FlaskConical,
-  5: Layers,
-  6: ShieldCheck,
+  5: ShieldCheck,
+  6: CheckCircle2,
+};
+
+const STAGE_EXPERT_MAP: Record<number, { expert: string; expertise: string }> = {
+  1: { expert: "Pharmacist / Pharmacognosist", expertise: "Pharmacognosy" },
+  2: { expert: "Bioinformatician / Computational Scientist", expertise: "Bioinformatics" },
+  3: { expert: "Pharmacologist", expertise: "Pharmacology" },
+  4: { expert: "Pharmacist / Pharmaceutical Scientist", expertise: "Formulation" },
+  5: { expert: "Physician / Clinical Pharmacist", expertise: "Clinical Safety" },
+  6: { expert: "Pharmacist / Pharmacognosist", expertise: "Pharmacognosy" },
 };
 
 export function ResearchStageHeader({
@@ -138,6 +147,38 @@ export function ResearchStageHeader({
                   </span>
                 )}
               </p>
+            )}
+
+            {STAGE_EXPERT_MAP[stageNumber] && (
+              <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white/10 border border-white/15 text-emerald-200 text-[11px] font-semibold backdrop-blur-md">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <span className="text-emerald-300/80 font-bold">Assigned Review:</span>
+                  <span className="text-white font-extrabold">{STAGE_EXPERT_MAP[stageNumber].expert}</span>
+                  <span className="text-emerald-300/70 font-medium">({STAGE_EXPERT_MAP[stageNumber].expertise})</span>
+                </span>
+                {isCompleted ? (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-[11px] font-bold">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                    <span>Professional Review Approved</span>
+                  </span>
+                ) : isRevisions ? (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-amber-500/20 border border-amber-400/40 text-amber-200 text-[11px] font-bold">
+                    <TriangleAlert className="w-3 h-3 text-amber-400" />
+                    <span>Revisions Required by Reviewer</span>
+                  </span>
+                ) : isUnderReview ? (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-blue-500/20 border border-blue-400/40 text-blue-200 text-[11px] font-bold">
+                    <Clock className="w-3 h-3 text-blue-300" />
+                    <span>In Professional Review</span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-white/5 border border-white/10 text-slate-300 text-[11px] font-medium">
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                    <span>Awaiting Professional Review</span>
+                  </span>
+                )}
+              </div>
             )}
           </div>
 

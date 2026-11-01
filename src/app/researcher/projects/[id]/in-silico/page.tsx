@@ -24,6 +24,7 @@ export default async function InSilicoStagePage({
   const [projectRows]: any = await pool.query(
     `
     SELECT rp.id, rp.title, rp.currentStage, rp.status, rp.researchObjective, rp.researchQuestion,
+           rp.plantId,
            COALESCE(p.commonName, rp.plantCustomName, 'Unspecified Plant') as plantName,
            p.scientificName as plantScientificName
     FROM research_projects rp
@@ -87,6 +88,48 @@ export default async function InSilicoStagePage({
     [projectId]
   );
 
+  // Fetch available documented phytochemicals for this project's plant
+  const plantId = project.plantId || null;
+  const plantSci = (project.plantScientificName || "").trim().toLowerCase();
+  const plantComm = (project.plantName || "").trim().toLowerCase();
+
+  let availableCompounds: any[] = [];
+  try {
+    const [pcRows]: any = await pool.query(
+      `
+      SELECT id, plantId, plantScientificName, plantCommonName, compoundName,
+             iupacName, molecularFormula, molecularWeight, compoundClass,
+             pubchemId, smiles, plantPartReported, referencesData, verificationStatus
+      FROM plant_compounds
+      WHERE (? IS NOT NULL AND plantId = ?)
+         OR (LENGTH(?) > 2 AND LOWER(plantScientificName) = LOWER(?))
+         OR (LENGTH(?) > 2 AND LOWER(plantCommonName) = LOWER(?))
+         OR (LENGTH(?) > 2 AND LOWER(?) LIKE CONCAT('%', LOWER(plantCommonName), '%'))
+         OR (LENGTH(?) > 2 AND LOWER(plantCommonName) LIKE CONCAT('%', ?, '%'))
+         OR (LENGTH(?) > 2 AND LOWER(?) LIKE CONCAT('%', LOWER(plantScientificName), '%'))
+         OR (LENGTH(?) > 2 AND LOWER(plantScientificName) LIKE CONCAT('%', ?, '%'))
+      ORDER BY compoundName ASC
+      `,
+      [
+        plantId, plantId,
+        plantSci, plantSci,
+        plantComm, plantComm,
+        plantComm, plantComm, plantComm, plantComm,
+        plantSci, plantSci, plantSci, plantSci
+      ]
+    );
+    availableCompounds = pcRows.map((row: any) => ({
+      ...row,
+      references: row.referencesData
+        ? typeof row.referencesData === "string"
+          ? JSON.parse(row.referencesData)
+          : row.referencesData
+        : [],
+    }));
+  } catch (err) {
+    console.warn("Failed to load plant_compounds:", err);
+  }
+
   return (
     <InSilicoWorkspaceClient
       projectId={projectId}
@@ -95,6 +138,7 @@ export default async function InSilicoStagePage({
       initialResults={results}
       initialSynthesis={synthesis}
       initialLiterature={literature}
+      initialAvailableCompounds={availableCompounds}
     />
   );
 }

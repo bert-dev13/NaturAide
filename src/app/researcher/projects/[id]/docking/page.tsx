@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import pool from "@/lib/db";
 import { beginPreparation, loadDockingWorkspace } from "@/lib/docking-jobs";
-import SimpleMolecularDockingClient from "@/components/researcher/docking/SimpleMolecularDockingClient";
+import MolecularDockingWorkspaceClient from "@/components/researcher/docking/MolecularDockingWorkspaceClient";
 
 export const instant = false;
 
@@ -33,7 +33,7 @@ export default async function MolecularDockingStagePage({
   );
 
   return (
-    <SimpleMolecularDockingClient
+    <MolecularDockingWorkspaceClient
       projectId={projectId}
       initialWorkspace={workspace}
       stageCompleted={stageRows[0]?.status === "COMPLETED"}
