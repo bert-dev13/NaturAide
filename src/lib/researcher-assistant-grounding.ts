@@ -411,12 +411,14 @@ export async function retrieveProjectForReviewer(
       [projectId]
     );
 
-    // Fetch Stage 4 formulation
+    // Fetch Stage 4 formulation & extraction data
     const [formulationRows]: any = await pool.query(
-      `SELECT formulationName as extractName, formulationType as plantMaterial, extractionSolvent as solvent, extractionMethod
-       FROM research_formulations
-       WHERE projectId = ?
-       ORDER BY id DESC LIMIT 1`,
+      `SELECT rf.formulationName as extractName, rf.formulationType as plantMaterial,
+              rpd.extractionSolvent as solvent, rpd.extractionMethod
+       FROM research_formulations rf
+       LEFT JOIN research_plant_data rpd ON rf.projectId = rpd.projectId
+       WHERE rf.projectId = ?
+       ORDER BY rf.id DESC LIMIT 1`,
       [projectId]
     );
 

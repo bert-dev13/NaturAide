@@ -227,24 +227,41 @@ export async function downloadAndPrepReceptor(pdbId: string, outputPrefix: strin
   const { pythonBin, workerScript } = getDockingPaths();
   fs.mkdirSync(path.dirname(outputPrefix), { recursive: true });
 
+  const cleanPdbId = pdbId.trim().toUpperCase();
+  const rawPdbPath = `${outputPrefix}_raw.pdb`;
+
   // Reuse existing valid prepared receptor PDBQT without re-downloading or re-preparing
   const existingPdbqt = `${outputPrefix}.pdbqt`;
   const existingCleanPdb = `${outputPrefix}_clean.pdb`;
   if (fs.existsSync(existingPdbqt)) {
     const inspection = inspectPdbqt(existingPdbqt, "receptor");
     if (inspection.ok) {
+      let cachedSites: any[] = [];
+      if (fs.existsSync(rawPdbPath)) {
+        try {
+          const { stdout: siteOut } = await execFileAsync(
+            pythonBin,
+            [workerScript, "sites", "--pdb", rawPdbPath],
+            { timeout: 60000, maxBuffer: 8 * 1024 * 1024 }
+          );
+          const siteData = parseWorkerJson(siteOut);
+          if (siteData.ok && siteData.candidates) {
+            cachedSites = siteData.candidates;
+          }
+        } catch (siteErr) {
+          console.warn("Could not extract sites from cached raw PDB:", siteErr);
+        }
+      }
       return {
         ok: true,
         pdbqt: existingPdbqt,
         cleanPdb: fs.existsSync(existingCleanPdb) ? existingCleanPdb : undefined,
         atoms: inspection.atoms,
         method: "Pre-prepared receptor structure (cached)",
+        sites: cachedSites,
       };
     }
   }
-
-  const cleanPdbId = pdbId.trim().toUpperCase();
-  const rawPdbPath = `${outputPrefix}_raw.pdb`;
 
   const looksLikePdb = (text: string) => /^(HEADER|TITLE|ATOM|HETATM|MODEL|CRYST1)/m.test(text);
   // 1. Download the official PDB if it is not already cached as a real structure

@@ -43,8 +43,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${manrope.variable} ${dmSans.variable}`}>
-      <body className="min-h-screen bg-[#faf9f5] text-[#131b17] antialiased selection:bg-[#ccfbf1] selection:text-[#0f2c20]">
+    <html lang="en" suppressHydrationWarning className={`${manrope.variable} ${dmSans.variable}`}>
+      <body suppressHydrationWarning className="min-h-screen bg-[#faf9f5] text-[#131b17] antialiased selection:bg-[#ccfbf1] selection:text-[#0f2c20]">
         {children}
       </body>
     </html>

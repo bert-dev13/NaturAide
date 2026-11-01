@@ -3,6 +3,8 @@ import pool from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { queryLiterature } from "@/lib/literature-service";
 import { callGrokChat } from "@/lib/ai/grok-provider";
+import { resolveCanonicalPlantId } from "@/lib/phytochemical-catalog";
+import { discoverPlantPhytochemicalsFromLiterature, queryPubChemCompound } from "@/lib/phytochemical-discovery";
 
 interface PubChemProperties {
   cid?: number;
@@ -245,40 +247,53 @@ export async function GET(
       status: "IN_PROGRESS",
     };
 
-    // Fetch available phytochemicals from plant_compounds for this plant
-    const plantId = project.plantId || null;
-    const plantSci = (project.plantScientificName || "").trim().toLowerCase();
-    const plantComm = (project.plantName || "").trim().toLowerCase();
+    // Fetch available phytochemicals from plant_compounds for this plant using canonical plantId
+    const canonicalPlantId =
+      resolveCanonicalPlantId(project.plantId) ||
+      resolveCanonicalPlantId(project.plantScientificName) ||
+      resolveCanonicalPlantId(project.plantName) ||
+      project.plantId ||
+      null;
 
     let plantCompoundRows: any[] = [];
     try {
-      const [pcRows]: any = await pool.query(
-        `
-        SELECT id, plantId, plantScientificName, plantCommonName, compoundName,
-               iupacName, molecularFormula, molecularWeight, compoundClass,
-               pubchemId, smiles, plantPartReported, referencesData, verificationStatus
-        FROM plant_compounds
-        WHERE (? IS NOT NULL AND plantId = ?)
-           OR (LENGTH(?) > 2 AND LOWER(plantScientificName) = LOWER(?))
-           OR (LENGTH(?) > 2 AND LOWER(plantCommonName) = LOWER(?))
-           OR (LENGTH(?) > 2 AND LOWER(?) LIKE CONCAT('%', LOWER(plantCommonName), '%'))
-           OR (LENGTH(?) > 2 AND LOWER(plantCommonName) LIKE CONCAT('%', ?, '%'))
-           OR (LENGTH(?) > 2 AND LOWER(?) LIKE CONCAT('%', LOWER(plantScientificName), '%'))
-           OR (LENGTH(?) > 2 AND LOWER(plantScientificName) LIKE CONCAT('%', ?, '%'))
-        ORDER BY compoundName ASC
-        `,
-        [
-          plantId, plantId,
-          plantSci, plantSci,
-          plantComm, plantComm,
-          plantComm, plantComm, plantComm, plantComm,
-          plantSci, plantSci, plantSci, plantSci
-        ]
-      );
-      plantCompoundRows = pcRows;
+      if (canonicalPlantId) {
+        const [pcRows]: any = await pool.query(
+          `
+          SELECT id, plantId, plantScientificName, plantCommonName, compoundName,
+                 iupacName, molecularFormula, molecularWeight, compoundClass,
+                 pubchemId, smiles, plantPartReported, referencesData, verificationStatus
+          FROM plant_compounds
+          WHERE plantId = ?
+          ORDER BY compoundName ASC
+          `,
+          [canonicalPlantId]
+        );
+        plantCompoundRows = pcRows;
+      } else if (project.plantScientificName && project.plantScientificName.trim().length > 2) {
+        const [pcRows]: any = await pool.query(
+          `
+          SELECT id, plantId, plantScientificName, plantCommonName, compoundName,
+                 iupacName, molecularFormula, molecularWeight, compoundClass,
+                 pubchemId, smiles, plantPartReported, referencesData, verificationStatus
+          FROM plant_compounds
+          WHERE LOWER(TRIM(plantScientificName)) = LOWER(TRIM(?))
+          ORDER BY compoundName ASC
+          `,
+          [project.plantScientificName.trim()]
+        );
+        plantCompoundRows = pcRows;
+      }
     } catch (e) {
       console.warn("plant_compounds query warning:", e);
     }
+
+    const projectAddedNames = new Set(
+      compounds.map((c: any) => c.compoundName.trim().toLowerCase())
+    );
+    const projectAddedCids = new Set(
+      compounds.map((c: any) => c.pubchemId).filter(Boolean)
+    );
 
     const availablePlantCompounds = plantCompoundRows.map((row: any) => {
       let parsedRefs = [];
@@ -289,9 +304,17 @@ export async function GET(
           parsedRefs = [];
         }
       }
+
+      const isStructureReady = Boolean(row.pubchemId && row.smiles && row.molecularFormula);
+      const isAlreadyAdded =
+        projectAddedNames.has(row.compoundName.trim().toLowerCase()) ||
+        (row.pubchemId && projectAddedCids.has(row.pubchemId));
+
       return {
         ...row,
         references: parsedRefs,
+        structureReady: isStructureReady,
+        isAlreadyAdded: Boolean(isAlreadyAdded),
       };
     });
 
@@ -653,12 +676,21 @@ export async function POST(
         }
       }
 
-      // Record in plant_compounds library as RESEARCHER_SUBMITTED
+      // Record in plant_compounds library as PENDING_VERIFICATION
+      const canonicalPlantId =
+        resolveCanonicalPlantId(project.plantId) ||
+        resolveCanonicalPlantId(project.plantScientificName) ||
+        resolveCanonicalPlantId(project.plantName) ||
+        project.plantId ||
+        null;
+
       const refData = [
         {
           title: plantAssociationEvidence.trim(),
           source: sourceReference.trim(),
           year: new Date().getFullYear(),
+          plantPart: body.plantPart || "Leaves",
+          evidenceType: "ISOLATION",
           submittedByResearcherId: session.id,
         },
       ];
@@ -668,12 +700,12 @@ export async function POST(
         INSERT INTO plant_compounds (
           plantId, plantScientificName, plantCommonName, compoundName,
           molecularFormula, molecularWeight, compoundClass,
-          pubchemId, smiles, referencesData, verificationStatus,
-          submittedByResearcherId
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'RESEARCHER_SUBMITTED', ?)
+          pubchemId, smiles, plantPartReported, referencesData, verificationStatus,
+          submittedByResearcherId, createdAt
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING_VERIFICATION', ?, NOW())
         `,
         [
-          project.plantId || null,
+          canonicalPlantId || project.plantId || null,
           project.plantScientificName || project.plantName,
           project.plantName,
           cName,
@@ -682,6 +714,7 @@ export async function POST(
           compoundClass?.trim() || "Unclassified",
           finalCid,
           finalSmiles,
+          body.plantPart?.trim() || "Leaves",
           JSON.stringify(refData),
           session.id,
         ]
@@ -735,6 +768,72 @@ export async function POST(
           selectedForDocking: 0,
           preparationStatus: "UNPREPARED",
         },
+      });
+    }
+
+    // =========================================================================
+    // 1d. DISCOVER COMPOUNDS FROM LITERATURE
+    // =========================================================================
+    if (action === "discover-compounds" || action === "discover-literature-compounds") {
+      const canonicalPlantId =
+        resolveCanonicalPlantId(project.plantId) ||
+        resolveCanonicalPlantId(project.plantScientificName) ||
+        resolveCanonicalPlantId(project.plantName) ||
+        project.plantId;
+
+      const discoveryResult = await discoverPlantPhytochemicalsFromLiterature(canonicalPlantId, {
+        researcherId: session.id,
+      });
+
+      // Refetch all plant compounds for this plant
+      const [pcRows]: any = await pool.query(
+        `
+        SELECT id, plantId, plantScientificName, plantCommonName, compoundName,
+               iupacName, molecularFormula, molecularWeight, compoundClass,
+               pubchemId, smiles, plantPartReported, referencesData, verificationStatus
+        FROM plant_compounds
+        WHERE plantId = ?
+        ORDER BY compoundName ASC
+        `,
+        [canonicalPlantId]
+      );
+
+      // Get project's existing compounds to check isAlreadyAdded
+      const [currCompounds]: any = await pool.query(
+        `SELECT compoundName, pubchemId FROM research_compounds WHERE projectId = ?`,
+        [projectId]
+      );
+      const projectAddedNames = new Set(
+        currCompounds.map((c: any) => c.compoundName.trim().toLowerCase())
+      );
+      const projectAddedCids = new Set(
+        currCompounds.map((c: any) => c.pubchemId).filter(Boolean)
+      );
+
+      const availablePlantCompounds = pcRows.map((row: any) => {
+        let parsedRefs = [];
+        if (row.referencesData) {
+          try {
+            parsedRefs = typeof row.referencesData === "string" ? JSON.parse(row.referencesData) : row.referencesData;
+          } catch {
+            parsedRefs = [];
+          }
+        }
+        return {
+          ...row,
+          references: parsedRefs,
+          structureReady: Boolean(row.pubchemId && row.smiles && row.molecularFormula),
+          isAlreadyAdded:
+            projectAddedNames.has(row.compoundName.trim().toLowerCase()) ||
+            (row.pubchemId && projectAddedCids.has(row.pubchemId)),
+        };
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: discoveryResult.message,
+        discovery: discoveryResult,
+        availablePlantCompounds,
       });
     }
 

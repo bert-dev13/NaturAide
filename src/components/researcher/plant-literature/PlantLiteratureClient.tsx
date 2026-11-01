@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useTransition } from "react";
+import React, { useState, useEffect, useRef, useTransition, useCallback } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -39,6 +39,8 @@ import {
 } from "lucide-react";
 import ResearchStageFooter from "@/components/researcher/stage/ResearchStageFooter";
 import ResearchStageHeader from "@/components/researcher/stage/ResearchStageHeader";
+import ResearcherReviewFeedbackPanel from "@/components/researcher/stage/ResearcherReviewFeedbackPanel";
+import RevisionResubmittedSuccessModal from "@/components/researcher/stage/RevisionResubmittedSuccessModal";
 
 interface ReferenceItem {
   id: number;
@@ -105,6 +107,10 @@ interface PlantLiteratureProps {
     safetyEvidence: number;
   };
   initialReviewFeedback?: any[];
+  overallAssessment?: string | null;
+  reviewStatus?: string | null;
+  reviewerName?: string | null;
+  approvedAt?: string | null;
 }
 
 export function parseVerifiedPlantParts(partsStr?: string | null): string[] {
@@ -145,6 +151,10 @@ export default function PlantLiteratureClient({
   initialReferences,
   initialSynthesis,
   initialReviewFeedback = [],
+  overallAssessment,
+  reviewStatus,
+  reviewerName,
+  approvedAt,
 }: PlantLiteratureProps) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -208,11 +218,83 @@ export default function PlantLiteratureClient({
   );
 
   // Review Feedback for Two-Way Reviewer Integration
+  const [currentReviewStatus, setCurrentReviewStatus] = useState<string | null>(reviewStatus || null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successModalData, setSuccessModalData] = useState<{
+    discipline: string;
+    profession: string;
+    reviewerName?: string | null;
+    reviewCycle: number;
+    addressedCount: number;
+  }>({
+    discipline: "Pharmacognosy",
+    profession: "Pharmacist / Pharmacognosist",
+    reviewerName: reviewerName || null,
+    reviewCycle: 1,
+    addressedCount: 1,
+  });
+
   const openReviewFeedback = React.useMemo(() => {
     return (initialReviewFeedback || []).filter(
-      (f: any) => (f.status || "OPEN").toUpperCase() !== "RESOLVED"
+      (f: any) => {
+        const st = (f.status || "OPEN").toUpperCase();
+        return st === "OPEN" || st === "IN_REVIEW";
+      }
     );
   }, [initialReviewFeedback]);
+
+  const isRevisionMode = Boolean(
+    currentReviewStatus === "REVISION_REQUIRED" ||
+      (openReviewFeedback.length > 0 && currentReviewStatus !== "REVISION_RESUBMITTED" && currentReviewStatus !== "APPROVED")
+  );
+
+  const [resubmitting, setResubmitting] = useState(false);
+
+  const handleResubmitRevision = async () => {
+    try {
+      setResubmitting(true);
+      await handleSave(false);
+
+      const res = await fetch(`/api/researcher/projects/${projectId}/resubmit-revision`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roleKey: "pharmacognosy",
+          stageNumber: 1,
+          changesSummary: "Updated plant identity, voucher specimen, and extraction protocol.",
+        }),
+      });
+
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to resubmit revision");
+
+      setCurrentReviewStatus("REVISION_RESUBMITTED");
+      setSuccessModalData({
+        discipline: json.discipline || "Pharmacognosy",
+        profession: json.profession || "Pharmacist / Pharmacognosist",
+        reviewerName: json.reviewerName || reviewerName || null,
+        reviewCycle: json.reviewCycle || 1,
+        addressedCount: initialReviewFeedback?.length || 1,
+      });
+      setShowSuccessModal(true);
+
+      // Trigger custom events so other tabs/sidebar update immediately
+      window.dispatchEvent(
+        new CustomEvent("natureaide:revisions-updated", {
+          detail: { projectId, stageNumber: 1, status: "REVISION_RESUBMITTED" },
+        })
+      );
+      window.dispatchEvent(new CustomEvent("natureaide:project-updated", { detail: { projectId } }));
+
+      startTransition(() => {
+        router.refresh();
+      });
+    } catch (err: any) {
+      console.error("Resubmit revision error:", err);
+    } finally {
+      setResubmitting(false);
+    }
+  };
 
   const getFieldFeedback = (fieldName: string, aliases: string[] = []) => {
     return openReviewFeedback.filter((f: any) => {
@@ -265,6 +347,20 @@ export default function PlantLiteratureClient({
   const [completingStage, setCompletingStage] = useState(false);
   const [lastSaved, setLastSaved] = useState<string>("Autosaved");
   const [validationError, setValidationError] = useState<string | null>(null);
+
+  // Clean initial state: guarantee no persisting loading indicators
+  useEffect(() => {
+    setCompletingStage(false);
+    return () => {
+      setCompletingStage(false);
+    };
+  }, []);
+
+  // Pure Back navigation handler (NEVER triggers stage completion or advancement)
+  const handleBack = useCallback(() => {
+    console.log("[PlantLiteratureClient] BACK_CLICK - Pure navigation to Project Dashboard");
+    router.push(`/researcher/projects/${projectId}`);
+  }, [projectId, router]);
 
   // Focus Refs
   const plantPartRef = useRef<HTMLDivElement>(null);
@@ -448,7 +544,7 @@ export default function PlantLiteratureClient({
       <div className="mt-2 space-y-2">
         {findings.map((f, i) => (
           <div
-            key={f.id || i}
+            key={`finding-${f.id || i}-${i}`}
             className="p-3 rounded-xl bg-amber-50/90 border border-amber-300 text-xs text-amber-950 space-y-1 shadow-2xs"
           >
             <div className="flex items-center justify-between">
@@ -487,7 +583,9 @@ export default function PlantLiteratureClient({
         plantCommonName={verifiedPlant.commonName}
         plantScientificName={verifiedPlant.scientificName}
         statusLabel={
-          openReviewFeedback.length > 0 || project.status === "REVISIONS_REQUIRED"
+          currentReviewStatus === "REVISION_RESUBMITTED"
+            ? "Revision Resubmitted"
+            : isRevisionMode
             ? "Revisions Required"
             : project.currentStage === "plant-literature"
             ? "In Progress"
@@ -508,29 +606,17 @@ export default function PlantLiteratureClient({
         }
       />
 
-      {/* Pharmacognosy Review Revision Alert Banner (Two-Way Feedback Loop) */}
-      {openReviewFeedback.length > 0 && (
-        <div className="rounded-2xl bg-amber-50/95 border-2 border-amber-300 p-4 sm:p-5 shadow-xs space-y-2">
-          <div className="flex items-start sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-xl bg-amber-500 text-white shrink-0 shadow-2xs">
-                <AlertCircle className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-sm font-extrabold text-amber-950">
-                  Pharmacognosy Review: Revisions Requested ({openReviewFeedback.length} finding{openReviewFeedback.length > 1 ? "s" : ""})
-                </h3>
-                <p className="text-xs text-amber-800 mt-0.5">
-                  The reviewer has flagged specific botanical / extraction records for correction. Inline feedback callouts are displayed beside the affected fields below.
-                </p>
-              </div>
-            </div>
-            <span className="px-2.5 py-1 rounded-full bg-amber-200 text-amber-900 text-[10px] font-black uppercase tracking-wider shrink-0">
-              Revision Active
-            </span>
-          </div>
-        </div>
-      )}
+      {/* Pharmacognosy Review Revision & Feedback Panel */}
+      <ResearcherReviewFeedbackPanel
+        projectId={projectId}
+        stageTitle="Stage 1 · Plant & Literature Research"
+        discipline="Pharmacognosy"
+        overallAssessment={overallAssessment}
+        reviewStatus={currentReviewStatus}
+        recommendations={openReviewFeedback.length > 0 ? openReviewFeedback : initialReviewFeedback}
+        reviewerName={reviewerName}
+        approvedAt={approvedAt}
+      />
 
       {/* ========================================================
           STICKY ANCHOR NAVIGATION (CONTINUOUS ONE-PAGE SCROLL)
@@ -735,11 +821,11 @@ export default function PlantLiteratureClient({
             </div>
 
             <div className="flex flex-wrap items-center gap-2.5 pt-1">
-              {availableParts.map((part) => {
+              {availableParts.filter(Boolean).map((part, pIdx) => {
                 const isSelected = selectedPlantParts.includes(part);
                 return (
                   <button
-                    key={part}
+                    key={`part-${part}-${pIdx}`}
                     type="button"
                     onClick={() => togglePlantPart(part)}
                     className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
@@ -1099,7 +1185,7 @@ export default function PlantLiteratureClient({
             <div className="space-y-5">
               {literatureList.map((paper, idx) => (
                 <motion.div
-                  key={paper.id || paper.pmid || paper.title}
+                  key={`paper-${paper.id || paper.pmid || paper.doi || idx}-${idx}`}
                   initial={{ opacity: 0, y: 14 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.35, delay: idx * 0.05 }}
@@ -1343,17 +1429,36 @@ export default function PlantLiteratureClient({
         projectId={projectId}
         stageNumber={1}
         stageTitle="Plant & Literature Research"
-        backHref={`/researcher/projects/${projectId}`}
+        previousStageRoute={`/researcher/projects/${projectId}`}
+        onBack={handleBack}
         backLabel="Back to Project"
         lastSaved={lastSaved}
         isSaving={saving}
         onSave={() => handleSave(true)}
-        primaryAction={{
-          label: "Continue to In-Silico Analysis",
-          onClick: handleCompleteAndContinue,
-          loading: completingStage,
-          loadingLabel: "Advancing to In-Silico...",
-        }}
+        saveLabel="Save Draft"
+        isRevisionMode={isRevisionMode}
+        onResubmitRevision={handleResubmitRevision}
+        isResubmitting={resubmitting}
+        reviewStatus={currentReviewStatus}
+        onContinue={handleCompleteAndContinue}
+        isContinuing={completingStage}
+        continueLabel="Continue to In-Silico Analysis"
+        continuingLabel="Advancing to In-Silico..."
+        continueDisabled={completingStage || isRevisionMode}
+      />
+
+      {/* Revision Resubmitted Success Confirmation Modal */}
+      <RevisionResubmittedSuccessModal
+        isOpen={showSuccessModal}
+        onClose={() => setShowSuccessModal(false)}
+        projectId={projectId}
+        stageNumber={1}
+        stageTitle="Stage 1 · Plant & Literature Research"
+        discipline={successModalData.discipline}
+        profession={successModalData.profession}
+        reviewCycle={successModalData.reviewCycle}
+        reviewerName={successModalData.reviewerName}
+        addressedCount={successModalData.addressedCount}
       />
     </div>
   );

@@ -5,6 +5,7 @@ import pool from "@/lib/db";
 import FormulationSafetyClient from "@/components/researcher/formulation-safety/FormulationSafetyClient";
 import { ensureDockingSchema } from "@/lib/docking-schema";
 import { ensureReviewTables } from "@/lib/expert-review-assignment";
+import { getProfessionalReviewStageStatus } from "@/lib/professional-review-status";
 
 export const instant = false;
 
@@ -115,12 +116,16 @@ export default async function FormulationSafetyStagePage({
 
   // 7. Reviewer feedback if any
   const [fbRows]: any = await pool.query(
-    `SELECT comment, recommendation, severity, createdAt
-     FROM review_feedback
-     WHERE projectId = ? AND (areaKey = 'formulation' OR affectedStage LIKE '%formulation%')
-     ORDER BY id DESC`,
+    `SELECT rf.*, u.name as reviewerDisplayName
+     FROM review_feedback rf
+     LEFT JOIN users u ON rf.reviewerId = u.id
+     WHERE rf.projectId = ? AND (rf.areaKey = 'formulation' OR rf.affectedStage LIKE '%formulation%')
+     ORDER BY rf.id ASC`,
     [projectId]
   );
+
+  // 8. Fetch canonical professional review status for Stage 4 (Formulation)
+  const stageReview = await getProfessionalReviewStageStatus(projectId, 4);
 
   return (
     <FormulationSafetyClient
@@ -133,8 +138,11 @@ export default async function FormulationSafetyStagePage({
       initialComponents={components}
       initialSteps={steps}
       stageStatus={stageStatus}
-      reviewStatus={reviewStatus}
+      reviewStatus={stageReview.status}
       reviewerFeedback={fbRows}
+      overallAssessment={stageReview.comments}
+      reviewerName={stageReview.reviewerName}
+      approvedAt={stageReview.approvedAt}
     />
   );
 }

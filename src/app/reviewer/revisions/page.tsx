@@ -139,7 +139,7 @@ export default function ProfessionalRevisionsPage() {
               href="/reviewer"
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition-colors"
             >
-              <span>View Review Workspace</span>
+              <span>View Dashboard</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </Link>
           </div>

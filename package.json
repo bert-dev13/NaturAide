@@ -18,7 +18,8 @@
     "discover:products": "npx tsx scripts/discover-plant-products.ts",
     "discover": "npx tsx scripts/discover-plant-products.ts",
     "test:chat": "npx tsx tests/community-chat-routing.test.ts",
-    "test:docking": "npx tsx tests/docking-integration.test.ts"
+    "test:docking": "npx tsx tests/docking-integration.test.ts",
+    "test:footer": "npx tsx tests/stage-footer-navigation.test.ts"
   },
   "dependencies": {
     "@types/bcryptjs": "^2.4.6",

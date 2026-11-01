@@ -43,28 +43,31 @@ NON_SITE_RESNAMES = {
 
 def tools(_):
     import shutil
-    out = {"ok": True, "python": sys.version.split()[0]}
+    out: dict[str, object] = {"ok": True, "python": sys.version.split()[0]}
+    missing: list[str] = []
     for mod in ("rdkit", "meeko", "gemmi", "openbabel"):
         try:
             m = __import__(mod)
             out[mod] = getattr(m, "__version__", "installed")
         except Exception:  # noqa: BLE001
             out[mod] = None
-            out.setdefault("missing", []).append(mod)
+            missing.append(mod)
     obabel = os.path.join(os.path.dirname(sys.executable), "obabel.exe" if os.name == "nt" else "obabel")
     if not os.path.exists(obabel):
         found = shutil.which("obabel")
         obabel = found or ""
     out["obabel"] = obabel if obabel and os.path.exists(obabel) else None
     if not out["obabel"]:
-        out.setdefault("missing", []).append("obabel")
+        missing.append("obabel")
+    if missing:
+        out["missing"] = missing
     emit(out)
 
 
 def prep_ligand(a):
     try:
         from rdkit import Chem
-        from rdkit.Chem import AllChem, Descriptors, rdMolDescriptors
+        from rdkit.Chem import rdDistGeom, rdForceFieldHelpers, rdMolDescriptors
         from meeko import MoleculePreparation, PDBQTWriterLegacy
     except Exception as e:  # noqa: BLE001
         fail(f"Ligand preparation libraries unavailable: {e}")
@@ -76,20 +79,20 @@ def prep_ligand(a):
     formula = rdMolDescriptors.CalcMolFormula(mol)
     mol = Chem.AddHs(mol)
 
-    params = AllChem.ETKDGv3()
+    params = rdDistGeom.ETKDGv3()
     params.randomSeed = 42
     params.maxIterations = 2000
-    if AllChem.EmbedMolecule(mol, params) != 0:
+    if rdDistGeom.EmbedMolecule(mol, params) != 0:
         params.useRandomCoords = True
-        if AllChem.EmbedMolecule(mol, params) != 0:
+        if rdDistGeom.EmbedMolecule(mol, params) != 0:
             fail("3D conformer generation failed for this structure.")
     method = "RDKit ETKDGv3 embedding"
     try:
-        if AllChem.MMFFHasAllMoleculeParams(mol):
-            AllChem.MMFFOptimizeMolecule(mol, maxIters=2000)
+        if rdForceFieldHelpers.MMFFHasAllMoleculeParams(mol):
+            rdForceFieldHelpers.MMFFOptimizeMolecule(mol, maxIters=2000)
             method += " + MMFF94 optimisation"
         else:
-            AllChem.UFFOptimizeMolecule(mol, maxIters=2000)
+            rdForceFieldHelpers.UFFOptimizeMolecule(mol, maxIters=2000)
             method += " + UFF optimisation"
     except Exception:  # noqa: BLE001
         method += " (no force-field optimisation)"
@@ -115,7 +118,7 @@ def prep_ligand(a):
         fh.write(pdbqt)
     emit({
         "ok": True, "pdbqt": path, "heavyAtoms": heavy, "formula": formula,
-        "molecularWeight": round(Descriptors.MolWt(Chem.RemoveHs(mol)), 3),
+        "molecularWeight": round(rdMolDescriptors.CalcExactMolWt(Chem.RemoveHs(mol)), 3),
         "torsions": torsions,
         "method": f"{method}; Meeko {__import__('meeko').__version__} PDBQT (Gasteiger-type charges, rotatable bonds assigned)",
     })
@@ -140,7 +143,7 @@ def _clean_protein(pdb_path, out_pdb):
     clean = gemmi.Structure()
     clean.cell = st.cell
     clean.spacegroup_hm = st.spacegroup_hm
-    nm = gemmi.Model("1")
+    nm = gemmi.Model(1)
     src = model[chain_id]
     nc = gemmi.Chain(chain_id)
     residues = 0
@@ -200,14 +203,14 @@ def sites(a):
             protein_chain = ch.name
             break
     found = {}
-    for ch in model:
-        if ch.name != protein_chain:
-            continue
+    # First search the target protein chain, then search all other chains for co-crystallized ligands/inhibitors
+    all_chains = [ch for ch in model if ch.name == protein_chain] + [ch for ch in model if ch.name != protein_chain]
+    for ch in all_chains:
         for r in ch:
             if r.het_flag != "H" or r.name in NON_SITE_RESNAMES:
                 continue
             atoms = [at for at in r if at.element.name != "H"]
-            if len(atoms) < 8 or r.name in found:
+            if len(atoms) < 6 or r.name in found:
                 continue
             xs = [at.pos.x for at in atoms]
             ys = [at.pos.y for at in atoms]
@@ -219,6 +222,20 @@ def sites(a):
                 # ligand extent + 8 A padding on every side (min 20 A), a standard focused-box rule
                 "size": [round(max(20.0, e + 16.0), 1) for e in ext],
             }
+
+    # If no co-crystallized ligand exists in the entire PDB structure, fallback to protein geometric center
+    if not found and protein_chain:
+        prot_atoms = [at for ch in model if ch.name == protein_chain for r in ch for at in r if at.element.name != "H"]
+        if prot_atoms:
+            pxs = [at.pos.x for at in prot_atoms]
+            pys = [at.pos.y for at in prot_atoms]
+            pzs = [at.pos.z for at in prot_atoms]
+            found["APO_CENTER"] = {
+                "resname": "CENTER", "chain": protein_chain, "seq": "1", "heavyAtoms": len(prot_atoms),
+                "center": [round((max(pxs) + min(pxs)) / 2, 3), round((max(pys) + min(pys)) / 2, 3), round((max(pzs) + min(pzs)) / 2, 3)],
+                "size": [25.0, 25.0, 25.0],
+            }
+
     emit({"ok": True, "chain": protein_chain, "candidates": list(found.values())})
 
 

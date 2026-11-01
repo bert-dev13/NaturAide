@@ -435,7 +435,8 @@ export default function AllProjectsDirectoryClient() {
                                 const isRev =
                                   area.status === "Revision Requested" || area.status === "Revision Submitted";
                                 const isProg = area.status === "In Review";
-                                const isNotReady = area.status === "Not Ready";
+                                const isNotReady =
+                                  area.status === "Not Ready" || area.status === "Not Submitted";
 
                                 return (
                                   <div

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -34,48 +34,63 @@ import {
   FileCheck,
 } from "lucide-react";
 import ResearchStageFooter from "@/components/researcher/stage/ResearchStageFooter";
+import ResearcherReviewFeedbackPanel from "@/components/researcher/stage/ResearcherReviewFeedbackPanel";
+import RevisionResubmittedSuccessModal from "@/components/researcher/stage/RevisionResubmittedSuccessModal";
 
 // Reusable Research Section wrapper matching Stages 1-3
 function ResearchSection({
   id,
   number,
+  badge,
   icon: Icon,
   title,
   subtitle,
   children,
   headerAction,
+  headerGradient = "from-emerald-50/80 via-teal-50/30 to-transparent",
+  iconBg = "bg-gradient-to-br from-emerald-500 to-teal-600 shadow-emerald-500/20",
 }: {
   id: string;
   number: string;
+  badge?: string;
   icon: React.ElementType;
   title: string;
   subtitle: string;
   children: React.ReactNode;
   headerAction?: React.ReactNode;
+  headerGradient?: string;
+  iconBg?: string;
 }) {
   return (
     <section
       id={id}
-      className="scroll-mt-24 rounded-3xl border border-[#dde6df] bg-white p-5 sm:p-7 shadow-2xs space-y-5"
+      className="scroll-mt-24 w-full overflow-hidden rounded-3xl bg-white border border-[#dde6df] shadow-md hover:border-emerald-400/80 hover:shadow-xl hover:shadow-emerald-500/5 transition-all duration-300"
     >
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-[#edf2ee]">
+      <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#edf2ee] bg-gradient-to-r ${headerGradient} px-6 py-4.5`}>
         <div className="flex items-center gap-3">
-          <span className="font-mono text-xs font-black text-emerald-900 bg-emerald-100/70 px-2.5 py-1 rounded-lg border border-emerald-200/60">
-            {number}
-          </span>
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200/80 shadow-2xs">
-            <Icon className="h-4 w-4" />
-          </span>
+          <div className={`rounded-xl p-2.5 text-white shadow-md ${iconBg} shrink-0`}>
+            <Icon className="h-5 w-5" />
+          </div>
           <div>
-            <h2 className="text-base sm:text-lg font-heading font-extrabold text-[#0f2c20] tracking-tight">
-              {title}
-            </h2>
-            <p className="text-xs text-[#6b7c76]">{subtitle}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-mono text-xs font-black text-emerald-800 uppercase tracking-wider">
+                {number}
+              </span>
+              <h2 className="text-base sm:text-lg font-black text-[#0f2c20] tracking-tight">
+                {title}
+              </h2>
+              {badge && (
+                <span className="rounded-full bg-emerald-100/90 border border-emerald-200 px-2.5 py-0.5 text-[10px] font-bold text-emerald-800 shadow-2xs">
+                  {badge}
+                </span>
+              )}
+            </div>
+            <p className="text-xs font-medium text-[#78997f] mt-0.5">{subtitle}</p>
           </div>
         </div>
-        {headerAction && <div>{headerAction}</div>}
+        {headerAction && <div className="shrink-0">{headerAction}</div>}
       </div>
-      {children}
+      <div className="p-5 sm:p-7 space-y-6">{children}</div>
     </section>
   );
 }
@@ -181,6 +196,9 @@ interface FormulationSafetyClientProps {
   stageStatus?: string;
   reviewStatus?: string;
   reviewerFeedback?: any[];
+  overallAssessment?: string | null;
+  reviewerName?: string | null;
+  approvedAt?: string | null;
 }
 
 export default function FormulationSafetyClient({
@@ -195,8 +213,84 @@ export default function FormulationSafetyClient({
   stageStatus: initialStageStatus = "IN_PROGRESS",
   reviewStatus: initialReviewStatus = "NOT_SUBMITTED",
   reviewerFeedback = [],
+  overallAssessment,
+  reviewerName,
+  approvedAt,
 }: FormulationSafetyClientProps) {
   const router = useRouter();
+
+  const [currentReviewStatus, setCurrentReviewStatus] = useState<string | null>(initialReviewStatus || null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successModalData, setSuccessModalData] = useState<{
+    discipline: string;
+    profession: string;
+    reviewerName?: string | null;
+    reviewCycle: number;
+    addressedCount: number;
+  }>({
+    discipline: "Formulation",
+    profession: "Pharmacist / Pharmaceutical Scientist",
+    reviewerName: reviewerName || null,
+    reviewCycle: 1,
+    addressedCount: 1,
+  });
+
+  const openReviewFeedback = React.useMemo(() => {
+    return (reviewerFeedback || []).filter((f: any) => {
+      const st = (f.status || "OPEN").toUpperCase();
+      return st === "OPEN" || st === "IN_REVIEW";
+    });
+  }, [reviewerFeedback]);
+
+  const isRevisionMode = Boolean(
+    currentReviewStatus === "REVISION_REQUIRED" ||
+      (openReviewFeedback.length > 0 && currentReviewStatus !== "REVISION_RESUBMITTED" && currentReviewStatus !== "APPROVED")
+  );
+
+  const [resubmitting, setResubmitting] = useState(false);
+
+  const handleResubmitRevision = async () => {
+    try {
+      setResubmitting(true);
+      await handleSaveDraft();
+
+      const res = await fetch(`/api/researcher/projects/${projectId}/resubmit-revision`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roleKey: "formulation",
+          stageNumber: 4,
+          changesSummary: "Updated formulation design, extraction parameters, and dosage form stability.",
+        }),
+      });
+
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to resubmit revision");
+
+      setCurrentReviewStatus("REVISION_RESUBMITTED");
+      setSuccessModalData({
+        discipline: json.discipline || "Formulation",
+        profession: json.profession || "Pharmacist / Pharmaceutical Scientist",
+        reviewerName: json.reviewerName || reviewerName || null,
+        reviewCycle: json.reviewCycle || 1,
+        addressedCount: reviewerFeedback?.length || 1,
+      });
+      setShowSuccessModal(true);
+
+      window.dispatchEvent(
+        new CustomEvent("natureaide:revisions-updated", {
+          detail: { projectId, stageNumber: 4, status: "REVISION_RESUBMITTED" },
+        })
+      );
+      window.dispatchEvent(new CustomEvent("natureaide:project-updated", { detail: { projectId } }));
+
+      router.refresh();
+    } catch (err: any) {
+      console.error("Resubmit revision error:", err);
+    } finally {
+      setResubmitting(false);
+    }
+  };
 
   // Active anchor for one-scroll tabs
   const [activeAnchor, setActiveAnchor] = useState<string>("sec-formulation");
@@ -214,6 +308,10 @@ export default function FormulationSafetyClient({
   const [extractionMethod, setExtractionMethod] = useState<string>(
     plantData?.extractionMethod || "Cold Maceration + Rotary Evaporation"
   );
+  const [customTypeActive, setCustomTypeActive] = useState<boolean>(false);
+  const [customPartActive, setCustomPartActive] = useState<boolean>(false);
+  const [customSolventActive, setCustomSolventActive] = useState<boolean>(false);
+  const [customMethodActive, setCustomMethodActive] = useState<boolean>(false);
   const [purpose, setPurpose] = useState<string>(
     initialFormulation?.researchPurpose ||
       `Investigate candidate anti-inflammatory and antioxidant botanical extract formulation enriched in standardized phytochemical fractions.`
@@ -318,12 +416,28 @@ export default function FormulationSafetyClient({
   const [showSopModal, setShowSopModal] = useState<boolean>(false);
   const [newStepText, setNewStepText] = useState<string>("");
 
-  // Save & Stage Progression State
+  // Save & Stage Progression State (strictly separated)
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [lastSaved, setLastSaved] = useState<string | null>(null);
-  const [completingStage, setCompletingStage] = useState<boolean>(false);
+  const [isContinuing, setIsContinuing] = useState<boolean>(false);
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
   const [successNotice, setSuccessNotice] = useState<string | null>(null);
+
+  // Guarantee clean initial navigation state: never activate loading on load or back navigation
+  useEffect(() => {
+    setIsContinuing(false);
+    setIsSaving(false);
+    return () => {
+      setIsContinuing(false);
+      setIsSaving(false);
+    };
+  }, []);
+
+  // Pure Back navigation handler (NEVER triggers stage completion or advancement)
+  const handleBack = useCallback(() => {
+    console.log("[FormulationSafetyClient] BACK_CLICK - Pure navigation to Molecular Docking");
+    router.push(`/researcher/projects/${projectId}/docking`);
+  }, [projectId, router]);
 
   // Review states
   const [stageStatus, setStageStatus] = useState<string>(initialStageStatus);
@@ -469,9 +583,9 @@ export default function FormulationSafetyClient({
     }
   };
 
-  // Complete Stage & Continue
+  // Complete Stage & Continue (triggered ONLY by explicit user click on Continue)
   const handleCompleteAndContinue = async () => {
-    if (completingStage) return;
+    if (isContinuing || isSaving) return;
 
     // Inline validation checks
     if (!plantPart.trim()) {
@@ -495,7 +609,7 @@ export default function FormulationSafetyClient({
       return;
     }
 
-    setCompletingStage(true);
+    setIsContinuing(true);
     setErrorNotice(null);
 
     try {
@@ -517,13 +631,14 @@ export default function FormulationSafetyClient({
       setReviewStatus("PENDING");
       setSuccessNotice("Stage 4 completed! Formulation review queued. Moving to Stage 5...");
 
-      const targetUrl = data.redirectUrl || `/researcher/projects/${projectId}/completion-integration`;
+      const targetUrl = data.redirectUrl || `/researcher/projects/${projectId}/safety`;
       setTimeout(() => {
         router.push(targetUrl);
       }, 500);
     } catch (err: any) {
       setErrorNotice(err.message || "Failed to complete Stage 4.");
-      setCompletingStage(false);
+    } finally {
+      setIsContinuing(false);
     }
   };
 
@@ -553,7 +668,7 @@ export default function FormulationSafetyClient({
             className="group inline-flex items-center gap-1.5 text-xs font-bold text-[#52645d] hover:text-[#0f2c20] transition-colors"
           >
             <ArrowLeft className="w-3.5 h-3.5 text-emerald-600 transition-transform group-hover:-translate-x-1" />
-            <span>Back to Stage 3 (Molecular Docking)</span>
+            <span>Back to Molecular Docking</span>
           </Link>
         </div>
 
@@ -629,6 +744,18 @@ export default function FormulationSafetyClient({
         </div>
       </motion.div>
 
+      {/* Formulation Review Revision & Feedback Panel */}
+      <ResearcherReviewFeedbackPanel
+        projectId={projectId}
+        stageTitle="Stage 4 · Formulation Development"
+        discipline="Formulation"
+        overallAssessment={overallAssessment}
+        reviewStatus={currentReviewStatus}
+        recommendations={openReviewFeedback.length > 0 ? openReviewFeedback : reviewerFeedback || []}
+        reviewerName={reviewerName}
+        approvedAt={approvedAt}
+      />
+
       {/* ERROR & SUCCESS NOTICES */}
       <div className="w-full space-y-2">
         {errorNotice && (
@@ -663,40 +790,60 @@ export default function FormulationSafetyClient({
       </div>
 
       {/* ============================================================== */}
-      {/* STICKY TAB NAVIGATION (3 SECTIONS)                             */}
+      {/* 2. STAGE 2/3-STYLE STICKY TAB NAVIGATION                        */}
       {/* ============================================================== */}
-      <div className="sticky top-4 z-20 flex w-full justify-center">
-        <div className="flex items-center gap-1 sm:gap-2 rounded-full border border-[#dde6df] bg-white/95 p-1.5 shadow-lg backdrop-blur-md">
-          <a
-            href="#sec-formulation"
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all ${
-              activeAnchor === "sec-formulation"
-                ? "bg-[#0f2c20] text-emerald-300 shadow-sm"
-                : "text-[#52645d] hover:text-[#0f2c20] hover:bg-slate-100"
-            }`}
-          >
-            <span>01 Formulation</span>
-          </a>
-          <a
-            href="#sec-composition"
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all ${
-              activeAnchor === "sec-composition"
-                ? "bg-[#0f2c20] text-emerald-300 shadow-sm"
-                : "text-[#52645d] hover:text-[#0f2c20] hover:bg-slate-100"
-            }`}
-          >
-            <span>02 Composition</span>
-          </a>
-          <a
-            href="#sec-documentation"
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all ${
-              activeAnchor === "sec-documentation"
-                ? "bg-[#0f2c20] text-emerald-300 shadow-sm"
-                : "text-[#52645d] hover:text-[#0f2c20] hover:bg-slate-100"
-            }`}
-          >
-            <span>03 Documentation</span>
-          </a>
+      <div className="sticky top-4 z-20 flex items-center justify-between gap-2 overflow-x-auto rounded-2xl border border-slate-200/90 bg-white/95 p-2 shadow-xs backdrop-blur-md no-scrollbar">
+        <div className="flex items-center gap-1 sm:gap-2">
+          {[
+            { id: "sec-formulation", number: "01", label: "Formulation", count: 1 },
+            { id: "sec-composition", number: "02", label: "Composition", count: candidateCompounds.length },
+            { id: "sec-documentation", number: "03", label: "Documentation", count: sopSteps.length },
+          ].map((tab) => {
+            const isActive = activeAnchor === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => {
+                  setActiveAnchor(tab.id);
+                  document.getElementById(tab.id)?.scrollIntoView({ behavior: "smooth" });
+                }}
+                className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                  isActive
+                    ? "bg-[#0f2c20] text-emerald-300 shadow-2xs"
+                    : "bg-slate-50 hover:bg-slate-100 text-slate-700 hover:text-slate-900 border border-slate-200/60"
+                }`}
+              >
+                <span className="font-mono text-[10px] opacity-75">{tab.number}</span>
+                <span>{tab.label}</span>
+                {tab.count !== undefined && (
+                  <span
+                    className={`ml-0.5 rounded-full px-1.5 py-0.2 text-[10px] font-black ${
+                      isActive
+                        ? "bg-emerald-800 text-emerald-100"
+                        : "bg-slate-200/80 text-slate-700"
+                    }`}
+                  >
+                    {tab.count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0 pr-1 text-xs">
+          <span className="text-[11px] font-mono text-slate-500 hidden sm:inline">
+            {candidateCompounds.length} compound{candidateCompounds.length === 1 ? "" : "s"} · {sopSteps.length} step{sopSteps.length === 1 ? "" : "s"}
+          </span>
+          {isSaving ? (
+            <span className="text-[11px] font-medium text-amber-600">Saving...</span>
+          ) : (
+            <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700 border border-emerald-200">
+              <Check className="h-3 w-3" />
+              Saved
+            </span>
+          )}
         </div>
       </div>
 
@@ -706,162 +853,304 @@ export default function FormulationSafetyClient({
       <ResearchSection
         id="sec-formulation"
         number="01"
+        badge="Extract Specification"
         icon={FlaskConical}
-        title="Formulation"
-        subtitle="Botanical extract architecture & preparation parameters"
+        title="Formulation Architecture"
+        subtitle="Botanical extract specification, specimen provenance & solvent parameters"
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {/* Formulation Type */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-[#0f2c20] block">
-              Formulation Type <span className="text-emerald-700">*</span>
-            </label>
-            <select
-              value={formulationType}
-              onChange={(e) => setFormulationType(e.target.value)}
-              disabled={isReviewLocked}
-              className="w-full p-3 rounded-xl border border-[#dde6df] bg-white text-xs font-bold text-[#0f2c20] focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none"
-            >
-              {FORMULATION_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-            <p className="text-[11px] text-[#78997f]">Target pharmaceutical or herbal preparation delivery format</p>
-          </div>
-
-          {/* Plant Material (Preloaded from Project) */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-[#0f2c20] block">
-              Plant Material
-            </label>
-            <div className="p-3 rounded-xl border border-emerald-200/80 bg-emerald-50/50 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Leaf className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span className="text-xs font-extrabold text-[#0f2c20]">{project.plantName}</span>
-                {project.plantScientificName && (
-                  <span className="text-xs font-serif italic text-emerald-800">· {project.plantScientificName}</span>
-                )}
-              </div>
-              <span className="text-[10px] font-mono font-bold text-emerald-800 uppercase px-2 py-0.5 rounded bg-white border border-emerald-200">
-                Stage 1 Specimen
+          {/* Formulation Type Card */}
+          <div className="p-4 sm:p-5 rounded-2xl bg-slate-50/70 hover:bg-white border border-slate-200/90 hover:border-emerald-400 focus-within:border-emerald-600 focus-within:ring-4 focus-within:ring-emerald-500/10 focus-within:bg-white transition-all shadow-2xs space-y-2.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-black text-[#0f2c20] uppercase tracking-wider flex items-center gap-1.5">
+                <FlaskConical className="w-4 h-4 text-emerald-600" />
+                <span>Formulation Type <span className="text-rose-500">*</span></span>
+              </label>
+              <span className="text-[10px] font-mono font-bold text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded-md border border-emerald-200">
+                Format
               </span>
             </div>
-            <p className="text-[11px] text-[#78997f]">Authenticated specimen carried forward from Stage 1</p>
+            <p className="text-xs text-[#78997f]">
+              Target pharmaceutical or herbal preparation delivery format.
+            </p>
+            <div className="space-y-2 pt-0.5">
+              <div className="relative">
+                <select
+                  value={FORMULATION_TYPES.includes(formulationType) ? formulationType : (customTypeActive || formulationType ? "__custom__" : "")}
+                  onChange={(e) => {
+                    if (e.target.value === "__custom__") {
+                      setCustomTypeActive(true);
+                    } else {
+                      setCustomTypeActive(false);
+                      setFormulationType(e.target.value);
+                    }
+                  }}
+                  disabled={isReviewLocked}
+                  className="w-full appearance-none px-3.5 py-2.5 pr-9 rounded-xl border border-slate-200 bg-white text-xs font-bold text-[#0f2c20] hover:border-emerald-300 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/10 outline-none shadow-2xs transition-all cursor-pointer"
+                >
+                  <option value="" disabled>Select formulation type...</option>
+                  {FORMULATION_TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                  <option value="__custom__">Custom Formulation Format...</option>
+                </select>
+                <ChevronDown className="w-4 h-4 text-slate-400 pointer-events-none absolute right-3 top-1/2 -translate-y-1/2" />
+              </div>
+              {(customTypeActive || (!FORMULATION_TYPES.includes(formulationType) && formulationType !== "")) && (
+                <input
+                  type="text"
+                  value={formulationType}
+                  onChange={(e) => setFormulationType(e.target.value)}
+                  disabled={isReviewLocked}
+                  placeholder="Enter custom formulation format..."
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50/50 text-xs font-semibold text-[#0f2c20] focus:border-emerald-600 focus:bg-white focus:ring-2 focus:ring-emerald-500/10 outline-none transition-all shadow-2xs"
+                />
+              )}
+            </div>
+          </div>
+
+          {/* Plant Material (Preloaded from Stage 1) */}
+          <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-emerald-50/70 via-teal-50/30 to-white border border-emerald-200/90 shadow-2xs space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-black text-[#0f2c20] uppercase tracking-wider flex items-center gap-1.5">
+                <Leaf className="w-4 h-4 text-emerald-600" />
+                <span>Botanical Specimen</span>
+              </span>
+              <span className="text-[10px] font-mono font-bold text-emerald-800 uppercase px-2.5 py-0.5 rounded-full bg-white border border-emerald-300 shadow-2xs">
+                Stage 1 Verified
+              </span>
+            </div>
+            <p className="text-xs text-[#78997f]">
+              Authenticated botanical specimen and verified provenance carried forward from Stage 1.
+            </p>
+            <div className="p-3 sm:p-3.5 rounded-xl border border-emerald-200/80 bg-white/90 shadow-2xs space-y-1.5">
+              <div className="flex items-center gap-2.5">
+                <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center shrink-0 shadow-sm shadow-emerald-500/20">
+                  <Leaf className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-xs sm:text-sm font-black text-[#0f2c20] truncate">{project.plantName}</h3>
+                  {project.plantScientificName && (
+                    <p className="text-[11px] font-serif italic text-emerald-800 truncate">
+                      {project.plantScientificName}
+                    </p>
+                  )}
+                </div>
+              </div>
+              {plantData?.specimenSource && (
+                <div className="text-[11px] text-slate-600 flex items-center gap-1.5 pt-0.5 border-t border-emerald-100/60">
+                  <span className="font-bold text-[#0f2c20] shrink-0">Provenance:</span>
+                  <span className="truncate">{plantData.specimenSource}</span>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Plant Part */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-[#0f2c20] block">
-              Plant Part <span className="text-emerald-700">*</span>
-            </label>
-            <div className="flex gap-2">
-              <select
-                value={COMMON_PLANT_PARTS.includes(plantPart) ? plantPart : "custom"}
-                onChange={(e) => {
-                  if (e.target.value !== "custom") setPlantPart(e.target.value);
-                }}
-                disabled={isReviewLocked}
-                className="w-1/2 p-3 rounded-xl border border-[#dde6df] bg-white text-xs font-bold text-[#0f2c20] focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none"
-              >
-                {COMMON_PLANT_PARTS.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
-                <option value="custom">Other (Specify)</option>
-              </select>
-              <input
-                type="text"
-                value={plantPart}
-                onChange={(e) => setPlantPart(e.target.value)}
-                disabled={isReviewLocked}
-                placeholder="Specific plant anatomical part..."
-                className="w-1/2 p-3 rounded-xl border border-[#dde6df] bg-white text-xs text-[#0f2c20] focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none font-medium"
-              />
+          <div className="p-4 sm:p-5 rounded-2xl bg-slate-50/70 hover:bg-white border border-slate-200/90 hover:border-emerald-400 focus-within:border-emerald-600 focus-within:ring-4 focus-within:ring-emerald-500/10 focus-within:bg-white transition-all shadow-2xs space-y-2.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-black text-[#0f2c20] uppercase tracking-wider flex items-center gap-1.5">
+                <Leaf className="w-4 h-4 text-emerald-600" />
+                <span>Plant Anatomical Part <span className="text-rose-500">*</span></span>
+              </label>
+              <span className="text-[10px] font-mono font-bold text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded-md border border-emerald-200">
+                Organ
+              </span>
             </div>
-            <p className="text-[11px] text-[#78997f]">Plant anatomical part used for extraction (e.g. Leaves, Rhizome)</p>
+            <p className="text-xs text-[#78997f]">
+              Plant anatomical organ harvested for extraction.
+            </p>
+            <div className="space-y-2 pt-0.5">
+              <div className="relative">
+                <select
+                  value={
+                    COMMON_PLANT_PARTS.some((p) => p.toLowerCase() === plantPart.toLowerCase())
+                      ? COMMON_PLANT_PARTS.find((p) => p.toLowerCase() === plantPart.toLowerCase())
+                      : customPartActive || plantPart
+                      ? "__custom__"
+                      : ""
+                  }
+                  onChange={(e) => {
+                    if (e.target.value === "__custom__") {
+                      setCustomPartActive(true);
+                    } else {
+                      setCustomPartActive(false);
+                      setPlantPart(e.target.value);
+                    }
+                  }}
+                  disabled={isReviewLocked}
+                  className="w-full appearance-none px-3.5 py-2.5 pr-9 rounded-xl border border-slate-200 bg-white text-xs font-bold text-[#0f2c20] hover:border-emerald-300 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/10 outline-none shadow-2xs transition-all cursor-pointer"
+                >
+                  <option value="" disabled>Select plant anatomical part...</option>
+                  {COMMON_PLANT_PARTS.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                  <option value="__custom__">Custom Specification...</option>
+                </select>
+                <ChevronDown className="w-4 h-4 text-slate-400 pointer-events-none absolute right-3 top-1/2 -translate-y-1/2" />
+              </div>
+              {(customPartActive ||
+                (!COMMON_PLANT_PARTS.some((p) => p.toLowerCase() === plantPart.toLowerCase()) &&
+                  plantPart !== "")) && (
+                <input
+                  type="text"
+                  value={plantPart}
+                  onChange={(e) => setPlantPart(e.target.value)}
+                  disabled={isReviewLocked}
+                  placeholder="Enter exact anatomical part specification..."
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50/50 text-xs font-semibold text-[#0f2c20] focus:border-emerald-600 focus:bg-white focus:ring-2 focus:ring-emerald-500/10 outline-none transition-all shadow-2xs"
+                />
+              )}
+            </div>
           </div>
 
           {/* Extraction Solvent */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-[#0f2c20] block">
-              Extraction Solvent <span className="text-emerald-700">*</span>
-            </label>
-            <div className="flex gap-2">
-              <select
-                value={COMMON_SOLVENTS.includes(extractionSolvent) ? extractionSolvent : "custom"}
-                onChange={(e) => {
-                  if (e.target.value !== "custom") setExtractionSolvent(e.target.value);
-                }}
-                disabled={isReviewLocked}
-                className="w-1/2 p-3 rounded-xl border border-[#dde6df] bg-white text-xs font-bold text-[#0f2c20] focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none"
-              >
-                {COMMON_SOLVENTS.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-                <option value="custom">Other (Specify)</option>
-              </select>
-              <input
-                type="text"
-                value={extractionSolvent}
-                onChange={(e) => setExtractionSolvent(e.target.value)}
-                disabled={isReviewLocked}
-                placeholder="Solvent composition & ratio..."
-                className="w-1/2 p-3 rounded-xl border border-[#dde6df] bg-white text-xs text-[#0f2c20] focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none font-medium"
-              />
+          <div className="p-4 sm:p-5 rounded-2xl bg-slate-50/70 hover:bg-white border border-slate-200/90 hover:border-emerald-400 focus-within:border-emerald-600 focus-within:ring-4 focus-within:ring-emerald-500/10 focus-within:bg-white transition-all shadow-2xs space-y-2.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-black text-[#0f2c20] uppercase tracking-wider flex items-center gap-1.5">
+                <Droplets className="w-4 h-4 text-emerald-600" />
+                <span>Extraction Solvent & Ratio <span className="text-rose-500">*</span></span>
+              </label>
+              <span className="text-[10px] font-mono font-bold text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded-md border border-emerald-200">
+                Solvent
+              </span>
             </div>
-            <p className="text-[11px] text-[#78997f]">Liquid medium utilized for secondary metabolite recovery</p>
+            <p className="text-xs text-[#78997f]">
+              Medium utilized for phytochemical recovery and metabolite solubility.
+            </p>
+            <div className="space-y-2 pt-0.5">
+              <div className="relative">
+                <select
+                  value={
+                    COMMON_SOLVENTS.some((s) => s.toLowerCase() === extractionSolvent.toLowerCase())
+                      ? COMMON_SOLVENTS.find((s) => s.toLowerCase() === extractionSolvent.toLowerCase())
+                      : customSolventActive || extractionSolvent
+                      ? "__custom__"
+                      : ""
+                  }
+                  onChange={(e) => {
+                    if (e.target.value === "__custom__") {
+                      setCustomSolventActive(true);
+                    } else {
+                      setCustomSolventActive(false);
+                      setExtractionSolvent(e.target.value);
+                    }
+                  }}
+                  disabled={isReviewLocked}
+                  className="w-full appearance-none px-3.5 py-2.5 pr-9 rounded-xl border border-slate-200 bg-white text-xs font-bold text-[#0f2c20] hover:border-emerald-300 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/10 outline-none shadow-2xs transition-all cursor-pointer"
+                >
+                  <option value="" disabled>Select extraction solvent & ratio...</option>
+                  {COMMON_SOLVENTS.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                  <option value="__custom__">Custom Solvent / Ratio...</option>
+                </select>
+                <ChevronDown className="w-4 h-4 text-slate-400 pointer-events-none absolute right-3 top-1/2 -translate-y-1/2" />
+              </div>
+              {(customSolventActive ||
+                (!COMMON_SOLVENTS.some((s) => s.toLowerCase() === extractionSolvent.toLowerCase()) &&
+                  extractionSolvent !== "")) && (
+                <input
+                  type="text"
+                  value={extractionSolvent}
+                  onChange={(e) => setExtractionSolvent(e.target.value)}
+                  disabled={isReviewLocked}
+                  placeholder="e.g. 80% Aqueous Ethanol (1:10 w/v)..."
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50/50 text-xs font-semibold text-[#0f2c20] focus:border-emerald-600 focus:bg-white focus:ring-2 focus:ring-emerald-500/10 outline-none transition-all shadow-2xs"
+                />
+              )}
+            </div>
           </div>
 
           {/* Extraction Method */}
-          <div className="space-y-1.5 md:col-span-2">
-            <label className="text-xs font-bold text-[#0f2c20] block">
-              Extraction Method <span className="text-emerald-700">*</span>
-            </label>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <select
-                value={COMMON_METHODS.includes(extractionMethod) ? extractionMethod : "custom"}
-                onChange={(e) => {
-                  if (e.target.value !== "custom") setExtractionMethod(e.target.value);
-                }}
-                disabled={isReviewLocked}
-                className="sm:w-1/2 p-3 rounded-xl border border-[#dde6df] bg-white text-xs font-bold text-[#0f2c20] focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none"
-              >
-                {COMMON_METHODS.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-                <option value="custom">Other (Specify)</option>
-              </select>
-              <input
-                type="text"
-                value={extractionMethod}
-                onChange={(e) => setExtractionMethod(e.target.value)}
-                disabled={isReviewLocked}
-                placeholder="Method specification (e.g. Maceration, Soxhlet)..."
-                className="sm:w-1/2 p-3 rounded-xl border border-[#dde6df] bg-white text-xs text-[#0f2c20] focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none font-medium"
-              />
+          <div className="p-4 sm:p-5 rounded-2xl bg-slate-50/70 hover:bg-white border border-slate-200/90 hover:border-emerald-400 focus-within:border-emerald-600 focus-within:ring-4 focus-within:ring-emerald-500/10 focus-within:bg-white transition-all shadow-2xs space-y-2.5 md:col-span-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-black text-[#0f2c20] uppercase tracking-wider flex items-center gap-1.5">
+                <Sliders className="w-4 h-4 text-emerald-600" />
+                <span>Extraction & Compounding Technique <span className="text-rose-500">*</span></span>
+              </label>
+              <span className="text-[10px] font-mono font-bold text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded-md border border-emerald-200">
+                Methodology
+              </span>
             </div>
-            <p className="text-[11px] text-[#78997f]">Compounding technique and separation physical parameters</p>
+            <p className="text-xs text-[#78997f]">
+              Physical separation technique, maceration protocol, or extraction methodology.
+            </p>
+            <div className="space-y-2 pt-0.5">
+              <div className="relative">
+                <select
+                  value={
+                    COMMON_METHODS.find((m) => {
+                      const mClean = m.toLowerCase().replace(/\s*\+\s*/g, " with ");
+                      const curClean = extractionMethod.toLowerCase().replace(/\s*\+\s*/g, " with ");
+                      return mClean === curClean;
+                    }) ||
+                    (customMethodActive || extractionMethod ? "__custom__" : "")
+                  }
+                  onChange={(e) => {
+                    if (e.target.value === "__custom__") {
+                      setCustomMethodActive(true);
+                    } else {
+                      setCustomMethodActive(false);
+                      setExtractionMethod(e.target.value);
+                    }
+                  }}
+                  disabled={isReviewLocked}
+                  className="w-full appearance-none px-3.5 py-2.5 pr-9 rounded-xl border border-slate-200 bg-white text-xs font-bold text-[#0f2c20] hover:border-emerald-300 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/10 outline-none shadow-2xs transition-all cursor-pointer"
+                >
+                  <option value="" disabled>Select extraction & compounding technique...</option>
+                  {COMMON_METHODS.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                  <option value="__custom__">Custom Technique / Protocol...</option>
+                </select>
+                <ChevronDown className="w-4 h-4 text-slate-400 pointer-events-none absolute right-3 top-1/2 -translate-y-1/2" />
+              </div>
+              {(customMethodActive ||
+                (!COMMON_METHODS.some(
+                  (m) =>
+                    m.toLowerCase().replace(/\s*\+\s*/g, " with ") ===
+                    extractionMethod.toLowerCase().replace(/\s*\+\s*/g, " with ")
+                ) &&
+                  extractionMethod !== "")) && (
+                <input
+                  type="text"
+                  value={extractionMethod}
+                  onChange={(e) => setExtractionMethod(e.target.value)}
+                  disabled={isReviewLocked}
+                  placeholder="e.g. Cold Maceration (48h) + Rotary Evaporation at 40°C..."
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50/50 text-xs font-semibold text-[#0f2c20] focus:border-emerald-600 focus:bg-white focus:ring-2 focus:ring-emerald-500/10 outline-none transition-all shadow-2xs"
+                />
+              )}
+            </div>
           </div>
 
           {/* Research Purpose */}
-          <div className="space-y-1.5 md:col-span-2">
-            <label className="text-xs font-bold text-[#0f2c20] block">
-              Formulation Purpose & Intended Scope <span className="text-emerald-700">*</span>
-            </label>
+          <div className="p-5 rounded-2xl bg-slate-50/70 hover:bg-white border border-slate-200/90 hover:border-emerald-400 focus-within:border-emerald-600 focus-within:ring-4 focus-within:ring-emerald-500/10 focus-within:bg-white transition-all shadow-2xs space-y-2.5 md:col-span-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-black text-[#0f2c20] uppercase tracking-wider flex items-center gap-1.5">
+                <FileText className="w-4 h-4 text-emerald-600" />
+                <span>Formulation Purpose & Intended Scope <span className="text-rose-500">*</span></span>
+              </label>
+              <span className="text-[10px] font-mono font-bold text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded-md border border-emerald-200">
+                Rationale
+              </span>
+            </div>
             <textarea
               rows={3}
               value={purpose}
               onChange={(e) => setPurpose(e.target.value)}
               disabled={isReviewLocked}
               placeholder="Describe the therapeutic objective, experimental target, and expected phytochemical enrichment..."
-              className="w-full p-3.5 rounded-xl border border-[#dde6df] bg-white text-xs text-[#0f2c20] focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none leading-relaxed font-sans"
+              className="w-full p-3.5 rounded-xl border border-slate-200 bg-white text-xs text-[#0f2c20] focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 outline-none leading-relaxed font-sans shadow-2xs"
             />
             <p className="text-[11px] text-[#78997f]">Formulation rationale, indication scope, and target efficacy delivery</p>
           </div>
@@ -874,28 +1163,29 @@ export default function FormulationSafetyClient({
       <ResearchSection
         id="sec-composition"
         number="02"
+        badge={`${candidateCompounds.length} Active Marker${candidateCompounds.length === 1 ? "" : "s"}`}
         icon={Droplets}
-        title="Composition"
-        subtitle="Active phytochemical fractions carried forward from Stage 2 & Stage 3"
+        title="Active Phytochemical Composition"
+        subtitle="Bioactive fractions & marker quantification carried forward from Stage 2 screening and Stage 3 docking"
       >
         <div className="space-y-4">
           {candidateCompounds.length === 0 ? (
-            <div className="p-8 rounded-2xl bg-amber-50/60 border border-amber-200 text-amber-900 text-center space-y-2">
+            <div className="p-8 rounded-3xl bg-amber-50/70 border border-amber-200/90 text-amber-900 text-center space-y-3 shadow-2xs">
               <Info className="w-8 h-8 text-amber-600 mx-auto" />
-              <p className="text-xs font-bold">No Candidate Phytochemicals Selected Yet</p>
-              <p className="text-[11px] text-amber-800 max-w-md mx-auto">
-                Candidate compounds screened in Stage 2 (In-Silico) and docked in Stage 3 flow automatically into Stage 4 composition.
+              <p className="text-sm font-black">No Candidate Phytochemicals Selected Yet</p>
+              <p className="text-xs text-amber-800 max-w-md mx-auto leading-relaxed">
+                Candidate compounds screened in Stage 2 (In-Silico) and simulated in Stage 3 flow automatically into Stage 4 formulation composition.
               </p>
               <Link
                 href={`/researcher/projects/${projectId}/in-silico`}
-                className="inline-flex items-center gap-1.5 text-xs font-extrabold text-emerald-800 hover:text-emerald-950 underline pt-1"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-sm transition-all"
               >
                 <span>Select Candidate Compounds in Stage 2 →</span>
               </Link>
             </div>
           ) : (
-            <div className="space-y-3.5">
-              {candidateCompounds.map((compound) => {
+            <div className="space-y-4">
+              {candidateCompounds.map((compound, idx) => {
                 const name = compound.compoundName;
                 const state = compositionData[name] || {
                   amount: "",
@@ -908,45 +1198,51 @@ export default function FormulationSafetyClient({
 
                 return (
                   <div
-                    key={compound.id || name}
-                    className="p-5 rounded-2xl border border-[#dde6df] bg-gradient-to-br from-emerald-50/20 via-[#fcfdfc] to-white shadow-2xs space-y-3.5 hover:border-emerald-300 transition-all"
+                    key={`formulation-compound-${compound?.id || name || idx}-${idx}`}
+                    className="p-5 sm:p-6 rounded-2xl border border-slate-200 bg-white shadow-2xs hover:border-emerald-400/80 hover:shadow-md transition-all overflow-hidden space-y-4"
                   >
                     {/* Compound Title & Badges */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-[#edf2ee]">
-                      <div className="flex items-center gap-2.5">
-                        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-100/80 text-emerald-900 font-bold text-xs border border-emerald-200">
-                          <Pill className="w-4 h-4" />
-                        </span>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#edf2ee]">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center font-bold text-xs shadow-sm shadow-emerald-500/20 shrink-0">
+                          <Pill className="w-5 h-5" />
+                        </div>
                         <div>
-                          <div className="flex items-center gap-2">
-                            <h4 className="font-black text-sm text-[#0f2c20]">{name}</h4>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h4 className="font-black text-sm sm:text-base text-[#0f2c20]">{name}</h4>
                             {compound.molecularFormula && (
-                              <span className="font-mono text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                              <span className="font-mono text-xs font-bold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-lg border border-emerald-200">
                                 {compound.molecularFormula}
                               </span>
                             )}
                           </div>
-                          <span className="text-[10px] text-[#78997f] font-semibold">
-                            Source: Stage 2 Candidate → Stage 3 Docking
+                          <span className="text-xs text-[#78997f] font-medium">
+                            Source: Stage 2 Candidate → Stage 3 Molecular Docking
                           </span>
                         </div>
                       </div>
 
                       {/* Docking Affinity Badge */}
-                      {dockingInfo && (
+                      {dockingInfo ? (
                         <div className="flex items-center gap-1.5 self-start sm:self-auto">
-                          <span className="font-mono text-[11px] font-black text-emerald-800 bg-emerald-100/90 px-2.5 py-1 rounded-lg border border-emerald-300">
+                          <span className="font-mono text-xs font-black text-white bg-gradient-to-r from-emerald-600 to-teal-600 px-3 py-1.5 rounded-xl shadow-xs border border-emerald-500">
                             AutoDock Vina: {Number(dockingInfo.bindingAffinity).toFixed(2)} kcal/mol
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5 self-start sm:self-auto">
+                          <span className="font-mono text-[11px] font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
+                            Screened in Stage 2
                           </span>
                         </div>
                       )}
                     </div>
 
                     {/* Inputs: Amount/Concentration & Preparation Role */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5 bg-slate-50/70 p-4 rounded-xl border border-slate-100">
                       {/* Amount */}
-                      <div className="space-y-1">
-                        <label className="text-[11px] font-bold text-[#0f2c20]">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-[#0f2c20] block">
                           Amount / Quantity
                         </label>
                         <div className="flex gap-1.5">
@@ -956,13 +1252,13 @@ export default function FormulationSafetyClient({
                             onChange={(e) => handleCompositionChange(name, "amount", e.target.value)}
                             disabled={isReviewLocked}
                             placeholder="e.g. 300"
-                            className="w-2/3 p-2.5 rounded-xl border border-[#dde6df] bg-white text-xs text-[#0f2c20] focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none font-medium"
+                            className="w-2/3 p-2.5 rounded-xl border border-slate-200 bg-white text-xs text-[#0f2c20] focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none font-bold shadow-2xs"
                           />
                           <select
                             value={state.unit}
                             onChange={(e) => handleCompositionChange(name, "unit", e.target.value)}
                             disabled={isReviewLocked}
-                            className="w-1/3 p-2.5 rounded-xl border border-[#dde6df] bg-white text-xs font-bold text-[#0f2c20] focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none"
+                            className="w-1/3 p-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-[#0f2c20] focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none shadow-2xs"
                           >
                             {COMMON_UNITS.map((u) => (
                               <option key={u} value={u}>
@@ -974,8 +1270,8 @@ export default function FormulationSafetyClient({
                       </div>
 
                       {/* Concentration / Yield */}
-                      <div className="space-y-1">
-                        <label className="text-[11px] font-bold text-[#0f2c20]">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-[#0f2c20] block">
                           Target Concentration / Yield
                         </label>
                         <input
@@ -984,20 +1280,20 @@ export default function FormulationSafetyClient({
                           onChange={(e) => handleCompositionChange(name, "concentration", e.target.value)}
                           disabled={isReviewLocked}
                           placeholder="e.g. 15.5% w/w or 50 µg/mL"
-                          className="w-full p-2.5 rounded-xl border border-[#dde6df] bg-white text-xs text-[#0f2c20] focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none font-medium"
+                          className="w-full p-2.5 rounded-xl border border-slate-200 bg-white text-xs text-[#0f2c20] focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none font-bold shadow-2xs"
                         />
                       </div>
 
                       {/* Preparation Role */}
-                      <div className="space-y-1 sm:col-span-2 md:col-span-1">
-                        <label className="text-[11px] font-bold text-[#0f2c20]">
+                      <div className="space-y-1.5 sm:col-span-2 md:col-span-1">
+                        <label className="text-xs font-bold text-[#0f2c20] block">
                           Preparation / Functional Role
                         </label>
                         <select
                           value={state.preparationRole}
                           onChange={(e) => handleCompositionChange(name, "preparationRole", e.target.value)}
                           disabled={isReviewLocked}
-                          className="w-full p-2.5 rounded-xl border border-[#dde6df] bg-white text-xs font-bold text-[#0f2c20] focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none"
+                          className="w-full p-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-[#0f2c20] focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none shadow-2xs"
                         >
                           {COMMON_ROLES.map((r) => (
                             <option key={r} value={r}>
@@ -1021,25 +1317,26 @@ export default function FormulationSafetyClient({
       <ResearchSection
         id="sec-documentation"
         number="03"
+        badge="SOP & Protocol"
         icon={FileCheck}
-        title="Formulation Documentation"
-        subtitle="Compounding standard operating procedure & formulation summary"
+        title="Formulation Documentation & SOP"
+        subtitle="Compounding standard operating procedure, stability notes & formulation architecture summary"
       >
-        <div className="space-y-5">
+        <div className="space-y-6">
           {/* RESEARCHER FORMULATION NOTES */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-[#0f2c20] flex items-center gap-1.5">
-                <FileText className="w-3.5 h-3.5 text-emerald-700" />
+          <div className="p-5 sm:p-6 rounded-2xl bg-white border border-[#dde6df] shadow-2xs space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-[#edf2ee]">
+              <label className="text-xs font-black text-[#0f2c20] uppercase tracking-wider flex items-center gap-1.5">
+                <FileText className="w-4 h-4 text-emerald-700" />
                 <span>Formulation Notes & Compounding Observations</span>
               </label>
               <button
                 type="button"
                 onClick={handleAssistSummary}
                 disabled={isReviewLocked}
-                className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 hover:text-emerald-950 bg-emerald-50 hover:bg-emerald-100/80 px-2.5 py-1 rounded-lg border border-emerald-200 transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1.5 text-xs font-bold text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 px-3.5 py-1.5 rounded-xl shadow-xs transition-all cursor-pointer self-start sm:self-auto"
               >
-                <Sparkles className="w-3 h-3 text-emerald-600" />
+                <Sparkles className="w-3.5 h-3.5" />
                 <span>Assist with Formulation Summary</span>
               </button>
             </div>
@@ -1049,28 +1346,33 @@ export default function FormulationSafetyClient({
               onChange={(e) => setNotes(e.target.value)}
               disabled={isReviewLocked}
               placeholder="Record your preparation parameters, stability observations, storage conditions, and bench compounding notes..."
-              className="w-full p-3.5 rounded-xl border border-[#dde6df] bg-white text-xs text-[#0f2c20] focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none leading-relaxed font-sans"
+              className="w-full p-3.5 rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white text-xs text-[#0f2c20] focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 outline-none leading-relaxed font-sans shadow-2xs"
             />
           </div>
 
           {/* STANDARD OPERATING PROCEDURE (SOP) */}
-          <div className="p-5 rounded-2xl border border-[#dde6df] bg-[#fbfcfb] space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-[#edf2ee]">
+          <div className="p-5 sm:p-6 rounded-2xl border border-[#dde6df] bg-slate-50/60 shadow-2xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#edf2ee]">
               <div className="space-y-0.5">
-                <h4 className="text-xs font-black text-[#0f2c20] uppercase tracking-wider flex items-center gap-1.5">
-                  <Sliders className="w-3.5 h-3.5 text-emerald-700" />
-                  Standard Operating Procedure (SOP)
-                </h4>
-                <p className="text-[11px] text-[#78997f]">
-                  Step-by-step extraction and laboratory bench preparation protocol ({sopSteps.length} steps defined)
+                <div className="flex items-center gap-2">
+                  <h4 className="text-xs font-black text-[#0f2c20] uppercase tracking-wider flex items-center gap-1.5">
+                    <Sliders className="w-4 h-4 text-emerald-700" />
+                    <span>Standard Operating Procedure (SOP)</span>
+                  </h4>
+                  <span className="font-mono text-xs font-bold text-emerald-800 bg-emerald-100/80 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                    {sopSteps.length} Steps Defined
+                  </span>
+                </div>
+                <p className="text-xs text-[#78997f]">
+                  Step-by-step extraction and laboratory bench preparation protocol
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setShowSopModal(true)}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-white border border-[#dde6df] hover:bg-emerald-50 text-xs font-bold text-[#0f2c20] hover:text-emerald-900 transition-colors shadow-2xs self-start sm:self-auto cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-[#dde6df] hover:bg-emerald-50 text-xs font-bold text-[#0f2c20] hover:text-emerald-900 transition-colors shadow-2xs self-start sm:self-auto cursor-pointer"
               >
-                <Eye className="w-3.5 h-3.5 text-emerald-700" />
+                <Eye className="w-4 h-4 text-emerald-700" />
                 <span>View Full Protocol</span>
               </button>
             </div>
@@ -1080,18 +1382,30 @@ export default function FormulationSafetyClient({
               {sopSteps.map((step, idx) => (
                 <div
                   key={idx}
-                  className="flex items-start gap-3 p-3 rounded-xl bg-white border border-[#e7eee9] text-xs"
+                  className="flex items-start gap-3 p-3.5 rounded-xl bg-white border border-[#e7eee9] text-xs shadow-2xs hover:border-emerald-300 transition-all"
                 >
-                  <span className="font-mono text-[10px] font-black text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded-md shrink-0 mt-0.5">
+                  <span className="font-mono text-[11px] font-black text-white bg-gradient-to-br from-emerald-600 to-teal-700 px-2.5 py-1 rounded-lg shrink-0 mt-0.5 shadow-2xs">
                     Step {step.stepNumber}
                   </span>
                   <div className="flex-1 space-y-1">
-                    <p className="text-[#0f2c20] font-medium leading-relaxed">{step.text}</p>
+                    <p className="text-[#0f2c20] font-bold leading-relaxed">{step.text}</p>
                     {(step.equipment || step.duration || step.temperature) && (
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-[#78997f]">
-                        {step.equipment && <span>Equipment: <strong className="text-[#0f2c20]">{step.equipment}</strong></span>}
-                        {step.duration && <span>Duration: <strong className="text-[#0f2c20]">{step.duration}</strong></span>}
-                        {step.temperature && <span>Temp: <strong className="text-[#0f2c20]">{step.temperature}</strong></span>}
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[#78997f] pt-0.5">
+                        {step.equipment && (
+                          <span className="bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
+                            Equipment: <strong className="text-[#0f2c20]">{step.equipment}</strong>
+                          </span>
+                        )}
+                        {step.duration && (
+                          <span className="bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
+                            Duration: <strong className="text-[#0f2c20]">{step.duration}</strong>
+                          </span>
+                        )}
+                        {step.temperature && (
+                          <span className="bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
+                            Temp: <strong className="text-[#0f2c20]">{step.temperature}</strong>
+                          </span>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1099,10 +1413,10 @@ export default function FormulationSafetyClient({
                     <button
                       type="button"
                       onClick={() => handleRemoveSopStep(idx)}
-                      className="p-1 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                      className="p-1.5 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer rounded-lg hover:bg-rose-50"
                       title="Remove step"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   )}
                 </div>
@@ -1123,52 +1437,53 @@ export default function FormulationSafetyClient({
                     }
                   }}
                   placeholder="Add additional extraction or compounding step..."
-                  className="flex-1 p-2.5 rounded-xl border border-[#dde6df] bg-white text-xs text-[#0f2c20] focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none"
+                  className="flex-1 p-2.5 rounded-xl border border-slate-200 bg-white text-xs text-[#0f2c20] focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none shadow-2xs font-medium"
                 />
                 <button
                   type="button"
                   onClick={handleAddSopStep}
                   disabled={!newStepText.trim()}
-                  className="px-4 py-2 rounded-xl bg-[#0f2c20] hover:bg-[#163f2e] text-white font-bold text-xs transition-colors cursor-pointer disabled:opacity-50"
+                  className="px-4 py-2 rounded-xl bg-[#0f2c20] hover:bg-[#163f2e] text-white font-bold text-xs transition-colors cursor-pointer disabled:opacity-50 shadow-2xs"
                 >
-                  <Plus className="w-3.5 h-3.5" />
+                  <Plus className="w-4 h-4" />
                 </button>
               </div>
             )}
           </div>
 
-          {/* FORMULATION SUMMARY CARD */}
-          <div className="rounded-2xl border border-emerald-700/30 bg-gradient-to-br from-[#072418] via-[#0d3626] to-[#041910] p-6 text-white shadow-xl shadow-emerald-950/20 relative overflow-hidden space-y-4">
-            <div className="pointer-events-none absolute -right-10 -top-10 h-36 w-36 rounded-full bg-emerald-400/15 blur-xl" />
-            <div className="relative z-10 space-y-3">
-              <span className="font-mono text-[10px] font-black uppercase tracking-wider text-emerald-300 block">
+          {/* FORMULATION SUMMARY CARD (Luxury Stage 2/3 style) */}
+          <div className="rounded-3xl border border-emerald-600/30 bg-gradient-to-br from-[#072418] via-[#0d3626] to-[#041910] p-6 sm:p-7 text-white shadow-xl shadow-emerald-950/20 relative overflow-hidden space-y-4">
+            <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-emerald-400/15 blur-2xl" />
+            <div className="pointer-events-none absolute -left-10 -bottom-10 h-40 w-40 rounded-full bg-teal-400/15 blur-2xl" />
+            <div className="relative z-10 space-y-3.5">
+              <span className="font-mono text-xs font-black uppercase tracking-wider text-emerald-300 block">
                 Formulation Architecture Summary
               </span>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
-                <div className="p-3 rounded-xl bg-white/10 border border-white/15 backdrop-blur-xs">
-                  <span className="text-[10px] uppercase font-bold text-emerald-300/80 block">Plant Material</span>
-                  <strong className="text-white font-black text-sm block mt-0.5 truncate">{project.plantName}</strong>
-                  <span className="text-[11px] text-emerald-200/80">Part: {plantPart}</span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 text-xs">
+                <div className="p-4 rounded-2xl bg-white/10 border border-white/15 backdrop-blur-md hover:bg-white/15 transition-all">
+                  <span className="text-[10px] uppercase font-bold text-emerald-300/80 block">Plant Specimen</span>
+                  <strong className="text-white font-black text-sm block mt-1 truncate">{project.plantName}</strong>
+                  <span className="text-xs text-emerald-200/90 font-medium mt-0.5 block truncate">Part: {plantPart || "Unspecified"}</span>
                 </div>
 
-                <div className="p-3 rounded-xl bg-white/10 border border-white/15 backdrop-blur-xs">
-                  <span className="text-[10px] uppercase font-bold text-emerald-300/80 block">Solvent & Ratio</span>
-                  <strong className="text-white font-black text-sm block mt-0.5 truncate">{extractionSolvent}</strong>
-                  <span className="text-[11px] text-emerald-200/80">Format: {formulationType}</span>
+                <div className="p-4 rounded-2xl bg-white/10 border border-white/15 backdrop-blur-md hover:bg-white/15 transition-all">
+                  <span className="text-[10px] uppercase font-bold text-emerald-300/80 block">Solvent & Format</span>
+                  <strong className="text-white font-black text-sm block mt-1 truncate">{extractionSolvent || "Unspecified"}</strong>
+                  <span className="text-xs text-emerald-200/90 font-medium mt-0.5 block truncate">Type: {formulationType}</span>
                 </div>
 
-                <div className="p-3 rounded-xl bg-white/10 border border-white/15 backdrop-blur-xs">
+                <div className="p-4 rounded-2xl bg-white/10 border border-white/15 backdrop-blur-md hover:bg-white/15 transition-all">
                   <span className="text-[10px] uppercase font-bold text-emerald-300/80 block">Extraction Method</span>
-                  <strong className="text-white font-black text-sm block mt-0.5 truncate">{extractionMethod}</strong>
-                  <span className="text-[11px] text-emerald-200/80">Cold macerated</span>
+                  <strong className="text-white font-black text-sm block mt-1 truncate">{extractionMethod || "Unspecified"}</strong>
+                  <span className="text-xs text-emerald-200/90 font-medium mt-0.5 block truncate">Cold Macerated</span>
                 </div>
 
-                <div className="p-3 rounded-xl bg-white/10 border border-white/15 backdrop-blur-xs">
+                <div className="p-4 rounded-2xl bg-white/10 border border-white/15 backdrop-blur-md hover:bg-white/15 transition-all">
                   <span className="text-[10px] uppercase font-bold text-emerald-300/80 block">Active Constituents</span>
-                  <strong className="text-white font-black text-sm block mt-0.5 truncate">
+                  <strong className="text-white font-black text-sm block mt-1 truncate">
                     {candidateCompounds[0]?.compoundName || "Candidate Compounds"}
                   </strong>
-                  <span className="text-[11px] text-emerald-200/80">
+                  <span className="text-xs text-emerald-200/90 font-medium mt-0.5 block truncate">
                     {candidateCompounds.length} compound{candidateCompounds.length === 1 ? "" : "s"} carried forward
                   </span>
                 </div>
@@ -1185,18 +1500,36 @@ export default function FormulationSafetyClient({
         projectId={projectId}
         stageNumber={4}
         stageTitle="Formulation Development"
-        backHref={`/researcher/projects/${projectId}`}
-        backLabel="Back to Project"
+        previousStageRoute={`/researcher/projects/${projectId}/docking`}
+        onBack={handleBack}
+        backLabel="Back to Molecular Docking"
         lastSaved={lastSaved}
         isSaving={isSaving}
         onSave={() => handleSaveDraft()}
-        primaryAction={{
-          label: "Continue to Safety / Clinical",
-          onClick: handleCompleteAndContinue,
-          loading: completingStage,
-          loadingLabel: "Advancing to Safety / Clinical...",
-          disabled: completingStage,
-        }}
+        saveLabel="Save Draft"
+        isRevisionMode={isRevisionMode}
+        onResubmitRevision={handleResubmitRevision}
+        isResubmitting={resubmitting}
+        reviewStatus={currentReviewStatus}
+        onContinue={handleCompleteAndContinue}
+        isContinuing={isContinuing}
+        continueLabel="Continue to Safety / Clinical"
+        continuingLabel="Advancing to Safety / Clinical..."
+        continueDisabled={isContinuing || isRevisionMode}
+      />
+
+      {/* Revision Resubmitted Success Confirmation Modal */}
+      <RevisionResubmittedSuccessModal
+        isOpen={showSuccessModal}
+        onClose={() => setShowSuccessModal(false)}
+        projectId={projectId}
+        stageNumber={4}
+        stageTitle="Stage 4 · Formulation Development"
+        discipline={successModalData.discipline}
+        profession={successModalData.profession}
+        reviewCycle={successModalData.reviewCycle}
+        reviewerName={successModalData.reviewerName}
+        addressedCount={successModalData.addressedCount}
       />
 
       {/* ============================================================== */}

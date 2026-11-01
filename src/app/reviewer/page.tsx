@@ -15,7 +15,7 @@ export default async function ReviewerDashboardPage() {
     <Suspense
       fallback={
         <div className="p-12 text-center text-xs text-slate-500 animate-pulse">
-          Loading professional review workspace...
+          Loading reviewer dashboard...
         </div>
       }
     >

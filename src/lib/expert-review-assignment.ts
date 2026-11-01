@@ -1,6 +1,21 @@
 import pool from "@/lib/db";
 import { EXPERT_REVIEW_AREAS, normalizeReviewAreaKey, type ExpertReviewAreaKey } from "@/lib/expert-review-areas";
 
+const PLANT_FAMILY_MAP: Record<string, string> = {
+  "Momordica charantia": "Cucurbitaceae",
+  "Blumea balsamifera": "Asteraceae",
+  "Vitex negundo": "Lamiaceae (Verbenaceae)",
+  "Psidium guajava": "Myrtaceae",
+  "Senna alata": "Fabaceae",
+  "Allium sativum": "Amaryllidaceae",
+  "Curcuma longa": "Zingiberaceae",
+  "Peperomia pellucida": "Piperaceae",
+  "Carmona retusa": "Boraginaceae",
+  "Mentha cordifolia": "Lamiaceae",
+  "Quisqualis indica": "Combretaceae",
+  "Zingiber officinale": "Zingiberaceae",
+};
+
 export async function ensureReviewTables() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS professional_review_areas (
@@ -126,7 +141,7 @@ export async function buildFullDossierSnapshot(projectId: number): Promise<any> 
     `SELECT rp.*,
             COALESCE(p.commonName, rp.plantCustomName, 'Unspecified Plant') as plantName,
             p.scientificName as plantScientificName,
-            p.category as plantFamily,
+            p.category as plantCategory,
             p.botanical_synonyms as botanicalSynonyms,
             p.local_names as plantLocalNames,
             p.plant_parts_used as plantPartsUsed,
@@ -165,10 +180,15 @@ export async function buildFullDossierSnapshot(projectId: number): Promise<any> 
     [projectId]
   );
 
-  // 5. Stage 3 Molecular Docking Runs
+  // 5. Stage 3 Molecular Docking Runs (Scoped strictly to currently active selected compounds)
   const [dockingRuns]: any = await pool.query(
-    "SELECT * FROM docking_runs WHERE projectId = ? ORDER BY bindingAffinity ASC, id DESC",
-    [projectId]
+    `SELECT * FROM docking_runs
+     WHERE projectId = ?
+       AND compoundId IN (SELECT id FROM research_compounds WHERE projectId = ? AND selectedForDocking = 1)
+       AND jobStatus = 'COMPLETED'
+       AND bindingAffinity IS NOT NULL
+     ORDER BY CAST(bindingAffinity AS DECIMAL(10,3)) ASC, id DESC`,
+    [projectId, projectId]
   );
 
   // 6. Stage 4 Formulations & Safety Assessments
@@ -259,7 +279,7 @@ export async function buildFullDossierSnapshot(projectId: number): Promise<any> 
     // Botanical & Plant Data (Direct from Researcher Stage 1)
     plantName: project?.plantName || "Unspecified Plant",
     plantScientificName: project?.plantScientificName || "",
-    plantFamily: project?.plantFamily || "",
+    plantFamily: plantData?.family || (project?.plantScientificName && PLANT_FAMILY_MAP[project.plantScientificName]) || "",
     plantLocalNames: plantData?.localNames || project?.plantLocalNames || "",
     plantPartsStudied: plantData?.partsStudied || project?.plantPartsUsed || "Leaves",
     botanicalSynonyms: project?.botanicalSynonyms || "",
@@ -491,7 +511,7 @@ export async function evaluateOverallApproval(submissionId: number, projectId: n
   const allApproved = coverageRows.length >= 5 && approvedCount === coverageRows.length;
 
   if (allApproved) {
-    // 5 of 5 Approved: Final Approval achieved!
+    // 5 of 5 Approved: Final Approval achieved! Ready for researcher final completion.
     await pool.query(
       `UPDATE review_submissions SET status = 'ACCEPTED_FOR_NEXT_STAGE', reviewedAt = CURRENT_TIMESTAMP(3) WHERE id = ?`,
       [submissionId]
@@ -501,25 +521,39 @@ export async function evaluateOverallApproval(submissionId: number, projectId: n
       [projectId]
     );
     await pool.query(
-      `UPDATE research_project_stages SET status = 'COMPLETED', completedAt = CURRENT_TIMESTAMP(3), updatedAt = CURRENT_TIMESTAMP(3)
-       WHERE projectId = ? AND (stageKey = 'expert-review' OR stageKey = 'review')`,
-      [projectId]
-    );
-    await pool.query(
       `UPDATE research_projects
-       SET status = 'COMPLETED', currentStage = 'expert-review', progressPercent = 100, updatedAt = CURRENT_TIMESTAMP(3)
-       WHERE id = ?`,
+       SET status = 'READY_FOR_COMPLETION', currentStage = 'knowledge-integration', updatedAt = CURRENT_TIMESTAMP(3)
+       WHERE id = ? AND status != 'COMPLETED'`,
       [projectId]
     );
     const [pRows]: any = await pool.query(
-      "SELECT researcherId FROM research_projects WHERE id = ? LIMIT 1",
+      "SELECT researcherId, COALESCE(p.commonName, rp.plantCustomName, 'Botanical Subject') as plantName FROM research_projects rp LEFT JOIN plants p ON rp.plantId = p.id WHERE rp.id = ? LIMIT 1",
       [projectId]
     );
     const researcherId = pRows[0]?.researcherId || 2;
+    const plantName = pRows[0]?.plantName || "Botanical Research";
+
+    // Create readiness notification (idempotent, avoid duplicates)
+    const [notifExists]: any = await pool.query(
+      "SELECT id FROM review_notifications WHERE userId = ? AND type = 'ACCEPTED_FOR_NEXT_STAGE' AND link LIKE ? LIMIT 1",
+      [researcherId, `%/projects/${projectId}/%`]
+    );
+
+    if (notifExists.length === 0) {
+      await pool.query(
+        `INSERT INTO review_notifications (userId, type, title, message, link, isRead, createdAt)
+         VALUES (?, 'ACCEPTED_FOR_NEXT_STAGE', 'Research Ready for Completion', ?, ?, 0, CURRENT_TIMESTAMP(3))`,
+        [
+          researcherId,
+          `${plantName}: All required professional reviews have been approved. Your research can now be finalized.`,
+          `/researcher/projects/${projectId}/knowledge-integration#sec-dossier`,
+        ]
+      );
+    }
 
     await pool.query(
       `INSERT INTO research_activity_logs (projectId, researcherId, actionType, description)
-       VALUES (?, ?, 'PROJECT_APPROVED', 'All 5 professional review areas approved. Research project completed.')`,
+       VALUES (?, ?, 'PROJECT_APPROVED', 'All required professional review areas approved. Research ready for final completion.')`,
       [projectId, researcherId]
     );
   } else if (revisionCount > 0) {

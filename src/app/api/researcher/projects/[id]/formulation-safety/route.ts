@@ -26,7 +26,7 @@ export async function POST(
     // Verify ownership
     const [projectRows]: any = await pool.query(
       "SELECT id, currentStage, progressPercent FROM research_projects WHERE id = ? AND researcherId = ? LIMIT 1",
-      [projectId, session.id]
+      [projectId, session!.id]
     );
 
     if (projectRows.length === 0) {
@@ -105,19 +105,12 @@ export async function POST(
       let versionId: number;
       if (existingVer.length > 0) {
         versionId = existingVer[0].id;
-        await pool.query(
-          `UPDATE formulation_versions
-           SET formulationType = ?,
-               updatedAt = CURRENT_TIMESTAMP(3)
-           WHERE id = ?`,
-          [formulationType, versionId]
-        );
       } else {
         const [verInsert]: any = await pool.query(
           `INSERT INTO formulation_versions (
-             formulationId, versionNumber, isCurrentVersion, formulationType
-           ) VALUES (?, 'v1.0', 1, ?)`,
-          [formulationId, formulationType]
+             formulationId, projectId, versionNumber, versionTag, changeSummary, createdByResearcherId, isCurrentVersion
+           ) VALUES (?, ?, 'v1.0', 'Initial Formulation Prototype', 'Initial research formulation created.', ?, 1)`,
+          [formulationId, projectId, session!.id]
         );
         versionId = verInsert.insertId;
       }
@@ -131,7 +124,7 @@ export async function POST(
           const unit = (compound.unit || "mg/g").trim();
           const concentration = (compound.concentration || "").trim();
           const role = (compound.preparationRole || compound.role || "Bioactive Marker Fraction").trim();
-          const notes = (compound.notes || "").trim();
+          const compNotes = (compound.notes || "").trim();
 
           const [existingComp]: any = await pool.query(
             "SELECT id FROM formulation_components WHERE versionId = ? AND componentName = ? LIMIT 1",
@@ -145,10 +138,9 @@ export async function POST(
                    quantity = ?,
                    unit = ?,
                    concentration = ?,
-                   notes = ?,
-                   updatedAt = CURRENT_TIMESTAMP(3)
+                   notes = ?
                WHERE id = ?`,
-              [role, quantity || null, unit || null, concentration || null, notes || null, existingComp[0].id]
+              [role, quantity || null, unit || null, concentration || null, compNotes || null, existingComp[0].id]
             );
           } else {
             await pool.query(
@@ -156,7 +148,7 @@ export async function POST(
                  formulationId, versionId, projectId, componentName, roleInFormulation,
                  quantity, unit, concentration, notes
                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-              [formulationId, versionId, projectId, compName, role, quantity || null, unit || null, concentration || null, notes || null]
+              [formulationId, versionId, projectId, compName, role, quantity || null, unit || null, concentration || null, compNotes || null]
             );
           }
         }
@@ -228,11 +220,11 @@ export async function POST(
         [projectId]
       );
 
-      // 4. Unlock Stage 5 (Safety / Clinical or completion-integration)
+      // 4. Unlock Stage 5 (Safety / Clinical)
       await pool.query(
         `UPDATE research_project_stages
          SET status = 'IN_PROGRESS', updatedAt = CURRENT_TIMESTAMP(3)
-         WHERE projectId = ? AND (stageKey = 'completion-integration' OR stageKey = 'completion') AND status <> 'COMPLETED'`,
+         WHERE projectId = ? AND (stageKey = 'safety' OR stageKey = 'completion-integration' OR stageKey = 'completion') AND status <> 'COMPLETED'`,
         [projectId]
       );
 
@@ -240,7 +232,7 @@ export async function POST(
       await pool.query(
         `UPDATE research_projects
          SET currentStage = CASE
-               WHEN currentStage IN ('plant-literature', 'in-silico', 'docking', 'formulation-safety', 'formulation') THEN 'completion-integration'
+               WHEN currentStage IN ('plant-literature', 'in-silico', 'docking', 'formulation-safety', 'formulation') THEN 'safety'
                ELSE currentStage
              END,
              progressPercent = GREATEST(progressPercent, 67),
@@ -308,8 +300,8 @@ export async function POST(
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Formulation-development POST error:", error);
-    return NextResponse.json({ error: "Failed to process formulation development request" }, { status: 500 });
+    return NextResponse.json({ error: error?.message || "Failed to process formulation development request" }, { status: 500 });
   }
 }

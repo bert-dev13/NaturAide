@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import pool from "@/lib/db";
 import { beginPreparation, loadDockingWorkspace } from "@/lib/docking-jobs";
+import { getProfessionalReviewStageStatus } from "@/lib/professional-review-status";
 import MolecularDockingWorkspaceClient from "@/components/researcher/docking/MolecularDockingWorkspaceClient";
 
 export const instant = false;
@@ -20,10 +21,11 @@ export default async function MolecularDockingStagePage({
   if (isNaN(projectId)) notFound();
 
   const [projectRows]: any = await pool.query(
-    `SELECT id FROM research_projects WHERE id = ? AND researcherId = ? LIMIT 1`,
+    `SELECT id, status FROM research_projects WHERE id = ? AND researcherId = ? LIMIT 1`,
     [projectId, session.id]
   );
   if (!projectRows.length) notFound();
+  const project = projectRows[0];
 
   await beginPreparation(projectId);
   const workspace = await loadDockingWorkspace(projectId);
@@ -32,11 +34,34 @@ export default async function MolecularDockingStagePage({
     [projectId]
   );
 
+  // Fetch Pharmacology review feedback
+  const [reviewFeedback]: any = await pool.query(
+    `
+    SELECT rf.*, u.name as reviewerDisplayName
+    FROM review_feedback rf
+    LEFT JOIN users u ON rf.reviewerId = u.id
+    WHERE rf.projectId = ? AND (
+      rf.areaKey = 'pharmacology'
+      OR rf.affectedStage IN ('Stage 3', 'docking', '3')
+    )
+    ORDER BY rf.id ASC
+    `,
+    [projectId]
+  );
+
+  // Fetch canonical professional review status for Stage 3 (Pharmacology)
+  const stageReview = await getProfessionalReviewStageStatus(projectId, 3);
+
   return (
     <MolecularDockingWorkspaceClient
       projectId={projectId}
       initialWorkspace={workspace}
       stageCompleted={stageRows[0]?.status === "COMPLETED"}
+      initialReviewFeedback={reviewFeedback || []}
+      overallAssessment={stageReview.comments}
+      reviewStatus={stageReview.status}
+      reviewerName={stageReview.reviewerName}
+      approvedAt={stageReview.approvedAt}
     />
   );
 }

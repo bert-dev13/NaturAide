@@ -5,6 +5,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import {
   Activity,
+  AlertTriangle,
   ArrowRight,
   Atom,
   BookOpen,
@@ -66,33 +67,36 @@ interface Props {
   stages: StageRecord[];
   activities: ActivityRecord[];
   linkedStudies: number;
+  openRevisionsCount?: number;
 }
 
 const FOCUS: Record<string, string> = {
   "plant-literature": "Investigate botanical identity, traditional ethnobotanical uses, and peer-reviewed scientific literature.",
   "in-silico": "Screen bioactive secondary metabolites and evaluate computational ADME / Lipinski drug-likeness criteria.",
   docking: "Perform AutoDock Vina molecular docking calculations to model receptor binding affinity and poses.",
-  "formulation-safety": "Standardize extraction parameters, SOP preparation steps, and preclinical safety dimensions.",
-  "completion-integration": "Integrate empirical and computational findings across Stages 1–4 into a unified research dossier.",
-  "expert-review": "Submit the completed research dossier for independent peer review across 5 scientific domains.",
+  "formulation-safety": "Standardize extraction parameters, SOP preparation steps, and bioactive marker composition.",
+  safety: "Evaluate preclinical and clinical safety evidence, toxicity boundaries, contraindications, and interactions.",
+  "knowledge-integration": "Synthesize multi-stage scientific findings, alignment, limitations, and final research dossier.",
+  "completion-integration": "Evaluate preclinical and clinical safety evidence, toxicity boundaries, contraindications, and interactions.",
+  "expert-review": "Synthesize multi-stage scientific findings, alignment, limitations, and final research dossier.",
 };
 
 const STAGE_ICONS: Record<number, LucideIcon> = {
   1: Sprout,
-  2: Dna,
-  3: Microscope,
+  2: Cpu,
+  3: Network,
   4: FlaskConical,
-  5: Layers,
-  6: ShieldCheck,
+  5: ShieldCheck,
+  6: CheckCircle2,
 };
 
 const STAGE_LABELS: Record<number, string> = {
   1: "Plant & Literature Research",
   2: "In-Silico Analysis",
   3: "Molecular Docking",
-  4: "Formulation & Safety",
-  5: "Research Integration",
-  6: "Final Professional Review",
+  4: "Formulation Development",
+  5: "Safety / Clinical",
+  6: "Knowledge Integration",
 };
 
 const OUTPUTS: { key: string; label: string; icon: React.ElementType }[] = [
@@ -100,7 +104,8 @@ const OUTPUTS: { key: string; label: string; icon: React.ElementType }[] = [
   { key: "in-silico", label: "In-Silico", icon: Atom },
   { key: "docking", label: "Docking", icon: Network },
   { key: "formulation-safety", label: "Formulation", icon: FlaskConical },
-  { key: "completion-integration", label: "Integration", icon: FileText },
+  { key: "safety", label: "Safety", icon: ShieldCheck },
+  { key: "knowledge-integration", label: "Integration", icon: FileText },
 ];
 
 function statusWord(status?: string) {
@@ -123,7 +128,13 @@ function startedLabel(dateString: string) {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-export default function ResearchWorkspaceClient({ project, stages, activities, linkedStudies }: Props) {
+export default function ResearchWorkspaceClient({
+  project,
+  stages,
+  activities,
+  linkedStudies,
+  openRevisionsCount = 0,
+}: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [objective, setObjective] = useState(project.researchObjective || "");
@@ -154,15 +165,19 @@ export default function ResearchWorkspaceClient({ project, stages, activities, l
     return WORKFLOW_STAGES[WORKFLOW_STAGES.length - 1];
   }, [project.currentStage, stageStatus]);
 
-  const currentIndex = Math.max(0, WORKFLOW_STAGES.findIndex((stage) => stage.key === current.key));
-  const continueHref = getStageUrl(project.id, current.key);
-  const dossierHref = `/researcher/projects/${project.id}/completion-integration`;
+  const currentIndex = Math.max(0, WORKFLOW_STAGES.findIndex((stage) => stage.key === current?.key));
+  const continueHref = current ? getStageUrl(project.id, current.key) : getStageUrl(project.id, "plant-literature");
+  const dossierHref = `/researcher/projects/${project.id}/knowledge-integration`;
   const isProjectCompleted = project.status === "COMPLETED" || completedCount === 6;
 
-  function isStageAccessible(stage: WorkflowStage, index: number) {
-    if (stageStatus[stage.key] === "COMPLETED" || stage.key === current.key) return true;
+  function isStageAccessible(stage?: WorkflowStage, index?: number) {
+    if (!stage) return false;
+    if (stageStatus[stage.key] === "COMPLETED" || (current && stage.key === current.key)) return true;
     if (index === 0) return true;
-    return stageStatus[WORKFLOW_STAGES[index - 1].key] === "COMPLETED";
+    if (typeof index === "number" && index > 0 && WORKFLOW_STAGES[index - 1]) {
+      return stageStatus[WORKFLOW_STAGES[index - 1].key] === "COMPLETED";
+    }
+    return false;
   }
 
   async function saveSnapshot() {
@@ -218,6 +233,16 @@ export default function ResearchWorkspaceClient({ project, stages, activities, l
 
             {/* Right Status Badge & Options Menu */}
             <div className="flex items-center gap-2.5 shrink-0">
+              {openRevisionsCount > 0 && (
+                <Link
+                  href={`/researcher/projects/${project.id}/revisions`}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/25 border border-amber-400/60 text-amber-300 hover:bg-amber-500/35 transition-colors shadow-xs"
+                >
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Revisions ({openRevisionsCount})</span>
+                </Link>
+              )}
+
               <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-mono font-medium uppercase tracking-wider bg-emerald-950/80 border border-emerald-500/40 text-emerald-300">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                 <span>{projectStatusLabel(project.status)}</span>
@@ -234,7 +259,7 @@ export default function ResearchWorkspaceClient({ project, stages, activities, l
                   <MoreHorizontal className="h-4 w-4" />
                 </button>
                 {menuOpen && (
-                  <div className="absolute right-0 z-20 mt-2 w-44 rounded-lg border border-slate-200 bg-white p-1 text-slate-900 shadow-xl">
+                  <div className="absolute right-0 z-20 mt-2 w-48 rounded-lg border border-slate-200 bg-white p-1 text-slate-900 shadow-xl">
                     <button
                       type="button"
                       className="block w-full rounded-md px-3 py-2 text-left text-xs font-medium hover:bg-slate-50 transition-colors"
@@ -253,6 +278,15 @@ export default function ResearchWorkspaceClient({ project, stages, activities, l
                     >
                       View Dossier
                     </Link>
+                    {openRevisionsCount > 0 && (
+                      <Link
+                        href={`/researcher/projects/${project.id}/revisions`}
+                        className="block rounded-md px-3 py-2 text-left text-xs font-bold text-amber-700 hover:bg-amber-50 transition-colors border-t border-slate-100"
+                        onClick={() => setMenuOpen(false)}
+                      >
+                        Revisions ({openRevisionsCount})
+                      </Link>
+                    )}
                   </div>
                 )}
               </div>
@@ -291,6 +325,32 @@ export default function ResearchWorkspaceClient({ project, stages, activities, l
         </div>
       </motion.header>
 
+      {/* REVISIONS REQUIRED BANNER */}
+      {openRevisionsCount > 0 && (
+        <div className="p-4 sm:p-5 rounded-2xl bg-amber-50/95 border-2 border-amber-300 text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-start sm:items-center gap-3">
+            <div className="p-2 rounded-xl bg-amber-500 text-white shrink-0 mt-0.5 sm:mt-0 shadow-2xs">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+            <div>
+              <span className="text-xs font-black uppercase tracking-wider text-amber-900 block font-mono">
+                {openRevisionsCount} Professional Recommendation{openRevisionsCount > 1 ? "s" : ""} Require Attention
+              </span>
+              <span className="text-xs text-amber-800 font-medium">
+                Professional reviewers have requested revisions across research stages. Please inspect and address the requested corrections.
+              </span>
+            </div>
+          </div>
+          <Link
+            href={`/researcher/projects/${project.id}/revisions`}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#0f2c20] hover:bg-[#164130] text-white text-xs font-bold transition-all shrink-0 cursor-pointer shadow-xs self-start sm:self-auto"
+          >
+            <span>Open Revisions Page</span>
+            <ArrowRight className="w-3.5 h-3.5 text-amber-400" />
+          </Link>
+        </div>
+      )}
+
       {/* ============================================================== */}
       {/* 2. CORE: 6-STAGE RESEARCH JOURNEY                              */}
       {/* ============================================================== */}
@@ -316,7 +376,7 @@ export default function ResearchWorkspaceClient({ project, stages, activities, l
           </div>
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#f6f8f6] border border-[#dde6df] text-xs font-bold text-[#0f2c20] self-start sm:self-auto">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span>Current Focus: Stage {current.number} of 6 · {current.label}</span>
+            <span>Current Focus: Stage {current?.number || 1} of 6 · {current?.label || "Plant & Literature"}</span>
           </div>
         </div>
 
@@ -325,7 +385,7 @@ export default function ResearchWorkspaceClient({ project, stages, activities, l
           <ol className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
             {WORKFLOW_STAGES.map((stage, index) => {
               const isCompleted = stageStatus[stage.key] === "COMPLETED";
-              const isCurrent = stage.key === current.key;
+              const isCurrent = stage.key === current?.key;
               const isAccessible = isStageAccessible(stage, index);
               const StageIconComponent = STAGE_ICONS[stage.number] || Sparkles;
 
@@ -423,7 +483,7 @@ export default function ResearchWorkspaceClient({ project, stages, activities, l
         <ol className="space-y-2 md:hidden pt-1">
           {WORKFLOW_STAGES.map((stage, index) => {
             const isCompleted = stageStatus[stage.key] === "COMPLETED";
-            const isCurrent = stage.key === current.key;
+            const isCurrent = stage.key === current?.key;
             const isAccessible = isStageAccessible(stage, index);
             const StageIconComponent = STAGE_ICONS[stage.number] || Sparkles;
 
@@ -502,18 +562,18 @@ export default function ResearchWorkspaceClient({ project, stages, activities, l
                 {isProjectCompleted ? "Research Finalized" : "Active Stage Focus"}
               </span>
               <span className="text-xs text-emerald-200/80 font-medium">
-                Stage {current.number} of 6
+                Stage {current?.number || 1} of 6
               </span>
             </div>
             <h3 className="text-base sm:text-lg font-heading font-extrabold tracking-tight text-white">
               {isProjectCompleted
                 ? "All 6 Stages Completed · Research Dossier Finalized"
-                : `${String(current.number).padStart(2, "0")} — ${STAGE_LABELS[current.number]}`}
+                : `${String(current?.number || 1).padStart(2, "0")} — ${STAGE_LABELS[current?.number || 1]}`}
             </h3>
             <p className="text-xs text-emerald-100/90 leading-relaxed max-w-2xl">
               {isProjectCompleted
                 ? "This scientific research dossier has fulfilled all 6 stages of the NatureAide validation workflow and passed professional review."
-                : FOCUS[current.key]}
+                : FOCUS[current?.key || "plant-literature"]}
             </p>
           </div>
 
@@ -593,9 +653,9 @@ export default function ResearchWorkspaceClient({ project, stages, activities, l
       {/* ============================================================== */}
       <div className="w-full">
         <ResearchSection icon={FlaskConical} title="Research Outputs" delay={0.14} compact>
-          <ul className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
+          <ul className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3">
             {OUTPUTS.map((output) => {
-              const stage = WORKFLOW_STAGES.find((item) => item.key === output.key)!;
+              const stage = WORKFLOW_STAGES.find((item) => item.key === output.key) || getStageByKey(output.key);
               const index = WORKFLOW_STAGES.findIndex((item) => item.key === output.key);
               const state = statusWord(stageStatus[output.key]);
               const open = isStageAccessible(stage, index);

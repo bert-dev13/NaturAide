@@ -49,6 +49,7 @@ export async function GET(request: Request) {
              p.category as plantCategory,
              COALESCE(p.local_image_path, p.imageUrl) as plantImageUrl,
              (SELECT COUNT(*) FROM review_feedback rf WHERE rf.projectId = rp.id) as feedbackCount,
+             (SELECT COUNT(*) FROM review_feedback rf WHERE rf.projectId = rp.id AND rf.status IN ('OPEN', 'IN_REVIEW')) as openFeedbackCount,
              (SELECT COUNT(*) FROM research_project_stages rps WHERE rps.projectId = rp.id AND rps.status = 'COMPLETED') as completedStagesCount,
              (SELECT rs.versionTag FROM review_submissions rs WHERE rs.projectId = rp.id ORDER BY rs.id DESC LIMIT 1) as dossierVersion,
              (SELECT rd.decision FROM review_decisions rd WHERE rd.projectId = rp.id ORDER BY rd.id DESC LIMIT 1) as finalDecision,

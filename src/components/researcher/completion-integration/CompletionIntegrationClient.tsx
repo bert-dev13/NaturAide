@@ -268,6 +268,7 @@ export default function CompletionIntegrationClient({ projectId }: Props) {
       }, 900);
     } catch (err: any) {
       setErrorMsg(err.message || "Failed to finalize Stage 5.");
+    } finally {
       setFinalizing(false);
     }
   };
@@ -947,17 +948,16 @@ export default function CompletionIntegrationClient({ projectId }: Props) {
         projectId={projectId}
         stageNumber={5}
         stageTitle="Safety / Clinical"
-        backHref={`/researcher/projects/${projectId}`}
-        backLabel="Back to Project"
+        previousStageRoute={`/researcher/projects/${projectId}/formulation-safety`}
+        backLabel="Back to Formulation Development"
         onSave={() => handleSaveDraft()}
+        saveLabel="Save Draft"
         isSaving={saving}
-        primaryAction={{
-          label: "Continue to Knowledge Integration",
-          onClick: handleFinalizeStage5,
-          disabled: (!isReadyToFinalize && !isStage5Complete) || finalizing,
-          loading: finalizing,
-          loadingLabel: "Advancing to Knowledge Integration...",
-        }}
+        onContinue={handleFinalizeStage5}
+        isContinuing={finalizing}
+        continueLabel="Continue to Knowledge Integration"
+        continuingLabel="Advancing to Knowledge Integration..."
+        continueDisabled={(!isReadyToFinalize && !isStage5Complete) || finalizing}
       />
 
       {/* ========================================================

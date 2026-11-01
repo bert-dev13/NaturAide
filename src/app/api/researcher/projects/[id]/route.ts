@@ -72,6 +72,7 @@ export async function GET(
 
     // Fetch reviewer feedback if any exists
     let reviewerFeedback: any[] = [];
+    let openFeedbackCount = 0;
     try {
       const [feedbackRows]: any = await pool.query(
         `SELECT id, reviewRound, sectionName, commentType, severity, reviewerName, comment, status, researcherReply, createdAt 
@@ -81,9 +82,17 @@ export async function GET(
         [projectId]
       );
       reviewerFeedback = feedbackRows;
+
+      const [countRows]: any = await pool.query(
+        `SELECT COUNT(*) as count FROM review_feedback 
+         WHERE projectId = ? AND status IN ('OPEN', 'IN_REVIEW')`,
+        [projectId]
+      );
+      openFeedbackCount = Number(countRows[0]?.count || 0);
     } catch {
       // Table might not have entries or review yet
       reviewerFeedback = [];
+      openFeedbackCount = 0;
     }
 
     // Fetch recent activity
@@ -99,6 +108,7 @@ export async function GET(
       project,
       stages,
       completedStagesCount,
+      openFeedbackCount,
       reviewerFeedback,
       activities,
     });

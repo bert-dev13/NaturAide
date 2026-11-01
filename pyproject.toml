@@ -1,0 +1,5 @@
+[tool.pyrefly]
+python-interpreter-path = ".docking-venv/Scripts/python.exe"
+site-packages-path = [".docking-venv/Lib/site-packages"]
+search-path = ["services/docking", "services"]
+

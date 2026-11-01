@@ -182,8 +182,8 @@ export const EXPERT_REVIEW_AREAS: readonly ExpertReviewArea[] = [
 
 export type ExpertReviewAreaKey = (typeof EXPERT_REVIEW_AREAS)[number]["key"];
 
-export function normalizeReviewAreaKey(raw?: string | null): ExpertReviewAreaKey {
-  if (!raw) return "pharmacognosy";
+export function normalizeReviewAreaKeyOrNull(raw?: string | null): ExpertReviewAreaKey | null {
+  if (!raw) return null;
   const clean = raw.trim().toLowerCase();
   const normalized = clean.replace(/-/g, "_");
   for (const area of EXPERT_REVIEW_AREAS) {
@@ -191,7 +191,11 @@ export function normalizeReviewAreaKey(raw?: string | null): ExpertReviewAreaKey
       return area.key;
     }
   }
-  return "pharmacognosy";
+  return null;
+}
+
+export function normalizeReviewAreaKey(raw?: string | null): ExpertReviewAreaKey {
+  return normalizeReviewAreaKeyOrNull(raw) || "pharmacognosy";
 }
 
 export function expertReviewAreaLabel(key?: string | null): string {

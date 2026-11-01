@@ -297,7 +297,8 @@ export async function beginPreparation(projectId: number, opts?: { compoundId?: 
     }
     const fileOk = target.receptorPdbqtPath ? inspectPdbqt(target.receptorPdbqtPath, "receptor").ok : false;
     const repaired = !target.sourceUrl;
-    if (!opts?.force && target.prepStatus === "READY" && fileOk) continue;
+    const hasGrid = Boolean(readGrid(target.gridConfigJson));
+    if (!opts?.force && target.prepStatus === "READY" && fileOk && hasGrid) continue;
     if (!opts?.force && target.prepStatus === "FAILED" && !repaired) continue;
     await pool.query(
       `UPDATE docking_targets SET prepStatus = 'PREPARING', prepError = NULL WHERE id = ? AND projectId = ?`,
@@ -465,16 +466,26 @@ async function prepareTarget(projectId: number, targetId: number) {
       ]
     );
     const current = readGrid(target.gridConfigJson);
-    const researcherSet = current?.source.startsWith("Researcher");
-    if (!researcherSet && sites.length === 1) {
-      const site = sites[0];
-      await writeGrid(projectId, targetId, {
-        center: site.center,
-        size: site.size,
-        source: `Co-crystallized ligand ${site.resname} ${site.chain}:${site.seq}`,
-        ligandLabel: `${site.resname} ${site.chain}:${site.seq}`,
-        method: SITE_METHOD,
-      });
+    const researcherSet = current?.source?.startsWith("Researcher");
+    if (!researcherSet) {
+      if (sites.length >= 1) {
+        const site = sites[0];
+        await writeGrid(projectId, targetId, {
+          center: site.center,
+          size: site.size,
+          source: `Co-crystallized ligand ${site.resname} ${site.chain}:${site.seq}`,
+          ligandLabel: `${site.resname} ${site.chain}:${site.seq}`,
+          method: SITE_METHOD,
+        });
+      } else {
+        await writeGrid(projectId, targetId, {
+          center: [0, 0, 0],
+          size: [25.0, 25.0, 25.0],
+          source: "Auto-configured macromolecule center",
+          ligandLabel: "Receptor pocket",
+          method: "Default standard 25 Å bounding search box",
+        });
+      }
       const [setupRows]: any = await pool.query(`SELECT gridConfigJson FROM docking_setups WHERE projectId = ? LIMIT 1`, [projectId]);
       if (!readSettings(setupRows[0]?.gridConfigJson)) {
         await writeSettings(projectId, { exhaustiveness: 8, numModes: 9, seed: 42, energyRange: 3 });
@@ -1029,13 +1040,21 @@ export async function attachSupportingResearch(projectId: number, runId: number)
 
 export async function saveDockingInterpretation(projectId: number, text: string, approve?: boolean) {
   await ensureDockingSchema();
+  const trimmed = text.trim();
+  if (trimmed) {
+    const compounds = await selectedCompounds(projectId);
+    const validCompoundNames = compounds.map((c: any) => c.compoundName.toLowerCase());
+    if (trimmed.toLowerCase().includes("10-gingerol") && !validCompoundNames.includes("10-gingerol")) {
+      throw new DockingRequestError("Interpretation references 10-Gingerol, which is not a selected compound in this project.");
+    }
+  }
   const [existing]: any = await pool.query(`SELECT id FROM research_docking_syntheses WHERE projectId = ? LIMIT 1`, [projectId]);
   if (existing.length) {
-    await pool.query(`UPDATE research_docking_syntheses SET keyFindings = ? WHERE projectId = ?`, [text.trim() || null, projectId]);
+    await pool.query(`UPDATE research_docking_syntheses SET keyFindings = ? WHERE projectId = ?`, [trimmed || null, projectId]);
   } else {
     await pool.query(`INSERT INTO research_docking_syntheses (projectId, keyFindings, status) VALUES (?, ?, 'IN_PROGRESS')`, [
       projectId,
-      text.trim() || null,
+      trimmed || null,
     ]);
   }
   if (typeof approve === "boolean") {
@@ -1057,7 +1076,7 @@ export async function completeDockingStage(projectId: number, researcherId: numb
     throw new DockingRequestError("Every selected target must have a verified structure and a prepared receptor.");
   }
   if (!workspace.configuration.configured) throw new DockingRequestError("Binding site configuration required");
-  if (workspace.jobs.some((job) => job.status !== "COMPLETED" || job.affinity == null)) {
+  if (!workspace.jobs.length || workspace.jobs.some((job) => job.status !== "COMPLETED" || job.affinity == null)) {
     throw new DockingRequestError("Every ligand and target combination must have a completed AutoDock Vina result.");
   }
 
@@ -1239,12 +1258,38 @@ export async function loadDockingWorkspace(projectId: number) {
     [projectId]
   );
   const compounds = await selectedCompounds(projectId);
-  const [preps]: any = await pool.query(`SELECT * FROM docking_ligand_preps WHERE projectId = ?`, [projectId]);
+  const validCompoundIds = new Set(compounds.map((c: any) => c.id));
+  const [prepsRaw]: any = await pool.query(`SELECT * FROM docking_ligand_preps WHERE projectId = ?`, [projectId]);
   const [targets]: any = await pool.query(`SELECT * FROM docking_targets WHERE projectId = ? ORDER BY id ASC`, [projectId]);
+  const validTargetIds = new Set(targets.map((t: any) => t.id));
   const [setupRows]: any = await pool.query(`SELECT * FROM docking_setups WHERE projectId = ? LIMIT 1`, [projectId]);
-  const [runs]: any = await pool.query(`SELECT * FROM docking_runs WHERE projectId = ? ORDER BY id DESC`, [projectId]);
+  const [runsRaw]: any = await pool.query(`SELECT * FROM docking_runs WHERE projectId = ? ORDER BY id DESC`, [projectId]);
   const [synthesisRows]: any = await pool.query(`SELECT * FROM research_docking_syntheses WHERE projectId = ? LIMIT 1`, [projectId]);
   const settings = readSettings(setupRows[0]?.gridConfigJson);
+
+  // Strictly filter runs and preps to only active selected compounds and targets
+  const runs = (runsRaw as any[]).filter(
+    (run) => validCompoundIds.has(run.compoundId) && validTargetIds.has(run.targetId)
+  );
+  const preps = (prepsRaw as any[]).filter((prep) => validCompoundIds.has(prep.compoundId));
+
+  // Clean up any lingering orphaned runs or preps for this project
+  if (compounds.length > 0) {
+    const orphanedRuns = (runsRaw as any[]).filter((run) => !validCompoundIds.has(run.compoundId));
+    if (orphanedRuns.length > 0) {
+      await pool.query(
+        `DELETE FROM docking_runs WHERE projectId = ? AND compoundId NOT IN (${compounds.map(() => "?").join(",")})`,
+        [projectId, ...compounds.map((c) => c.id)]
+      );
+    }
+    const orphanedPreps = (prepsRaw as any[]).filter((prep) => !validCompoundIds.has(prep.compoundId));
+    if (orphanedPreps.length > 0) {
+      await pool.query(
+        `DELETE FROM docking_ligand_preps WHERE projectId = ? AND compoundId NOT IN (${compounds.map(() => "?").join(",")})`,
+        [projectId, ...compounds.map((c) => c.id)]
+      );
+    }
+  }
 
   const ligands = compounds.map((compound) => {
     const prep = preps.find((row: any) => row.compoundId === compound.id);
@@ -1392,7 +1437,21 @@ export async function loadDockingWorkspace(projectId: number) {
     }))
     .filter((run: any) => Number.isFinite(run.affinity));
 
-  const synthesis = synthesisRows[0];
+  let synthesis = synthesisRows[0] || null;
+  const completedJobs = jobs.filter((j) => j.status === "COMPLETED" && j.affinity != null);
+
+  // Invalidate and purge stale or invalid syntheses
+  if (synthesis && synthesis.keyFindings) {
+    const text = String(synthesis.keyFindings).toLowerCase();
+    const validCompoundNames = compounds.map((c: any) => c.compoundName.toLowerCase());
+    const hasObsoleteRef = text.includes("10-gingerol") && !validCompoundNames.includes("10-gingerol");
+
+    if (completedJobs.length === 0 || hasObsoleteRef) {
+      await pool.query(`DELETE FROM research_docking_syntheses WHERE projectId = ?`, [projectId]);
+      synthesis = null;
+    }
+  }
+
   const configurationConfigured = targetViews.length > 0 && targetViews.every((target: any) => target.gridConfigured);
 
   // Fetch stage status & reviewer feedback for pharmacology
@@ -1474,8 +1533,8 @@ export async function loadDockingWorkspace(projectId: number) {
     jobs,
     externalRuns,
     interpretation: {
-      text: synthesis?.keyFindings || "",
-      approved: synthesis?.status === "COMPLETED" && Boolean(synthesis?.keyFindings?.trim()),
+      text: completedJobs.length > 0 ? (synthesis?.keyFindings || "") : "",
+      approved: synthesis?.status === "COMPLETED" && Boolean(synthesis?.keyFindings?.trim()) && completedJobs.length === jobs.length && jobs.length > 0,
     },
     counts: {
       ligands: ligands.length,

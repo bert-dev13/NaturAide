@@ -9,6 +9,7 @@ import {
   FlaskConical,
   UserRound,
   Sparkles,
+  MessageSquareWarning,
 } from "lucide-react";
 import { WORKFLOW_STAGES } from "@/lib/workflow-stages";
 
@@ -31,6 +32,7 @@ interface ProjectApiResponse {
   project: ProjectDetails;
   stages: StageRecord[];
   completedStagesCount: number;
+  openFeedbackCount?: number;
   reviewerFeedback?: any[];
 }
 
@@ -123,10 +125,12 @@ export default function ResearcherNavSections({
 
     const handleUpdate = () => fetchProject();
     window.addEventListener("natureaide:project-updated", handleUpdate);
+    window.addEventListener("natureaide:revisions-updated", handleUpdate);
 
     return () => {
       isMounted = false;
       window.removeEventListener("natureaide:project-updated", handleUpdate);
+      window.removeEventListener("natureaide:revisions-updated", handleUpdate);
     };
   }, [activeProjectId, pathname]);
 
@@ -135,6 +139,11 @@ export default function ResearcherNavSections({
   const isAssistantActive = pathname.startsWith("/researcher/assistant");
   const isProjectsActive =
     pathname === "/researcher/projects" || pathname.startsWith("/researcher/projects?new=true");
+
+  const isRevisionsActive =
+    pathname.endsWith("/revisions") ||
+    activeSubpath === "revisions" ||
+    (activeProjectId !== null && pathname === `/researcher/projects/${activeProjectId}/revisions`);
 
   const isWorkspaceActive =
     routeProjectId !== null && (activeSubpath === "" || activeSubpath === undefined);
@@ -180,6 +189,13 @@ export default function ResearcherNavSections({
     projectData?.project?.plantScientificName ||
     projectData?.project?.plantName ||
     "Botanical Specimen";
+
+  const openRevisionsCount =
+    typeof projectData?.openFeedbackCount === "number"
+      ? projectData.openFeedbackCount
+      : (projectData?.reviewerFeedback?.filter(
+          (f: any) => f.status === "OPEN" || f.status === "IN_REVIEW"
+        ).length || 0);
 
   return (
     <nav className="space-y-4 text-white select-none" aria-label="Researcher Platform Navigation">
@@ -229,6 +245,52 @@ export default function ResearcherNavSections({
             }`}
           />
           {!collapsed && <span className="truncate">My Research Projects</span>}
+        </Link>
+
+        {/* Research Revisions */}
+        <Link
+          href={
+            activeProjectId
+              ? `/researcher/projects/${activeProjectId}/revisions`
+              : "/researcher/projects"
+          }
+          onClick={onNavigate}
+          className={`relative flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
+            isRevisionsActive
+              ? "bg-emerald-600/25 text-emerald-300 font-semibold border-l-2 border-emerald-400"
+              : "text-slate-300 hover:text-white hover:bg-white/5"
+          }`}
+          title={
+            collapsed
+              ? openRevisionsCount > 0
+                ? `Research Revisions (${openRevisionsCount} required)`
+                : "Research Revisions"
+              : undefined
+          }
+        >
+          <MessageSquareWarning
+            className={`w-4 h-4 shrink-0 transition-colors ${
+              isRevisionsActive
+                ? "text-emerald-300"
+                : openRevisionsCount > 0
+                ? "text-amber-400"
+                : "text-slate-400"
+            }`}
+          />
+          {!collapsed ? (
+            <div className="flex items-center justify-between flex-1 min-w-0">
+              <span className="truncate">Research Revisions</span>
+              {openRevisionsCount > 0 && (
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold font-mono bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                  {openRevisionsCount}
+                </span>
+              )}
+            </div>
+          ) : (
+            openRevisionsCount > 0 && (
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-400" />
+            )
+          )}
         </Link>
 
         {/* Ask NatureAide */}
@@ -310,6 +372,29 @@ export default function ResearcherNavSections({
                     />
                   </div>
                 </div>
+
+                {/* Compact Revision Indicator on Active Study Card */}
+                {openRevisionsCount > 0 && (
+                  <Link
+                    href={`/researcher/projects/${activeProjectId}/revisions`}
+                    onClick={onNavigate}
+                    className="mt-2 flex items-center justify-between gap-1.5 px-2.5 py-1.5 rounded-md bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 text-[11px] font-medium transition-all group cursor-pointer"
+                    title={`${openRevisionsCount} revisions required`}
+                  >
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="flex h-1.5 w-1.5 relative shrink-0">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-400"></span>
+                      </span>
+                      <span className="truncate font-semibold">
+                        ! {openRevisionsCount} Revision{openRevisionsCount > 1 ? "s" : ""} Required
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-amber-300/80 group-hover:text-amber-200 group-hover:translate-x-0.5 transition-transform shrink-0">
+                      &rarr;
+                    </span>
+                  </Link>
+                )}
               </div>
             )}
 

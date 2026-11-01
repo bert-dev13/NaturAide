@@ -1,60 +1,30 @@
 import { NextResponse } from "next/server";
 import pool from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import {
-  EXPERT_REVIEW_AREAS,
-  normalizeReviewAreaKey,
-} from "@/lib/expert-review-areas";
-
-const STAGE_ORDER: Record<string, number> = {
-  "plant-literature": 1,
-  "in-silico": 2,
-  docking: 3,
-  "formulation-safety": 4,
-  "completion-integration": 5,
-  "expert-review": 6,
-};
+import { resolveSingleStageStatus } from "@/lib/professional-review-status";
 
 const STAGE_NUMBERS: Record<string, number> = {
   "plant-literature": 1,
   "in-silico": 2,
   docking: 3,
   "formulation-safety": 4,
-  "completion-integration": 5,
-  "expert-review": 6,
+  formulation: 4,
+  safety: 5,
+  "expert-review": 5,
+  "knowledge-integration": 6,
+  "completion-integration": 6,
 };
 
 const STAGE_NAMES: Record<string, string> = {
   "plant-literature": "Plant & Literature",
   "in-silico": "In-Silico Analysis",
   docking: "Molecular Docking",
-  "formulation-safety": "Formulation & Safety",
-  "completion-integration": "Research Integration",
-  "expert-review": "Final Professional Review",
-};
-
-const AREA_REQUIRED_STAGE: Record<string, number> = {
-  pharmacognosy: 1,
-  bioinformatics: 3,
-  pharmacology: 4,
-  formulation: 4,
-  clinical_safety: 4,
-};
-
-const AREA_PROFESSIONS: Record<string, string> = {
-  pharmacognosy: "Pharmacist / Pharmacognosist",
-  bioinformatics: "Bioinformatician / Computational Scientist",
-  pharmacology: "Pharmacologist",
-  formulation: "Pharmacist / Pharmaceutical Scientist",
-  clinical_safety: "Physician / Clinical Pharmacist",
-};
-
-const AREA_LABELS: Record<string, string> = {
-  pharmacognosy: "Pharmacognosy",
-  bioinformatics: "Bioinformatics",
-  pharmacology: "Pharmacology",
-  formulation: "Formulation",
-  clinical_safety: "Clinical Safety",
+  "formulation-safety": "Formulation Development",
+  formulation: "Formulation Development",
+  safety: "Safety / Clinical",
+  "expert-review": "Safety / Clinical",
+  "knowledge-integration": "Knowledge Integration",
+  "completion-integration": "Knowledge Integration",
 };
 
 const PLANT_FAMILY_MAP: Record<string, string> = {
@@ -207,83 +177,65 @@ export async function GET(request: Request) {
       `
     );
 
+    // 3. Query supporting review records for all retrieved projects
+    const projectIds = projectRows.map((p: any) => p.projectId);
+    let allStages: any[] = [];
+    let allCoverage: any[] = [];
+    let allProfReviews: any[] = [];
+
+    if (projectIds.length > 0) {
+      const [stagesRows]: any = await pool.query(
+        `SELECT projectId, stageKey, status, completedAt FROM research_project_stages WHERE projectId IN (?)`,
+        [projectIds]
+      );
+      allStages = stagesRows;
+
+      const [covRows]: any = await pool.query(
+        `SELECT projectId, areaKey, status, updatedAt FROM review_area_coverage WHERE projectId IN (?)`,
+        [projectIds]
+      );
+      allCoverage = covRows;
+
+      const [revRows]: any = await pool.query(
+        `SELECT id, projectId, areaKey, assessment, status, submittedAt FROM professional_reviews WHERE projectId IN (?)`,
+        [projectIds]
+      );
+      allProfReviews = revRows;
+    }
+
     // 4. Augment canonical projects with stage progress & professional review areas
     const detailedProjects = projectRows.map((p: any) => {
       const stageNum = STAGE_NUMBERS[p.currentStage] || 1;
       const stageName = STAGE_NAMES[p.currentStage] || "Plant & Literature";
-      const projectStageLevel = STAGE_ORDER[p.currentStage] || 1;
       const projectAssignments = assignments.filter((a: any) => a.projectId === p.projectId);
+      const projStages = allStages.filter((s: any) => s.projectId === p.projectId);
+      const projCoverage = allCoverage.filter((c: any) => c.projectId === p.projectId);
+      const projReviews = allProfReviews.filter((r: any) => r.projectId === p.projectId);
 
-      // Map the 5 professional review disciplines
-      const areas = EXPERT_REVIEW_AREAS.map((def) => {
-        const key = def.key;
-        const requiredLevel = AREA_REQUIRED_STAGE[key] || 1;
-        const matchedAss = projectAssignments.find((a: any) => {
-          const norm = normalizeReviewAreaKey(a.specialtyNeeded);
-          return norm === key;
-        });
+      // Resolve the 5 disciplinary review areas independently
+      const resolved = [1, 2, 3, 4, 5].map((num) =>
+        resolveSingleStageStatus(
+          num,
+          p.projectId,
+          { currentStage: p.currentStage, status: p.rawStatus, updatedAt: p.updatedAt },
+          projStages,
+          projectAssignments,
+          projCoverage,
+          projReviews
+        )
+      );
 
-        const profession = AREA_PROFESSIONS[key] || def.professionTitle;
-        const checkingArea = AREA_LABELS[key] || def.label;
-
-        let status = "Not Ready";
-        let isReady = false;
-        let isCompleted = false;
-        let assignmentId: number | null = null;
-
-        if (matchedAss) {
-          assignmentId = matchedAss.assignmentId;
-          const raw = matchedAss.assignmentStatus;
-          if (raw === "COMPLETED" || raw === "APPROVED") {
-            status = "Approved";
-            isReady = true;
-            isCompleted = true;
-          } else if (raw === "IN_REVIEW") {
-            status = "In Review";
-            isReady = true;
-          } else if (raw === "REVISION_REQUIRED") {
-            status = "Revision Requested";
-            isReady = true;
-          } else if (raw === "RESUBMITTED") {
-            status = "Revision Submitted";
-            isReady = true;
-          } else {
-            status = "Needs Review";
-            isReady = true;
-          }
-        } else if (projectStageLevel >= requiredLevel || p.rawStatus === "COMPLETED") {
-          if (p.rawStatus === "COMPLETED") {
-            status = "Approved";
-            isReady = true;
-            isCompleted = true;
-          } else if (p.rawStatus === "UNDER_REVIEW" || p.rawStatus === "READY_FOR_REVIEW") {
-            status = "Needs Review";
-            isReady = true;
-          } else {
-            status = "Available";
-            isReady = true;
-          }
-        } else {
-          status = "Not Ready";
-          isReady = false;
-        }
-
-        const actionUrl = `/reviewer/checking/${key}?projectId=${p.projectId}${
-          assignmentId ? `&assignmentId=${assignmentId}` : ""
-        }`;
-
-        return {
-          key,
-          profession,
-          checkingArea,
-          status,
-          displayStatus: status,
-          isReady,
-          isCompleted,
-          assignmentId,
-          actionUrl,
-        };
-      });
+      const areas = resolved.map((r) => ({
+        key: r.areaKey,
+        profession: r.profession,
+        checkingArea: r.checkingArea,
+        status: r.statusLabel,
+        displayStatus: r.statusLabel,
+        isReady: r.isReady,
+        isCompleted: r.isCompleted,
+        assignmentId: r.assignmentId,
+        actionUrl: r.actionUrl,
+      }));
 
       const completedCount = areas.filter((a) => a.isCompleted).length;
       const isReviewReady = areas.some((a) => a.isReady && !a.isCompleted);

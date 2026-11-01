@@ -267,6 +267,7 @@ export default function SimpleMolecularDockingClient({
       router.push(res.redirectUrl || `/researcher/projects/${projectId}/formulation-safety`);
     } catch (e: any) {
       setErrorNotice(e.message);
+    } finally {
       setCompleting(false);
     }
   };
@@ -318,7 +319,7 @@ export default function SimpleMolecularDockingClient({
         complete={stageCompleted || allCompleted}
         projectId={projectId}
         backHref={`/researcher/projects/${projectId}/in-silico`}
-        backLabel="Back to Stage 2"
+
       />
 
       {/* ERROR BANNER IF ANY */}
@@ -1076,17 +1077,17 @@ export default function SimpleMolecularDockingClient({
         projectId={projectId}
         stageNumber={3}
         stageTitle="Molecular Docking"
-        backHref={`/researcher/projects/${projectId}/in-silico`}
-        backLabel="Back to Stage 2"
+        previousStageRoute={`/researcher/projects/${projectId}/in-silico`}
+        backLabel="Back to In-Silico Analysis"
         statusMessage={stageCompleted || allCompleted ? "Stage Completed" : "In Progress"}
         saveStatus={savingDraft ? "saving" : !dirty && approved ? "saved" : "idle"}
         onSave={handleSaveDraft}
-        primaryAction={{
-          label: "Continue to Formulation & Safety",
-          onClick: handleCompleteStage,
-          disabled: !canComplete,
-          loading: completing,
-        }}
+        saveLabel="Save Draft"
+        onContinue={handleCompleteStage}
+        isContinuing={completing}
+        continueLabel="Continue to Formulation & Safety"
+        continuingLabel="Advancing to Formulation..."
+        continueDisabled={!canComplete}
       />
     </div>
   );

@@ -79,12 +79,19 @@ export default async function ResearchProjectWorkspacePage({
     [projectId]
   );
 
+  const [feedbackRows]: any = await pool.query(
+    "SELECT COUNT(*) AS total FROM review_feedback WHERE projectId = ? AND status = 'OPEN'",
+    [projectId]
+  );
+  const openRevisionsCount = Number(feedbackRows[0]?.total || 0);
+
   return (
     <ResearchWorkspaceClient
       project={project}
       stages={stages}
       activities={activities}
       linkedStudies={Number(studyRows[0]?.total || 0)}
+      openRevisionsCount={openRevisionsCount}
     />
   );
 }

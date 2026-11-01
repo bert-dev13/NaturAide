@@ -3,6 +3,8 @@ import { notFound, redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import pool from "@/lib/db";
 import InSilicoWorkspaceClient from "@/components/researcher/in-silico/InSilicoWorkspaceClient";
+import { resolveCanonicalPlantId } from "@/lib/phytochemical-catalog";
+import { getProfessionalReviewStageStatus } from "@/lib/professional-review-status";
 
 export const instant = false;
 
@@ -89,46 +91,94 @@ export default async function InSilicoStagePage({
   );
 
   // Fetch available documented phytochemicals for this project's plant
-  const plantId = project.plantId || null;
-  const plantSci = (project.plantScientificName || "").trim().toLowerCase();
-  const plantComm = (project.plantName || "").trim().toLowerCase();
+  const canonicalPlantId =
+    resolveCanonicalPlantId(project.plantId) ||
+    resolveCanonicalPlantId(project.plantScientificName) ||
+    resolveCanonicalPlantId(project.plantName) ||
+    project.plantId ||
+    null;
 
   let availableCompounds: any[] = [];
   try {
-    const [pcRows]: any = await pool.query(
-      `
-      SELECT id, plantId, plantScientificName, plantCommonName, compoundName,
-             iupacName, molecularFormula, molecularWeight, compoundClass,
-             pubchemId, smiles, plantPartReported, referencesData, verificationStatus
-      FROM plant_compounds
-      WHERE (? IS NOT NULL AND plantId = ?)
-         OR (LENGTH(?) > 2 AND LOWER(plantScientificName) = LOWER(?))
-         OR (LENGTH(?) > 2 AND LOWER(plantCommonName) = LOWER(?))
-         OR (LENGTH(?) > 2 AND LOWER(?) LIKE CONCAT('%', LOWER(plantCommonName), '%'))
-         OR (LENGTH(?) > 2 AND LOWER(plantCommonName) LIKE CONCAT('%', ?, '%'))
-         OR (LENGTH(?) > 2 AND LOWER(?) LIKE CONCAT('%', LOWER(plantScientificName), '%'))
-         OR (LENGTH(?) > 2 AND LOWER(plantScientificName) LIKE CONCAT('%', ?, '%'))
-      ORDER BY compoundName ASC
-      `,
-      [
-        plantId, plantId,
-        plantSci, plantSci,
-        plantComm, plantComm,
-        plantComm, plantComm, plantComm, plantComm,
-        plantSci, plantSci, plantSci, plantSci
-      ]
+    let pcRows: any[] = [];
+    if (canonicalPlantId) {
+      const [rows]: any = await pool.query(
+        `
+        SELECT id, plantId, plantScientificName, plantCommonName, compoundName,
+               iupacName, molecularFormula, molecularWeight, compoundClass,
+               pubchemId, smiles, plantPartReported, referencesData, verificationStatus
+        FROM plant_compounds
+        WHERE plantId = ?
+        ORDER BY compoundName ASC
+        `,
+        [canonicalPlantId]
+      );
+      pcRows = rows;
+    } else if (project.plantScientificName && project.plantScientificName.trim().length > 2) {
+      const [rows]: any = await pool.query(
+        `
+        SELECT id, plantId, plantScientificName, plantCommonName, compoundName,
+               iupacName, molecularFormula, molecularWeight, compoundClass,
+               pubchemId, smiles, plantPartReported, referencesData, verificationStatus
+        FROM plant_compounds
+        WHERE LOWER(TRIM(plantScientificName)) = LOWER(TRIM(?))
+        ORDER BY compoundName ASC
+        `,
+        [project.plantScientificName.trim()]
+      );
+      pcRows = rows;
+    }
+
+    const projectAddedNames = new Set(
+      compounds.map((c: any) => c.compoundName.trim().toLowerCase())
     );
-    availableCompounds = pcRows.map((row: any) => ({
-      ...row,
-      references: row.referencesData
-        ? typeof row.referencesData === "string"
-          ? JSON.parse(row.referencesData)
-          : row.referencesData
-        : [],
-    }));
+    const projectAddedCids = new Set(
+      compounds.map((c: any) => c.pubchemId).filter(Boolean)
+    );
+
+    availableCompounds = pcRows.map((row: any) => {
+      let parsedRefs = [];
+      if (row.referencesData) {
+        try {
+          parsedRefs =
+            typeof row.referencesData === "string"
+              ? JSON.parse(row.referencesData)
+              : row.referencesData;
+        } catch {
+          parsedRefs = [];
+        }
+      }
+
+      return {
+        ...row,
+        references: parsedRefs,
+        structureReady: Boolean(row.pubchemId && row.smiles && row.molecularFormula),
+        isAlreadyAdded:
+          projectAddedNames.has(row.compoundName.trim().toLowerCase()) ||
+          (row.pubchemId && projectAddedCids.has(row.pubchemId)),
+      };
+    });
   } catch (err) {
     console.warn("Failed to load plant_compounds:", err);
   }
+
+  // Fetch Bioinformatics review feedback / findings
+  const [reviewFeedback]: any = await pool.query(
+    `
+    SELECT rf.*, u.name as reviewerDisplayName
+    FROM review_feedback rf
+    LEFT JOIN users u ON rf.reviewerId = u.id
+    WHERE rf.projectId = ? AND (
+      rf.areaKey = 'bioinformatics'
+      OR rf.affectedStage IN ('Stage 2', 'in-silico', '2')
+    )
+    ORDER BY rf.id ASC
+    `,
+    [projectId]
+  );
+
+  // Fetch canonical professional review status for Stage 2 (Bioinformatics)
+  const stageReview = await getProfessionalReviewStageStatus(projectId, 2);
 
   return (
     <InSilicoWorkspaceClient
@@ -139,6 +189,11 @@ export default async function InSilicoStagePage({
       initialSynthesis={synthesis}
       initialLiterature={literature}
       initialAvailableCompounds={availableCompounds}
+      initialReviewFeedback={reviewFeedback || []}
+      overallAssessment={stageReview.comments}
+      reviewStatus={stageReview.status}
+      reviewerName={stageReview.reviewerName}
+      approvedAt={stageReview.approvedAt}
     />
   );
 }

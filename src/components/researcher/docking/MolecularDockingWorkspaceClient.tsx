@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -29,6 +29,8 @@ import {
   X,
 } from "lucide-react";
 import ResearchStageFooter from "@/components/researcher/stage/ResearchStageFooter";
+import ResearcherReviewFeedbackPanel from "@/components/researcher/stage/ResearcherReviewFeedbackPanel";
+import RevisionResubmittedSuccessModal from "@/components/researcher/stage/RevisionResubmittedSuccessModal";
 
 // Common verified botanical targets for Philippine / Southeast Asian medicinal research
 const VERIFIED_TARGET_PRESETS = [
@@ -197,14 +199,97 @@ interface MolecularDockingClientProps {
   projectId: number;
   initialWorkspace: any;
   stageCompleted?: boolean;
+  initialReviewFeedback?: any[];
+  overallAssessment?: string | null;
+  reviewStatus?: string | null;
+  reviewerName?: string | null;
+  approvedAt?: string | null;
 }
 
 export default function MolecularDockingWorkspaceClient({
   projectId,
   initialWorkspace,
   stageCompleted = false,
+  initialReviewFeedback = [],
+  overallAssessment,
+  reviewStatus: propReviewStatus,
+  reviewerName,
+  approvedAt,
 }: MolecularDockingClientProps) {
   const router = useRouter();
+
+  const [currentReviewStatus, setCurrentReviewStatus] = useState<string | null>(propReviewStatus || null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successModalData, setSuccessModalData] = useState<{
+    discipline: string;
+    profession: string;
+    reviewerName?: string | null;
+    reviewCycle: number;
+    addressedCount: number;
+  }>({
+    discipline: "Pharmacology",
+    profession: "Pharmacologist",
+    reviewerName: reviewerName || null,
+    reviewCycle: 1,
+    addressedCount: 1,
+  });
+
+  const openReviewFeedback = React.useMemo(() => {
+    return (initialReviewFeedback || []).filter((f: any) => {
+      const st = (f.status || "OPEN").toUpperCase();
+      return st === "OPEN" || st === "IN_REVIEW";
+    });
+  }, [initialReviewFeedback]);
+
+  const isRevisionMode = Boolean(
+    currentReviewStatus === "REVISION_REQUIRED" ||
+    (openReviewFeedback.length > 0 && currentReviewStatus !== "REVISION_RESUBMITTED" && currentReviewStatus !== "APPROVED")
+  );
+
+  const [resubmitting, setResubmitting] = useState(false);
+
+  const handleResubmitRevision = async () => {
+    try {
+      setResubmitting(true);
+      await handleSaveInterpretation();
+
+      const res = await fetch(`/api/researcher/projects/${projectId}/resubmit-revision`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roleKey: "pharmacology",
+          stageNumber: 3,
+          changesSummary: "Updated docking configuration, simulation runs, and pharmacological interpretation.",
+        }),
+      });
+
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to resubmit revision");
+
+      setCurrentReviewStatus("REVISION_RESUBMITTED");
+      setSuccessModalData({
+        discipline: json.discipline || "Pharmacology",
+        profession: json.profession || "Pharmacologist",
+        reviewerName: json.reviewerName || reviewerName || null,
+        reviewCycle: json.reviewCycle || 1,
+        addressedCount: initialReviewFeedback?.length || 1,
+      });
+      setShowSuccessModal(true);
+
+      window.dispatchEvent(
+        new CustomEvent("natureaide:revisions-updated", {
+          detail: { projectId, stageNumber: 3, status: "REVISION_RESUBMITTED" },
+        })
+      );
+      window.dispatchEvent(new CustomEvent("natureaide:project-updated", { detail: { projectId } }));
+
+      router.refresh();
+    } catch (err: any) {
+      console.error("Resubmit revision error:", err);
+    } finally {
+      setResubmitting(false);
+    }
+  };
 
   // Primary workspace state
   const [workspace, setWorkspace] = useState<any>(initialWorkspace);
@@ -244,6 +329,21 @@ export default function MolecularDockingWorkspaceClient({
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
   const [successNotice, setSuccessNotice] = useState<string | null>(null);
 
+  // Clean initial state: guarantee no persisting loading indicators
+  useEffect(() => {
+    setCompletingStage(false);
+    setSavingDraft(false);
+    return () => {
+      setCompletingStage(false);
+      setSavingDraft(false);
+    };
+  }, []);
+
+  // Pure Back navigation handler (NEVER triggers stage completion or advancement)
+  const handleBack = useCallback(() => {
+    console.log("[MolecularDockingWorkspaceClient] BACK_CLICK - Pure navigation to In-Silico Analysis");
+    router.push(`/researcher/projects/${projectId}/in-silico`);
+  }, [projectId, router]);
   // Modals
   const [showLigandDetailsModal, setShowLigandDetailsModal] = useState<boolean>(false);
   const [showTargetDetailsModal, setShowTargetDetailsModal] = useState<boolean>(false);
@@ -320,25 +420,84 @@ export default function MolecularDockingWorkspaceClient({
   const bestJob = completedJobs[0] || null;
   const currentSelectedJob = completedJobs[selectedJobIndex] || completedJobs[0] || null;
 
-  // Validation checks
-  const ligandsReady = (workspace.ligands || []).length > 0 &&
-    workspace.ligands.every((l: any) => l.preparationReady);
-  const targetsReady = (workspace.targets || []).length > 0 &&
-    workspace.targets.every((t: any) => t.status === "READY");
-  const configurationReady = Boolean(workspace.configuration?.configured);
-  const engineAvailable = Boolean(workspace.engine?.available);
-  const preflightPassed = ligandsReady && targetsReady && configurationReady && engineAvailable;
-
   // Review states & stage progression
   const currentStageStatus = workspace.stageStatus || (stageCompleted ? "COMPLETED" : "IN_PROGRESS");
   const isStageCompleted = currentStageStatus === "COMPLETED";
-  const reviewStatus = workspace.reviewStatus || (workspace.review?.assessment ? "REVIEWED" : "NOT_SUBMITTED");
+  const reviewStatus = currentReviewStatus || propReviewStatus || workspace.reviewStatus || (workspace.review?.assessment ? "REVIEWED" : "NOT_SUBMITTED");
   const isUnderReview = reviewStatus === "IN_REVIEW";
   const isRevisionRequired = reviewStatus === "REVISION_REQUIRED" || currentStageStatus === "REVISION_REQUIRED";
   const isReviewApproved = reviewStatus === "APPROVED" || reviewStatus === "ACCEPTED";
   const isReviewPending = reviewStatus === "PENDING";
   // The researcher is only locked from mutating if the review is actively locked
   const isReviewLocked = isUnderReview;
+
+  // Validation checks & Canonical Docking Readiness Resolver
+  const dockingReadiness = useMemo(() => {
+    const engineReady = Boolean(workspace.engine?.available);
+    const ligandsList = workspace.ligands || [];
+    const targetsList = workspace.targets || [];
+    const jobsList = workspace.jobs || [];
+
+    const ligandsReady = ligandsList.length > 0 && ligandsList.every((l: any) => l.preparationReady);
+    const targetsReady = targetsList.length > 0 && targetsList.every((t: any) => t.status === "READY" && t.gridConfigured);
+    const configurationReady = Boolean(workspace.configuration?.configured);
+
+    const runnableJobs = jobsList.filter((j: any) => j.ready && !j.active);
+    const activeJobs = jobsList.filter((j: any) => j.active || j.status === "RUNNING" || j.status === "PENDING");
+    const isBusy = Boolean(workspace.busy || activeJobs.length > 0 || runningAll || runningJobKey !== null);
+
+    let disabledReason: string | null = null;
+    if (!engineReady) {
+      disabledReason = workspace.engine?.error || "AutoDock Vina engine is unavailable on the server.";
+    } else if (ligandsList.length === 0) {
+      disabledReason = "No candidate phytochemical ligands loaded.";
+    } else if (!ligandsReady) {
+      const pendingLigand = ligandsList.find((l: any) => !l.preparationReady);
+      disabledReason = pendingLigand?.issue || `Ligand preparation is incomplete for ${pendingLigand?.compoundName || "one or more ligands"}.`;
+    } else if (targetsList.length === 0) {
+      disabledReason = "No macromolecular targets selected.";
+    } else if (!targetsReady) {
+      const pendingTarget = targetsList.find((t: any) => t.status !== "READY" || !t.gridConfigured);
+      disabledReason = pendingTarget?.issue || `Binding site configuration is required for ${pendingTarget?.targetName || "target"}.`;
+    } else if (!configurationReady) {
+      disabledReason = "Search box grid configuration is required.";
+    } else if (isReviewLocked) {
+      disabledReason = "Simulation execution is locked during professional review.";
+    } else if (isBusy) {
+      disabledReason = "Simulations are currently running.";
+    } else if (jobsList.length === 0) {
+      disabledReason = "No ligand-target simulation pairs generated.";
+    }
+
+    const canRunAll = Boolean(
+      engineReady &&
+      ligandsReady &&
+      targetsReady &&
+      configurationReady &&
+      !isReviewLocked &&
+      !isBusy &&
+      jobsList.length > 0
+    );
+
+    return {
+      engineReady,
+      ligandsReady,
+      targetsReady,
+      configurationReady,
+      preflightPassed: engineReady && ligandsReady && targetsReady && configurationReady,
+      runnableJobs,
+      activeJobs,
+      isBusy,
+      canRunAll,
+      disabledReason,
+    };
+  }, [workspace, isReviewLocked, runningAll, runningJobKey]);
+
+  const ligandsReady = dockingReadiness.ligandsReady;
+  const targetsReady = dockingReadiness.targetsReady;
+  const configurationReady = dockingReadiness.configurationReady;
+  const engineAvailable = dockingReadiness.engineReady;
+  const preflightPassed = dockingReadiness.preflightPassed;
 
   // Target actions
   const handleSearchTargets = async () => {
@@ -504,6 +663,7 @@ export default function MolecularDockingWorkspaceClient({
       }, 500);
     } catch (e: any) {
       setErrorNotice(e.message || "Failed to complete Stage 3.");
+    } finally {
       setCompletingStage(false);
     }
   };
@@ -666,20 +826,17 @@ export default function MolecularDockingWorkspaceClient({
           </div>
         )}
 
-        {/* PHARMACOLOGY REVISION NOTICE */}
-        {isRevisionRequired && workspace.review?.comments && (
-          <div className="p-5 rounded-2xl bg-amber-50/95 border-2 border-amber-300 shadow-sm space-y-2 text-xs">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-              <h3 className="font-black text-amber-950 uppercase tracking-wider">
-                Pharmacologist Review Comments:
-              </h3>
-            </div>
-            <p className="text-amber-900 whitespace-pre-line leading-relaxed pl-6">
-              {workspace.review.comments}
-            </p>
-          </div>
-        )}
+        {/* Pharmacology Review Revision & Feedback Panel */}
+        <ResearcherReviewFeedbackPanel
+          projectId={projectId}
+          stageTitle="Stage 3 · Molecular Docking"
+          discipline="Pharmacology"
+          overallAssessment={overallAssessment || workspace.review?.comments}
+          reviewStatus={currentReviewStatus || reviewStatus}
+          recommendations={openReviewFeedback.length > 0 ? openReviewFeedback : initialReviewFeedback}
+          reviewerName={reviewerName}
+          approvedAt={approvedAt}
+        />
       </div>
 
       {/* 2. STAGE 2-STYLE STICKY TAB NAVIGATION */}
@@ -699,21 +856,19 @@ export default function MolecularDockingWorkspaceClient({
                   setActiveAnchor(tab.id);
                   document.getElementById(tab.id)?.scrollIntoView({ behavior: "smooth" });
                 }}
-                className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                  isActive
-                    ? "bg-[#0f2c20] text-emerald-300 shadow-2xs"
-                    : "bg-slate-50 hover:bg-slate-100 text-slate-700 hover:text-slate-900 border border-slate-200/60"
-                }`}
+                className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${isActive
+                  ? "bg-[#0f2c20] text-emerald-300 shadow-2xs"
+                  : "bg-slate-50 hover:bg-slate-100 text-slate-700 hover:text-slate-900 border border-slate-200/60"
+                  }`}
               >
                 <span className="font-mono text-[10px] opacity-75">{tab.number}</span>
                 <span>{tab.label}</span>
                 {tab.count !== undefined && (
                   <span
-                    className={`ml-0.5 rounded-full px-1.5 py-0.2 text-[10px] font-black ${
-                      isActive
-                        ? "bg-emerald-800 text-emerald-100"
-                        : "bg-slate-200/80 text-slate-700"
-                    }`}
+                    className={`ml-0.5 rounded-full px-1.5 py-0.2 text-[10px] font-black ${isActive
+                      ? "bg-emerald-800 text-emerald-100"
+                      : "bg-slate-200/80 text-slate-700"
+                      }`}
                   >
                     {tab.count}
                   </span>
@@ -788,6 +943,10 @@ export default function MolecularDockingWorkspaceClient({
                           <Check className="w-3.5 h-3.5 text-emerald-600" />
                           Ready
                         </span>
+                      ) : ligand.status === "FAILED" ? (
+                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-800 border border-rose-200" title={ligand.issue || "Ligand preparation failed"}>
+                          Preparation Failed
+                        </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200">
                           Preparing...
@@ -839,12 +998,24 @@ export default function MolecularDockingWorkspaceClient({
                       </p>
                     </div>
                     <div className="flex items-center gap-2 text-xs">
-                      <span className="text-emerald-800 font-bold bg-emerald-100/80 px-2.5 py-0.5 rounded-full border border-emerald-200">
-                        ✓ Receptor Ready
-                      </span>
-                      <span className="text-teal-800 font-bold bg-teal-50 px-2.5 py-0.5 rounded-full border border-teal-200">
-                        ✓ Binding Site Ready
-                      </span>
+                      {target.receptorPrepared ? (
+                        <span className="text-emerald-800 font-bold bg-emerald-100/80 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                          ✓ Receptor Ready
+                        </span>
+                      ) : (
+                        <span className="text-amber-800 font-bold bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200" title={target.issue || "Receptor preparation required"}>
+                          Receptor Pending
+                        </span>
+                      )}
+                      {target.gridConfigured ? (
+                        <span className="text-teal-800 font-bold bg-teal-50 px-2.5 py-0.5 rounded-full border border-teal-200">
+                          ✓ Binding Site Ready
+                        </span>
+                      ) : (
+                        <span className="text-amber-800 font-bold bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200" title={target.issue || "Binding site configuration required"}>
+                          Binding Site Required
+                        </span>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -1038,10 +1209,15 @@ export default function MolecularDockingWorkspaceClient({
                       <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                       Partial Results ({completedJobs.length} of {workspace.jobs?.length || 0} completed)
                     </span>
-                  ) : (
+                  ) : dockingReadiness.canRunAll ? (
                     <span className="text-xs font-black text-[#0f2c20] flex items-center gap-1.5">
                       <Play className="w-4 h-4 text-emerald-600 fill-emerald-600" />
                       Ready to Run Simulations
+                    </span>
+                  ) : (
+                    <span className="text-xs font-bold text-amber-800 flex items-center gap-1.5">
+                      <AlertCircle className="w-4 h-4 text-amber-600" />
+                      Prerequisites Pending
                     </span>
                   )}
                 </div>
@@ -1051,53 +1227,60 @@ export default function MolecularDockingWorkspaceClient({
               </div>
 
               {/* Action buttons */}
-              <div className="flex items-center gap-2 shrink-0">
-                {workspace.busy ? (
-                  <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-blue-100 text-blue-800">
-                    <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
-                    Running Simulations...
-                  </span>
-                ) : completedJobs.length === (workspace.jobs?.length || 0) && (workspace.jobs?.length || 0) > 0 ? (
-                  <button
-                    type="button"
-                    onClick={handleRunAll}
-                    disabled={runningAll || isReviewLocked}
-                    className="px-4 py-2 rounded-xl bg-white border border-[#dde6df] hover:bg-slate-50 text-[#0f2c20] font-bold text-xs transition-colors cursor-pointer shadow-2xs flex items-center gap-1.5"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5 text-emerald-700" />
-                    <span>Rerun All</span>
-                  </button>
-                ) : completedJobs.length > 0 ? (
-                  <div className="flex items-center gap-2">
+              <div className="flex flex-col sm:items-end gap-1 shrink-0">
+                <div className="flex items-center gap-2">
+                  {workspace.busy ? (
+                    <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-blue-100 text-blue-800">
+                      <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
+                      Running Simulations...
+                    </span>
+                  ) : completedJobs.length === (workspace.jobs?.length || 0) && (workspace.jobs?.length || 0) > 0 ? (
                     <button
                       type="button"
                       onClick={handleRunAll}
                       disabled={runningAll || isReviewLocked}
-                      className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#0f3626] to-[#16a34a] hover:from-[#0c2c1f] hover:to-[#15803d] text-white font-black text-xs transition-all shadow-md shadow-emerald-700/20 active:scale-[0.98] cursor-pointer flex items-center gap-1.5"
+                      className="px-4 py-2 rounded-xl bg-white border border-[#dde6df] hover:bg-slate-50 text-[#0f2c20] font-bold text-xs transition-colors cursor-pointer shadow-2xs flex items-center gap-1.5"
                     >
-                      {runningAll ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5 fill-white" />}
-                      <span>Run Remaining ({(workspace.jobs?.length || 0) - completedJobs.length})</span>
+                      <RotateCcw className="w-3.5 h-3.5 text-emerald-700" />
+                      <span>Rerun All</span>
                     </button>
+                  ) : completedJobs.length > 0 ? (
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleRunAll}
+                        disabled={runningAll || isReviewLocked}
+                        className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#0f3626] to-[#16a34a] hover:from-[#0c2c1f] hover:to-[#15803d] text-white font-black text-xs transition-all shadow-md shadow-emerald-700/20 active:scale-[0.98] cursor-pointer flex items-center gap-1.5"
+                      >
+                        {runningAll ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5 fill-white" />}
+                        <span>Run Remaining ({(workspace.jobs?.length || 0) - completedJobs.length})</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleRunAll}
+                        disabled={runningAll || isReviewLocked}
+                        className="p-2.5 rounded-xl bg-white border border-[#dde6df] hover:bg-slate-50 text-[#52645d] hover:text-[#0f2c20] font-bold text-xs transition-colors cursor-pointer shadow-2xs"
+                        title="Rerun all jobs"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ) : (
                     <button
                       type="button"
-                      onClick={handleRunAll}
-                      disabled={runningAll || isReviewLocked}
-                      className="p-2.5 rounded-xl bg-white border border-[#dde6df] hover:bg-slate-50 text-[#52645d] hover:text-[#0f2c20] font-bold text-xs transition-colors cursor-pointer shadow-2xs"
-                      title="Rerun all jobs"
+                      onClick={workspace.jobs?.length > 1 ? handleRunAll : () => handleRunJob(workspace.jobs?.[0])}
+                      disabled={!dockingReadiness.canRunAll}
+                      className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-[#0f3626] to-[#16a34a] hover:from-[#0c2c1f] hover:to-[#15803d] text-white font-black text-xs transition-all shadow-md shadow-emerald-700/20 active:scale-[0.98] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                     >
-                      <RotateCcw className="w-3.5 h-3.5" />
+                      {runningAll ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4 fill-white" />}
+                      <span>{workspace.jobs?.length > 1 ? "Run All Docking" : "Run Docking"}</span>
                     </button>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={workspace.jobs?.length > 1 ? handleRunAll : () => handleRunJob(workspace.jobs?.[0])}
-                    disabled={!preflightPassed || workspace.busy || isReviewLocked || runningAll}
-                    className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-[#0f3626] to-[#16a34a] hover:from-[#0c2c1f] hover:to-[#15803d] text-white font-black text-xs transition-all shadow-md shadow-emerald-700/20 active:scale-[0.98] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                  >
-                    {runningAll ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4 fill-white" />}
-                    <span>{workspace.jobs?.length > 1 ? "Run All Docking" : "Run Docking"}</span>
-                  </button>
+                  )}
+                </div>
+                {!dockingReadiness.canRunAll && !dockingReadiness.isBusy && dockingReadiness.disabledReason && (
+                  <p className="text-[11px] text-amber-700 font-medium sm:text-right max-w-sm mt-0.5">
+                    Cannot run: {dockingReadiness.disabledReason}
+                  </p>
                 )}
               </div>
             </div>
@@ -1111,13 +1294,12 @@ export default function MolecularDockingWorkspaceClient({
                 return (
                   <div
                     key={`${job.compoundId}-${job.targetId}-${idx}`}
-                    className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl border transition-all ${
-                      isJobActive
-                        ? "bg-blue-50/60 border-blue-200 shadow-2xs"
-                        : isJobDone
+                    className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl border transition-all ${isJobActive
+                      ? "bg-blue-50/60 border-blue-200 shadow-2xs"
+                      : isJobDone
                         ? "bg-emerald-50/30 border-emerald-200/80 hover:border-emerald-300"
                         : "bg-white/80 border-[#e7eee9] hover:border-slate-300"
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center gap-3">
                       <span className="shrink-0">
@@ -1140,8 +1322,10 @@ export default function MolecularDockingWorkspaceClient({
                           {isJobActive
                             ? "Running AutoDock Vina simulation..."
                             : isJobDone
-                            ? `Completed with ${job.poseCount || 9} binding poses · ${formatAffinity(job.affinity)} kcal/mol`
-                            : "Structure & binding site ready"}
+                              ? `Completed with ${job.poseCount || 9} binding poses · ${formatAffinity(job.affinity)} kcal/mol`
+                              : job.ready
+                                ? "Structure & binding site ready"
+                                : (job.blockedReason || "Prerequisites pending")}
                         </p>
                       </div>
                     </div>
@@ -1185,8 +1369,8 @@ export default function MolecularDockingWorkspaceClient({
                         <button
                           type="button"
                           onClick={() => handleRunJob(job)}
-                          disabled={!preflightPassed || workspace.busy || isReviewLocked || runningJobKey !== null}
-                          className="px-3 py-1 rounded-lg bg-white border border-[#dde6df] hover:bg-emerald-50 text-[#0f2c20] hover:text-emerald-900 font-bold text-xs transition-colors cursor-pointer shadow-2xs disabled:opacity-50"
+                          disabled={!job.ready || isJobActive || runningAll || runningJobKey !== null || isReviewLocked}
+                          className="px-3 py-1 rounded-lg bg-white border border-[#dde6df] hover:bg-emerald-50 text-[#0f2c20] hover:text-emerald-900 font-bold text-xs transition-colors cursor-pointer shadow-2xs disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           Run
                         </button>
@@ -1340,7 +1524,7 @@ export default function MolecularDockingWorkspaceClient({
               </span>
               <p className="text-xs text-[#0f2c20] leading-relaxed font-medium">
                 {completedJobs.length} docking {completedJobs.length === 1 ? "simulation" : "simulations"} completed.
-                {bestJob && (
+                {completedJobs.length > 0 && bestJob && (
                   <>
                     {" "}
                     <strong>{bestJob.ligandName}</strong> showed a predicted binding affinity of{" "}
@@ -1362,7 +1546,12 @@ export default function MolecularDockingWorkspaceClient({
                     <button
                       type="button"
                       onClick={handleDraftWithAi}
-                      className="inline-flex items-center gap-1 text-xs font-bold text-teal-800 hover:text-teal-950 transition-colors cursor-pointer"
+                      disabled={completedJobs.length === 0}
+                      title={completedJobs.length === 0 ? "Complete docking simulations before drafting interpretation" : "Assist with interpretation"}
+                      className={`inline-flex items-center gap-1 text-xs font-bold transition-colors ${completedJobs.length === 0
+                        ? "text-slate-400 cursor-not-allowed opacity-60"
+                        : "text-teal-800 hover:text-teal-950 cursor-pointer"
+                        }`}
                     >
                       <Sparkles className="w-3.5 h-3.5 text-teal-600" />
                       <span>Assist with Interpretation</span>
@@ -1372,14 +1561,14 @@ export default function MolecularDockingWorkspaceClient({
                     <button
                       type="button"
                       onClick={handleSaveInterpretation}
-                      disabled={savingDraft}
+                      disabled={savingDraft || completedJobs.length === 0}
                       className="inline-flex items-center gap-1 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-[#0f3626] to-[#16a34a] hover:from-[#0c2c1f] hover:to-[#15803d] text-white font-bold text-xs transition-colors cursor-pointer shadow-xs"
                     >
                       {savingDraft ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                       <span>Save Interpretation</span>
                     </button>
                   )}
-                  {!dirty && interpretationText.trim() && (
+                  {!dirty && interpretationText.trim() && completedJobs.length > 0 && (
                     <span className="text-xs font-bold text-emerald-800 flex items-center gap-1 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
                       <Check className="w-3.5 h-3.5 text-emerald-600" />
                       Interpretation Complete
@@ -1388,7 +1577,14 @@ export default function MolecularDockingWorkspaceClient({
                 </div>
               </div>
 
-              {isReviewLocked ? (
+              {completedJobs.length === 0 ? (
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 leading-relaxed font-medium space-y-1">
+                  <p className="font-bold text-slate-800">Waiting for docking results</p>
+                  <p className="text-slate-500">
+                    Scientific interpretation will become available after the required AutoDock Vina simulations have completed.
+                  </p>
+                </div>
+              ) : isReviewLocked ? (
                 <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 leading-relaxed whitespace-pre-line font-medium">
                   {interpretationText || "No scientific interpretation was provided."}
                 </div>
@@ -1437,18 +1633,42 @@ export default function MolecularDockingWorkspaceClient({
           projectId={projectId}
           stageNumber={3}
           stageTitle="Molecular Docking"
-          backHref={`/researcher/projects/${projectId}`}
-          backLabel="Back to Project"
+          previousStageRoute={`/researcher/projects/${projectId}/in-silico`}
+          onBack={handleBack}
+          backLabel="Back to In-Silico Analysis"
           lastSaved={lastSaved}
           isSaving={savingDraft}
           onSave={handleSaveInterpretation}
-          primaryAction={{
-            label: "Continue to Formulation",
-            onClick: handleCompleteAndContinue,
-            loading: completingStage,
-            loadingLabel: "Advancing to Formulation...",
-            disabled: completedJobs.length === 0 || !interpretationText.trim() || completingStage,
-          }}
+          saveLabel="Save Draft"
+          isRevisionMode={isRevisionMode}
+          onResubmitRevision={handleResubmitRevision}
+          isResubmitting={resubmitting}
+          reviewStatus={currentReviewStatus}
+          onContinue={handleCompleteAndContinue}
+          isContinuing={completingStage}
+          continueLabel="Continue to Formulation"
+          continuingLabel="Advancing to Formulation..."
+          continueDisabled={
+            completedJobs.length === 0 ||
+            completedJobs.length < (workspace.jobs?.length || 0) ||
+            !interpretationText.trim() ||
+            completingStage ||
+            isRevisionMode
+          }
+        />
+
+        {/* Revision Resubmitted Success Confirmation Modal */}
+        <RevisionResubmittedSuccessModal
+          isOpen={showSuccessModal}
+          onClose={() => setShowSuccessModal(false)}
+          projectId={projectId}
+          stageNumber={3}
+          stageTitle="Stage 3 · Molecular Docking"
+          discipline={successModalData.discipline}
+          profession={successModalData.profession}
+          reviewCycle={successModalData.reviewCycle}
+          reviewerName={successModalData.reviewerName}
+          addressedCount={successModalData.addressedCount}
         />
       </div>
 
@@ -1595,11 +1815,10 @@ export default function MolecularDockingWorkspaceClient({
                     key={tab.id}
                     type="button"
                     onClick={() => setInspectSubTab(tab.id as any)}
-                    className={`px-3.5 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer ${
-                      inspectSubTab === tab.id
-                        ? "border-emerald-700 text-emerald-800"
-                        : "border-transparent text-[#78997f] hover:text-[#0f2c20]"
-                    }`}
+                    className={`px-3.5 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer ${inspectSubTab === tab.id
+                      ? "border-emerald-700 text-emerald-800"
+                      : "border-transparent text-[#78997f] hover:text-[#0f2c20]"
+                      }`}
                   >
                     {tab.label}
                   </button>
@@ -1648,10 +1867,10 @@ export default function MolecularDockingWorkspaceClient({
                         {(currentSelectedJob.poses?.length > 0
                           ? currentSelectedJob.poses
                           : [
-                              { mode: 1, affinity: currentSelectedJob.affinity ?? -8.37, rmsdLowerBound: 0.0, rmsdUpperBound: 0.0 },
-                              { mode: 2, affinity: (currentSelectedJob.affinity ?? -8.37) + 0.32, rmsdLowerBound: 1.42, rmsdUpperBound: 2.11 },
-                              { mode: 3, affinity: (currentSelectedJob.affinity ?? -8.37) + 0.58, rmsdLowerBound: 1.89, rmsdUpperBound: 2.65 },
-                            ]
+                            { mode: 1, affinity: currentSelectedJob.affinity ?? -8.37, rmsdLowerBound: 0.0, rmsdUpperBound: 0.0 },
+                            { mode: 2, affinity: (currentSelectedJob.affinity ?? -8.37) + 0.32, rmsdLowerBound: 1.42, rmsdUpperBound: 2.11 },
+                            { mode: 3, affinity: (currentSelectedJob.affinity ?? -8.37) + 0.58, rmsdLowerBound: 1.89, rmsdUpperBound: 2.65 },
+                          ]
                         ).map((pose: any, pIdx: number) => (
                           <tr key={pIdx} className={pIdx === 0 ? "bg-emerald-50/60 font-bold" : ""}>
                             <td className="py-2.5 px-3">Mode {pose.mode ?? pIdx + 1}</td>
@@ -1692,7 +1911,7 @@ export default function MolecularDockingWorkspaceClient({
                     </button>
                   </div>
                   <pre className="p-4 rounded-2xl bg-[#072418] text-emerald-300 font-mono text-[10px] leading-relaxed max-h-60 overflow-y-auto whitespace-pre-wrap border border-emerald-900">
-                    {currentSelectedJob.logOutput || "AutoDock Vina v1.2.7 execution completed cleanly.\nAffinity: -8.37 kcal/mol\nWriting output poses... Done."}
+                    {currentSelectedJob.record?.log || currentSelectedJob.logOutput || "AutoDock Vina execution log unavailable."}
                   </pre>
                 </div>
               )}

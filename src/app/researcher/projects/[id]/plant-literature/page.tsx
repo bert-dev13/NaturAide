@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import pool from "@/lib/db";
 import { resolvePlantImage } from "@/lib/record-images";
+import { getProfessionalReviewStageStatus } from "@/lib/professional-review-status";
 import PlantLiteratureClient from "@/components/researcher/plant-literature/PlantLiteratureClient";
 
 export const instant = false;
@@ -201,6 +202,9 @@ export default async function PlantLiteratureStagePage({
     [projectId]
   );
 
+  // 7. Fetch canonical professional review status for Stage 1 (Pharmacognosy)
+  const stageReview = await getProfessionalReviewStageStatus(projectId, 1);
+
   return (
     <PlantLiteratureClient
       projectId={projectId}
@@ -232,6 +236,10 @@ export default async function PlantLiteratureStagePage({
       initialSynthesis={synthesis}
       initialCounts={initialCounts}
       initialReviewFeedback={reviewFeedback || []}
+      overallAssessment={stageReview.comments}
+      reviewStatus={stageReview.status}
+      reviewerName={stageReview.reviewerName}
+      approvedAt={stageReview.approvedAt}
     />
   );
 }

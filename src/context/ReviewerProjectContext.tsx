@@ -10,7 +10,14 @@ export interface ReviewFlowStage {
   professionalExpert: string;
   expertise: string;
   areaKey: string;
-  status: "APPROVED" | "IN_REVIEW" | "REVISION_REQUIRED" | "NOT_SUBMITTED";
+  status:
+    | "APPROVED"
+    | "IN_REVIEW"
+    | "REVISION_REQUIRED"
+    | "REVISION_RESUBMITTED"
+    | "NEEDS_REVIEW"
+    | "NOT_SUBMITTED"
+    | string;
   statusLabel: string;
   actionUrl: string;
   reviewerName?: string | null;
@@ -106,6 +113,20 @@ export function ReviewerProjectProvider({ children }: { children: React.ReactNod
     if (activeProject?.id) {
       fetchProjectDetails(activeProject.id);
     }
+  }, [activeProject?.id, fetchProjectDetails]);
+
+  // Listen for real-time review status updates across reviewer components
+  useEffect(() => {
+    const handleReviewUpdated = (e: any) => {
+      const targetPid = e?.detail?.projectId || activeProject?.id;
+      if (targetPid) {
+        fetchProjectDetails(targetPid);
+      }
+    };
+    window.addEventListener("natureaide:review-updated", handleReviewUpdated);
+    return () => {
+      window.removeEventListener("natureaide:review-updated", handleReviewUpdated);
+    };
   }, [activeProject?.id, fetchProjectDetails]);
 
   // Derive and auto-sync active project from URL route when available

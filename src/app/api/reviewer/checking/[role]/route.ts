@@ -9,6 +9,7 @@ import {
   type ExpertReviewAreaKey,
 } from "@/lib/expert-review-areas";
 import { buildFullDossierSnapshot } from "@/lib/expert-review-assignment";
+import { getProfessionalReviewStageStatus } from "@/lib/professional-review-status";
 
 const PLANT_FAMILY_MAP: Record<string, string> = {
   "Momordica charantia": "Cucurbitaceae",
@@ -133,34 +134,30 @@ export async function GET(
       }
     }
 
-    if (requestedProjectRecord) {
-      const STAGE_LEVELS: Record<string, number> = {
-        "plant-literature": 1,
-        "in-silico": 2,
-        docking: 3,
-        "formulation-safety": 4,
-        "completion-integration": 5,
-        "expert-review": 6,
-      };
-      const ROLE_REQUIRED_LEVELS: Record<string, number> = {
-        pharmacognosy: 1,
-        bioinformatics: 2,
-        pharmacology: 3,
-        formulation: 4,
-        clinical_safety: 5,
-      };
-      const currentLevel = STAGE_LEVELS[requestedProjectRecord.currentStage] || 1;
-      const requiredLevel = ROLE_REQUIRED_LEVELS[roleKey] || 1;
-      const isReady = currentLevel >= requiredLevel || requestedProjectRecord.projectStatus === "COMPLETED";
+    const stageParam = searchParams.get("stage");
+    const ROLE_TO_STAGE_NUM: Record<string, number> = {
+      pharmacognosy: stageParam === "6" ? 6 : 1,
+      bioinformatics: 2,
+      pharmacology: 3,
+      formulation: 4,
+      clinical_safety: 5,
+    };
 
-      if (!isReady) {
+    if (requestedProjectRecord) {
+      const stageNum = ROLE_TO_STAGE_NUM[roleKey] || 1;
+      const stageStatus = await getProfessionalReviewStageStatus(
+        requestedProjectRecord.projectId,
+        stageNum
+      );
+
+      if (!stageStatus.isReady) {
         const notReadyAssignment = {
           assignmentId: 0,
           submissionId: 0,
           projectId: requestedProjectRecord.projectId,
           reviewerId: session.id,
           assignedReviewerName: session.name,
-          assignmentStatus: "NOT_READY",
+          assignmentStatus: "NOT_SUBMITTED",
           specialtyNeeded: roleKey,
           reviewRound: 1,
           projectTitle: requestedProjectRecord.projectTitle,
@@ -171,7 +168,7 @@ export async function GET(
           reviewArea: roleKey,
           reviewAreaLabel: areaDef.shortLabel,
           isReady: false,
-          notReadyReason: "The required research data has not yet been submitted.",
+          notReadyReason: "Researcher submission not yet available.",
         };
 
         return NextResponse.json({
@@ -188,6 +185,62 @@ export async function GET(
           review: null,
           findings: [],
         });
+      }
+
+      // If stage is ready but assignment record hasn't been instantiated yet, ensure it exists
+      if (!requestedProjectMatch) {
+        const [subRows]: any = await pool.query(
+          `SELECT id, versionTag FROM review_submissions WHERE projectId = ? ORDER BY id DESC LIMIT 1`,
+          [requestedProjectRecord.projectId]
+        );
+        let subId = subRows[0]?.id;
+        if (!subId) {
+          const [insSub]: any = await pool.query(
+            `INSERT INTO review_submissions (projectId, versionTag, reviewRound, status, submittedAt)
+             VALUES (?, 'v1.0', 1, 'IN_PROGRESS', CURRENT_TIMESTAMP(3))`,
+            [requestedProjectRecord.projectId]
+          );
+          subId = insSub.insertId;
+        }
+
+        const [insAss]: any = await pool.query(
+          `INSERT INTO review_assignments (
+             projectId, submissionId, reviewerId, specialtyNeeded, status, reviewRound, assignedAt
+           ) VALUES (?, ?, ?, ?, 'PENDING', 1, CURRENT_TIMESTAMP(3))`,
+          [requestedProjectRecord.projectId, subId, session.id, roleKey]
+        );
+
+        await pool.query(
+          `INSERT INTO review_area_coverage (
+             submissionId, projectId, areaKey, reviewerId, status
+           ) VALUES (?, ?, ?, ?, 'PENDING')
+           ON DUPLICATE KEY UPDATE status = VALUES(status), reviewerId = VALUES(reviewerId)`,
+          [subId, requestedProjectRecord.projectId, roleKey, session.id]
+        );
+
+        requestedProjectMatch = {
+          assignmentId: insAss.insertId,
+          projectId: requestedProjectRecord.projectId,
+          submissionId: subId,
+          reviewerId: session.id,
+          specialtyNeeded: roleKey,
+          assignmentStatus: "PENDING",
+          reviewRound: 1,
+          assignedAt: new Date().toISOString(),
+          completedAt: null,
+          projectTitle: requestedProjectRecord.projectTitle,
+          plantName: requestedProjectRecord.plantName,
+          plantScientificName: requestedProjectRecord.plantScientificName,
+          researcherName: requestedProjectRecord.researcherName,
+          versionTag: "v1.0",
+          reviewArea: roleKey,
+          reviewAreaLabel: areaDef.shortLabel,
+          assignedReviewerName: session.name,
+          assessment: null,
+          reviewComments: null,
+          openFindingsCount: 0,
+        };
+        assignments.unshift(requestedProjectMatch);
       }
     }
 
@@ -307,7 +360,7 @@ export async function GET(
     // Always overlay live Stage 1 researcher scientific record (Single Source of Truth)
     try {
       const [livePlantRows]: any = await pool.query(
-        `SELECT rpd.*, p.category as plantFamily, p.local_names as plantLocalNames,
+        `SELECT rpd.*, p.category as plantCategory, p.local_names as plantLocalNames,
                 p.botanical_synonyms as plantSynonyms, p.source_organization as plantSourceOrg,
                 p.source_verified as plantSourceVerified, p.plant_parts_used as plantPartsUsed
          FROM research_projects rp
@@ -329,10 +382,16 @@ export async function GET(
         [projectId]
       );
 
+      const resolvedBotanicalFamily =
+        livePlant.family ||
+        (activeAssignment.plantScientificName && PLANT_FAMILY_MAP[activeAssignment.plantScientificName]) ||
+        snapshot?.plantFamily ||
+        "";
+
       snapshot = {
         ...snapshot,
         plantLocalNames: livePlant.localNames || livePlant.plantLocalNames || snapshot?.plantLocalNames || "",
-        plantFamily: livePlant.family || livePlant.plantFamily || snapshot?.plantFamily || snapshot?.botanicalFamily || "",
+        plantFamily: resolvedBotanicalFamily,
         plantPartsStudied: livePlant.partsStudied || snapshot?.plantPartsStudied || livePlant.plantPartsUsed || "Leaves",
         specimenSource: livePlant.specimenSource || snapshot?.specimenSource || "",
         collectionDate: livePlant.collectionDate || snapshot?.collectionDate || "",
@@ -390,14 +449,17 @@ export async function GET(
       console.warn("Could not overlay live Stage 2 data:", overlayErr2);
     }
 
-    // Overlay live Stage 3 researcher docking data (Single Source of Truth)
+    // Overlay live Stage 3 researcher docking data (Single Source of Truth, strictly scoped)
     try {
       const [liveRuns]: any = await pool.query(
         `SELECT dr.*, dr.bindingAffinity as affinity
          FROM docking_runs dr
          WHERE dr.projectId = ?
+           AND dr.compoundId IN (SELECT id FROM research_compounds WHERE projectId = ? AND selectedForDocking = 1)
+           AND dr.jobStatus = 'COMPLETED'
+           AND dr.bindingAffinity IS NOT NULL
          ORDER BY CAST(dr.bindingAffinity AS DECIMAL(10,3)) ASC, dr.id DESC`,
-        [projectId]
+        [projectId, projectId]
       );
       const [liveTargets]: any = await pool.query(
         `SELECT * FROM docking_targets WHERE projectId = ? ORDER BY id ASC`,
@@ -407,7 +469,7 @@ export async function GET(
         `SELECT dlp.*, rc.compoundName, rc.molecularFormula, rc.molecularWeight, rc.pubchemId
          FROM docking_ligand_preps dlp
          JOIN research_compounds rc ON dlp.compoundId = rc.id
-         WHERE dlp.projectId = ?`,
+         WHERE dlp.projectId = ? AND rc.selectedForDocking = 1`,
         [projectId]
       );
       const [liveDockSynthRows]: any = await pool.query(
@@ -419,15 +481,14 @@ export async function GET(
         [projectId]
       );
 
-      if (liveRuns && liveRuns.length > 0) {
-        snapshot.dockingRuns = liveRuns.map((r: any) => ({
-          ...r,
-          affinity: r.bindingAffinity ? Number(r.bindingAffinity) : null,
-          poses: r.posesJson ? (typeof r.posesJson === "string" ? JSON.parse(r.posesJson) : r.posesJson) : [],
-          config: r.configJson ? (typeof r.configJson === "string" ? JSON.parse(r.configJson) : r.configJson) : null,
-          literature: r.literatureJson ? (typeof r.literatureJson === "string" ? JSON.parse(r.literatureJson) : r.literatureJson) : [],
-        }));
-      }
+      snapshot.dockingRuns = (liveRuns || []).map((r: any) => ({
+        ...r,
+        affinity: r.bindingAffinity ? Number(r.bindingAffinity) : null,
+        poses: r.posesJson ? (typeof r.posesJson === "string" ? JSON.parse(r.posesJson) : r.posesJson) : [],
+        config: r.configJson ? (typeof r.configJson === "string" ? JSON.parse(r.configJson) : r.configJson) : null,
+        literature: r.literatureJson ? (typeof r.literatureJson === "string" ? JSON.parse(r.literatureJson) : r.literatureJson) : [],
+      }));
+
       if (liveTargets && liveTargets.length > 0) {
         snapshot.dockingTargets = liveTargets.map((t: any) => ({
           ...t,
@@ -436,12 +497,21 @@ export async function GET(
           detectedSites: t.detectedSites ? (typeof t.detectedSites === "string" ? JSON.parse(t.detectedSites) : t.detectedSites) : [],
         }));
       }
-      if (livePreps && livePreps.length > 0) {
-        snapshot.dockingLigands = livePreps;
+
+      snapshot.dockingLigands = livePreps || [];
+
+      // Validate synthesis does not contain obsolete compounds and only exists if runs exist
+      if (liveDockSynthRows && liveDockSynthRows.length > 0 && liveRuns && liveRuns.length > 0) {
+        const text = String(liveDockSynthRows[0].keyFindings || "").toLowerCase();
+        if (!text.includes("10-gingerol")) {
+          snapshot.dockingSynthesis = liveDockSynthRows[0];
+        } else {
+          snapshot.dockingSynthesis = null;
+        }
+      } else {
+        snapshot.dockingSynthesis = null;
       }
-      if (liveDockSynthRows && liveDockSynthRows.length > 0) {
-        snapshot.dockingSynthesis = liveDockSynthRows[0];
-      }
+
       if (liveSetupRows && liveSetupRows.length > 0) {
         snapshot.dockingSettings = liveSetupRows[0]?.gridConfigJson
           ? (typeof liveSetupRows[0].gridConfigJson === "string" ? JSON.parse(liveSetupRows[0].gridConfigJson) : liveSetupRows[0].gridConfigJson)

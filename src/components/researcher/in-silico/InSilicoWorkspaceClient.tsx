@@ -15,6 +15,7 @@ import {
   ExternalLink,
   FileText,
   FlaskConical,
+  Info,
   Leaf,
   Loader2,
   Microscope,
@@ -27,6 +28,8 @@ import {
 } from "lucide-react";
 import ResearchStageFooter from "@/components/researcher/stage/ResearchStageFooter";
 import ResearchStageHeader from "@/components/researcher/stage/ResearchStageHeader";
+import ResearcherReviewFeedbackPanel from "@/components/researcher/stage/ResearcherReviewFeedbackPanel";
+import RevisionResubmittedSuccessModal from "@/components/researcher/stage/RevisionResubmittedSuccessModal";
 
 
 export interface AvailablePlantCompound {
@@ -51,8 +54,15 @@ export interface AvailablePlantCompound {
     pages?: string;
     doi?: string;
     pubmedId?: string;
+    pmid?: string;
+    url?: string;
+    plantPart?: string;
+    evidenceType?: string;
+    summary?: string;
   }>;
-  verificationStatus?: "VERIFIED_DATABASE" | "RESEARCHER_SUBMITTED";
+  verificationStatus?: "VERIFIED_DATABASE" | "LITERATURE_VERIFIED" | "RESEARCHER_SUBMITTED" | "PENDING_VERIFICATION";
+  structureReady?: boolean;
+  isAlreadyAdded?: boolean;
 }
 
 interface CompoundItem {
@@ -133,6 +143,11 @@ interface InSilicoWorkspaceClientProps {
   initialSynthesis: InsilicoSynthesisData;
   initialLiterature?: LiteratureReferenceItem[];
   initialAvailableCompounds?: AvailablePlantCompound[];
+  initialReviewFeedback?: any[];
+  overallAssessment?: string | null;
+  reviewStatus?: string | null;
+  reviewerName?: string | null;
+  approvedAt?: string | null;
 }
 
 interface MetricField {
@@ -650,9 +665,89 @@ export default function InSilicoWorkspaceClient({
   initialSynthesis,
   initialLiterature = [],
   initialAvailableCompounds = [],
+  initialReviewFeedback = [],
+  overallAssessment,
+  reviewStatus,
+  reviewerName,
+  approvedAt,
 }: InSilicoWorkspaceClientProps) {
   const router = useRouter();
   const [, startTransition] = useTransition();
+
+  const [currentReviewStatus, setCurrentReviewStatus] = useState<string | null>(reviewStatus || null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successModalData, setSuccessModalData] = useState<{
+    discipline: string;
+    profession: string;
+    reviewerName?: string | null;
+    reviewCycle: number;
+    addressedCount: number;
+  }>({
+    discipline: "Bioinformatics",
+    profession: "Bioinformatician / Computational Scientist",
+    reviewerName: reviewerName || null,
+    reviewCycle: 1,
+    addressedCount: 1,
+  });
+
+  const openReviewFeedback = React.useMemo(() => {
+    return (initialReviewFeedback || []).filter((f: any) => {
+      const st = (f.status || "OPEN").toUpperCase();
+      return st === "OPEN" || st === "IN_REVIEW";
+    });
+  }, [initialReviewFeedback]);
+
+  const isRevisionMode = Boolean(
+    currentReviewStatus === "REVISION_REQUIRED" ||
+      (openReviewFeedback.length > 0 && currentReviewStatus !== "REVISION_RESUBMITTED" && currentReviewStatus !== "APPROVED")
+  );
+
+  const [resubmitting, setResubmitting] = useState(false);
+
+  const handleResubmitRevision = async () => {
+    try {
+      setResubmitting(true);
+      await handleSaveRationaleDraft();
+
+      const res = await fetch(`/api/researcher/projects/${projectId}/resubmit-revision`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roleKey: "bioinformatics",
+          stageNumber: 2,
+          changesSummary: "Updated candidate compounds, in-silico ADME properties, and computational synthesis.",
+        }),
+      });
+
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to resubmit revision");
+
+      setCurrentReviewStatus("REVISION_RESUBMITTED");
+      setSuccessModalData({
+        discipline: json.discipline || "Bioinformatics",
+        profession: json.profession || "Bioinformatician / Computational Scientist",
+        reviewerName: json.reviewerName || reviewerName || null,
+        reviewCycle: json.reviewCycle || 1,
+        addressedCount: initialReviewFeedback?.length || 1,
+      });
+      setShowSuccessModal(true);
+
+      window.dispatchEvent(
+        new CustomEvent("natureaide:revisions-updated", {
+          detail: { projectId, stageNumber: 2, status: "REVISION_RESUBMITTED" },
+        })
+      );
+      window.dispatchEvent(new CustomEvent("natureaide:project-updated", { detail: { projectId } }));
+
+      startTransition(() => {
+        router.refresh();
+      });
+    } catch (err: any) {
+      console.error("Resubmit revision error:", err);
+    } finally {
+      setResubmitting(false);
+    }
+  };
 
   const [compounds, setCompounds] = useState<CompoundItem[]>(initialCompounds);
   const [results, setResults] = useState<InsilicoResultItem[]>(initialResults);
@@ -682,14 +777,30 @@ export default function InSilicoWorkspaceClient({
   const [screeningErrors, setScreeningErrors] = useState<Record<number, string>>({});
   const [validationError, setValidationError] = useState<string | null>(null);
   const [completingStage, setCompletingStage] = useState(false);
-  const [saveState, setSaveState] = useState<"idle" | "saved" | "error">("idle");
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [modal, setModal] = useState<ModalState>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
   const [removingId, setRemovingId] = useState<number | null>(null);
 
+  // Clean initial state: guarantee no persisting loading or advancement indicators
+  useEffect(() => {
+    setCompletingStage(false);
+    return () => {
+      setCompletingStage(false);
+    };
+  }, []);
+
+  // Pure Back navigation handler (NEVER triggers stage completion or advancement)
+  const handleBack = useCallback(() => {
+    console.log("[InSilicoWorkspaceClient] BACK_CLICK - Pure navigation to Plant & Literature Research");
+    router.push(`/researcher/projects/${projectId}/plant-literature`);
+  }, [projectId, router]);
+
   const [modalSearchTerm, setModalSearchTerm] = useState("");
   const [selectedClassFilter, setSelectedClassFilter] = useState("ALL");
-  const [selectedStatusFilter, setSelectedStatusFilter] = useState<"ALL" | "NOT_ADDED" | "ADDED">("ALL");
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState<
+    "ALL" | "NOT_ADDED" | "ADDED" | "STRUCTURE_READY" | "EVIDENCE_AVAILABLE"
+  >("ALL");
   const [selectedCompoundIds, setSelectedCompoundIds] = useState<Set<number>>(new Set());
   const [inspectingCompound, setInspectingCompound] = useState<AvailablePlantCompound | null>(null);
   const [showAdvancedCustomForm, setShowAdvancedCustomForm] = useState(false);
@@ -698,6 +809,8 @@ export default function InSilicoWorkspaceClient({
     initialAvailableCompounds || []
   );
   const [loadingAvailable, setLoadingAvailable] = useState(false);
+  const [discovering, setDiscovering] = useState(false);
+  const [discoveryMessage, setDiscoveryMessage] = useState<string | null>(null);
 
   const [customCompoundName, setCustomCompoundName] = useState("");
   const [customCompoundClass, setCustomCompoundClass] = useState("");
@@ -745,6 +858,31 @@ export default function InSilicoWorkspaceClient({
     }
   }, [projectId]);
 
+  const handleDiscoverFromLiterature = useCallback(async () => {
+    setDiscovering(true);
+    setCustomError(null);
+    setDiscoveryMessage(null);
+    try {
+      const res = await fetch(`/api/researcher/projects/${projectId}/in-silico`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "discover-compounds" }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to discover phytochemicals from literature.");
+      }
+      if (Array.isArray(data.availablePlantCompounds)) {
+        setAvailableCompounds(data.availablePlantCompounds);
+      }
+      setDiscoveryMessage(data.message || "Literature discovery completed successfully.");
+    } catch (err: any) {
+      setCustomError(err.message || "Literature discovery failed.");
+    } finally {
+      setDiscovering(false);
+    }
+  }, [projectId]);
+
   useEffect(() => {
     if (modal?.type === "add" && availableCompounds.length === 0) {
       void loadAvailableCompounds();
@@ -789,6 +927,8 @@ export default function InSilicoWorkspaceClient({
         );
         if (selectedStatusFilter === "NOT_ADDED" && isAdded) return false;
         if (selectedStatusFilter === "ADDED" && !isAdded) return false;
+        if (selectedStatusFilter === "STRUCTURE_READY" && (!compound.smiles || !compound.pubchemId)) return false;
+        if (selectedStatusFilter === "EVIDENCE_AVAILABLE" && (!compound.references || compound.references.length === 0)) return false;
       }
 
       return true;
@@ -1357,6 +1497,7 @@ export default function InSilicoWorkspaceClient({
       });
     } catch (error) {
       setValidationError(error instanceof Error ? error.message : "Failed to continue to molecular docking.");
+    } finally {
       setCompletingStage(false);
     }
   };
@@ -1382,7 +1523,25 @@ export default function InSilicoWorkspaceClient({
         stageTitle="In-Silico Analysis"
         plantCommonName={project.plantName}
         plantScientificName={project.plantScientificName}
-        statusLabel="In Progress"
+        statusLabel={
+          currentReviewStatus === "REVISION_RESUBMITTED"
+            ? "Revision Resubmitted"
+            : isRevisionMode
+            ? "Revisions Required"
+            : "In Progress"
+        }
+      />
+
+      {/* Bioinformatics Review Revision & Feedback Panel */}
+      <ResearcherReviewFeedbackPanel
+        projectId={projectId}
+        stageTitle="Stage 2 · In-Silico Analysis"
+        discipline="Bioinformatics"
+        overallAssessment={overallAssessment}
+        reviewStatus={currentReviewStatus}
+        recommendations={openReviewFeedback.length > 0 ? openReviewFeedback : initialReviewFeedback}
+        reviewerName={reviewerName}
+        approvedAt={approvedAt}
       />
 
       {/* STICKY TAB NAVIGATION (CONTINUOUS ONE-PAGE SCROLL) */}
@@ -1976,17 +2135,36 @@ export default function InSilicoWorkspaceClient({
         projectId={project.id}
         stageNumber={2}
         stageTitle="In-Silico Analysis"
-        backHref={`/researcher/projects/${projectId}`}
-        backLabel="Back to Project"
+        previousStageRoute={`/researcher/projects/${projectId}/plant-literature`}
+        onBack={handleBack}
+        backLabel="Back to Plant & Literature Research"
         saveStatus={saveState}
+        isSaving={saveState === "saving"}
         onSave={() => void handleSaveRationaleDraft()}
-        primaryAction={{
-          label: "Continue to Molecular Docking",
-          onClick: () => void handleCompleteAndContinue(),
-          disabled: selectedCompounds.length === 0 || !selectionRationale.trim() || completingStage || screeningIds.length > 0,
-          loading: completingStage,
-          loadingLabel: "Advancing to Molecular Docking...",
-        }}
+        saveLabel="Save Draft"
+        isRevisionMode={isRevisionMode}
+        onResubmitRevision={handleResubmitRevision}
+        isResubmitting={resubmitting}
+        reviewStatus={currentReviewStatus}
+        onContinue={() => void handleCompleteAndContinue()}
+        isContinuing={completingStage}
+        continueLabel="Continue to Molecular Docking"
+        continuingLabel="Advancing to Molecular Docking..."
+        continueDisabled={selectedCompounds.length === 0 || !selectionRationale.trim() || completingStage || screeningIds.length > 0 || isRevisionMode}
+      />
+
+      {/* Revision Resubmitted Success Confirmation Modal */}
+      <RevisionResubmittedSuccessModal
+        isOpen={showSuccessModal}
+        onClose={() => setShowSuccessModal(false)}
+        projectId={projectId}
+        stageNumber={2}
+        stageTitle="Stage 2 · In-Silico Analysis"
+        discipline={successModalData.discipline}
+        profession={successModalData.profession}
+        reviewCycle={successModalData.reviewCycle}
+        reviewerName={successModalData.reviewerName}
+        addressedCount={successModalData.addressedCount}
       />
 
       <AnimatePresence>
@@ -2006,7 +2184,23 @@ export default function InSilicoWorkspaceClient({
                 <button
                   type="button"
                   onClick={() => setCustomError(null)}
-                  className="text-rose-500 hover:text-rose-700"
+                  className="text-rose-500 hover:text-rose-700 cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
+            {discoveryMessage && (
+              <div className="mb-4 flex items-center justify-between gap-2 rounded-xl bg-emerald-50 border border-emerald-200 px-3.5 py-2.5 text-xs font-semibold text-emerald-900 shadow-2xs">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{discoveryMessage}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDiscoveryMessage(null)}
+                  className="text-emerald-700 hover:text-emerald-900 cursor-pointer"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -2022,17 +2216,54 @@ export default function InSilicoWorkspaceClient({
                     Reported Phytochemicals
                   </h3>
                   <p className="text-xs text-[#52645d] mt-0.5">
-                    Select compounds documented for <strong className="text-[#0f2c20]">{project.plantName}</strong> from our peer-reviewed botanical database.
+                    Evidence-backed compounds documented for <strong className="text-[#0f2c20]">{project.plantName}</strong>{project.plantScientificName ? ` (${project.plantScientificName})` : ""} from peer-reviewed scientific literature.
                   </p>
                 </div>
-                {loadingAvailable && (
-                  <span className="inline-flex items-center gap-1.5 text-xs text-slate-500">
-                    <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-600" />
-                    <span>Loading compound library…</span>
-                  </span>
-                )}
+                <div className="flex items-center gap-2">
+                  {loadingAvailable && (
+                    <span className="inline-flex items-center gap-1.5 text-xs text-slate-500">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-600" />
+                      <span>Loading library…</span>
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => void handleDiscoverFromLiterature()}
+                    disabled={discovering}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-emerald-50 hover:text-emerald-900 border border-slate-200 hover:border-emerald-300 text-xs font-bold text-slate-700 transition-colors cursor-pointer shadow-2xs shrink-0"
+                    title="Scan PubMed NCBI scientific literature for newly reported phytochemicals for this plant"
+                  >
+                    {discovering ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-600" />
+                    ) : (
+                      <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                    )}
+                    <span>{discovering ? "Scanning Literature…" : "Discover from Literature"}</span>
+                  </button>
+                </div>
               </div>
             </div>
+
+            {/* Informative banner if limited library available */}
+            {availableCompounds.length > 0 && availableCompounds.length <= 2 && (
+              <div className="mt-3 p-3.5 rounded-2xl bg-amber-50/80 border border-amber-200 text-amber-950 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-2xs">
+                <div className="flex items-center gap-2">
+                  <Info className="w-4 h-4 text-amber-600 shrink-0" />
+                  <p className="leading-relaxed">
+                    <strong>{availableCompounds.length} verified compound{availableCompounds.length === 1 ? "" : "s"}</strong> currently available. The NatureAide phytochemical library for this plant is continually expanded through literature grounding.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void handleDiscoverFromLiterature()}
+                  disabled={discovering}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-amber-700 hover:bg-amber-800 text-white font-bold text-xs transition-colors cursor-pointer shadow-xs self-start sm:self-auto shrink-0"
+                >
+                  {discovering ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                  <span>Search Literature</span>
+                </button>
+              </div>
+            )}
 
             {/* Search and Filters Bar */}
             <div className="pt-3 pb-2 space-y-2.5">
@@ -2050,7 +2281,7 @@ export default function InSilicoWorkspaceClient({
                     <button
                       type="button"
                       onClick={() => setModalSearchTerm("")}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
@@ -2077,20 +2308,20 @@ export default function InSilicoWorkspaceClient({
                     </div>
                   )}
 
-                  {availableCompounds.length > 0 && (
-                    <div className="relative">
-                      <select
-                        value={selectedStatusFilter}
-                        onChange={(e) => setSelectedStatusFilter(e.target.value as any)}
-                        className="appearance-none pl-3 pr-8 py-2 rounded-xl border border-[#d7e3db] bg-white text-xs font-semibold text-slate-700 outline-none focus:border-emerald-600 cursor-pointer shadow-2xs"
-                      >
-                        <option value="ALL">All Status</option>
-                        <option value="NOT_ADDED">Not Yet Added</option>
-                        <option value="ADDED">Already Added</option>
-                      </select>
-                      <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                    </div>
-                  )}
+                  <div className="relative">
+                    <select
+                      value={selectedStatusFilter}
+                      onChange={(e) => setSelectedStatusFilter(e.target.value as any)}
+                      className="appearance-none pl-3 pr-8 py-2 rounded-xl border border-[#d7e3db] bg-white text-xs font-semibold text-slate-700 outline-none focus:border-emerald-600 cursor-pointer shadow-2xs"
+                    >
+                      <option value="ALL">All Status</option>
+                      <option value="NOT_ADDED">Not Yet Added</option>
+                      <option value="ADDED">Already Added</option>
+                      <option value="STRUCTURE_READY">Structure Ready</option>
+                      <option value="EVIDENCE_AVAILABLE">Evidence Available</option>
+                    </select>
+                    <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  </div>
                 </div>
               </div>
 
@@ -2169,9 +2400,13 @@ export default function InSilicoWorkspaceClient({
             ) : (
               <div className="max-h-[46vh] overflow-y-auto divide-y divide-[#edf2ee] pr-1 space-y-1 custom-scrollbar">
                 {filteredCompounds.map((compound) => {
-                  const isAdded = compounds.some(
-                    (c) => c.compoundName.toLowerCase() === compound.compoundName.toLowerCase()
-                  );
+                  const isAdded =
+                    compound.isAlreadyAdded ||
+                    compounds.some(
+                      (c) =>
+                        c.compoundName.toLowerCase() === compound.compoundName.toLowerCase() ||
+                        (compound.pubchemId && String(c.pubchemId) === String(compound.pubchemId))
+                    );
                   const isChecked = selectedCompoundIds.has(compound.id);
 
                   return (
@@ -2651,9 +2886,9 @@ export default function InSilicoWorkspaceClient({
               </p>
             ) : (
               <div className="space-y-3">
-                {activePapers.map((paper) => (
+                {activePapers.map((paper, idx) => (
                   <article
-                    key={paper.pubmedId || paper.id || paper.title}
+                    key={`compound-paper-${paper.pubmedId || paper.id || idx}-${idx}`}
                     className="rounded-2xl border border-[#e7eee9] p-4"
                   >
                     <h3 className="font-semibold leading-snug">{paper.title}</h3>

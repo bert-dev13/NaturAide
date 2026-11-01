@@ -30,7 +30,7 @@ export default async function ReviewerLayout({
   return (
     <Suspense fallback={<div className="h-screen bg-[#f8fafc]" />}>
       <ReviewerProjectProvider>
-        <div className="h-screen flex flex-col lg:flex-row bg-[#f8fafc] text-slate-900 font-sans antialiased overflow-hidden">
+        <div suppressHydrationWarning className="h-screen flex flex-col lg:flex-row bg-[#f8fafc] text-slate-900 font-sans antialiased overflow-hidden">
           {/* Desktop Sticky Professional Sidebar */}
           <ReviewerSidebar user={session} />
 

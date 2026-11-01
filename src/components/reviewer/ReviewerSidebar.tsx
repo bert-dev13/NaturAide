@@ -14,9 +14,11 @@ import {
   Sparkles,
   FlaskConical,
   CheckCircle2,
-  Clock,
-  AlertCircle,
+  Clock3,
+  AlertTriangle,
+  CircleAlert,
   Circle,
+  RefreshCw,
   type LucideIcon,
 } from "lucide-react";
 import LogoutButton from "@/components/LogoutButton";
@@ -89,8 +91,10 @@ function getStageStatusConfig(status?: string): {
   textColor: string;
   isApproved: boolean;
 } {
-  switch (status) {
+  const norm = (status || "").toUpperCase();
+  switch (norm) {
     case "APPROVED":
+    case "COMPLETED":
       return {
         icon: CheckCircle2,
         label: "Approved",
@@ -98,28 +102,40 @@ function getStageStatusConfig(status?: string): {
         textColor: "text-emerald-300",
         isApproved: true,
       };
-    case "IN_REVIEW":
+    case "REVISION_RESUBMITTED":
+    case "RESUBMITTED":
       return {
-        icon: Clock,
-        label: "In Review",
-        iconColor: "text-sky-400",
-        textColor: "text-sky-300",
+        icon: RefreshCw,
+        label: "Revision Resubmitted",
+        iconColor: "text-teal-400",
+        textColor: "text-teal-300",
         isApproved: false,
       };
     case "REVISION_REQUIRED":
+    case "REVISIONS_REQUESTED":
       return {
-        icon: AlertCircle,
+        icon: AlertTriangle,
         label: "Revision Required",
         iconColor: "text-amber-400",
         textColor: "text-amber-300",
         isApproved: false,
       };
+    case "IN_REVIEW":
+    case "UNDER_REVIEW":
+      return {
+        icon: Clock3,
+        label: "In Review",
+        iconColor: "text-sky-400",
+        textColor: "text-sky-300",
+        isApproved: false,
+      };
+    case "NEEDS_REVIEW":
     case "AWAITING_REVIEW":
       return {
-        icon: Circle,
-        label: "Awaiting Review",
-        iconColor: "text-slate-400",
-        textColor: "text-slate-300",
+        icon: CircleAlert,
+        label: "Needs Review",
+        iconColor: "text-blue-400",
+        textColor: "text-blue-200",
         isApproved: false,
       };
     case "NOT_SUBMITTED":
@@ -231,10 +247,10 @@ export default function ReviewerSidebar({
                   ? "bg-blue-600 text-white shadow-md shadow-blue-900/40"
                   : "text-slate-300 hover:text-white hover:bg-white/10"
               }`}
-              title="Review Workspace"
+              title="Dashboard"
             >
               <LayoutDashboard className="w-4 h-4 shrink-0 text-blue-300" />
-              {!collapsed && <span>Review Workspace</span>}
+              {!collapsed && <span>Dashboard</span>}
             </Link>
 
             <Link
@@ -364,41 +380,34 @@ export default function ReviewerSidebar({
                   <Link
                     key={stage.number}
                     href={targetHref}
-                    className={`group block px-2.5 py-2 rounded-xl transition-all border ${
+                    className={`group block px-2.5 py-1.5 rounded-xl transition-all border ${
                       isStageActive
                         ? "bg-blue-600/30 text-white border-blue-400 shadow-sm"
                         : "bg-white/[0.03] border-white/10 hover:bg-white/[0.08] hover:border-white/20 text-slate-200"
                     }`}
-                    title={`${stage.number} ${stage.stageName} · ${stage.professionalExpert}`}
+                    title={`${stage.number} ${stage.stageName} · ${stage.professionalExpert} · ${statusConfig.label}`}
                   >
-                    {/* ROW 1: STATUS ICON + STAGE NUMBER + STAGE NAME */}
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <span className={`shrink-0 ${statusConfig.iconColor}`}>
-                        <StatusIcon className="w-3.5 h-3.5" />
-                      </span>
-                      <span className="font-mono text-xs font-black text-blue-300 shrink-0">
-                        {stage.number}
-                      </span>
-                      <span className="font-heading font-bold text-xs text-white leading-tight truncate">
-                        {stage.stageName}
+                    {/* ROW 1: STATUS ICON + STAGE NUMBER + STAGE NAME + STATUS BADGE */}
+                    <div className="flex items-center justify-between gap-1.5 min-w-0">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className={`shrink-0 ${statusConfig.iconColor}`}>
+                          <StatusIcon className="w-3.5 h-3.5" />
+                        </span>
+                        <span className="font-mono text-xs font-black text-blue-300 shrink-0">
+                          {stage.number}
+                        </span>
+                        <span className="font-heading font-bold text-xs text-white leading-tight truncate">
+                          {stage.stageName}
+                        </span>
+                      </div>
+                      <span className={`shrink-0 inline-flex items-center gap-1 text-[10px] font-bold ${statusConfig.textColor}`}>
+                        {statusConfig.label}
                       </span>
                     </div>
 
-                    {/* ROW 2: PROFESSIONAL EXPERT (Secondary, clean natural wrap, no word break) */}
-                    <div className="mt-1 pl-5 space-y-0.5 min-w-0">
-                      <p className="text-[11.5px] font-semibold text-slate-200 leading-snug break-normal whitespace-normal hyphens-none">
-                        {stage.professionalExpert}
-                      </p>
-
-                      {/* ROW 3: EXPERTISE (Muted/Uppercase) + REVIEW STATUS */}
-                      <div className="flex items-center justify-between gap-1 pt-0.5">
-                        <span className="text-[9.5px] font-bold text-blue-300/70 tracking-wider uppercase">
-                          {stage.expertise}
-                        </span>
-                        <span className={`inline-flex items-center gap-1 text-[10px] font-bold ${statusConfig.textColor}`}>
-                          {statusConfig.label}
-                        </span>
-                      </div>
+                    {/* ROW 2: PROFESSIONAL EXPERT */}
+                    <div className="mt-0.5 pl-5 flex items-center justify-between text-[11px] text-slate-300 truncate">
+                      <span className="truncate">{stage.professionalExpert}</span>
                     </div>
                   </Link>
                 );

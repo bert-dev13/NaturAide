@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
 import pool from "@/lib/db";
 import { getSession } from "@/lib/auth";
+import { normalizeReviewAreaKey } from "@/lib/expert-review-areas";
+import {
+  ensureReviewTables,
+  findDefaultExpertReviewerId,
+  findReviewerForArea,
+} from "@/lib/expert-review-assignment";
+import { getAllProfessionalReviewStages, getProfessionalReviewStageStatus } from "@/lib/professional-review-status";
 
 export async function GET(
   request: Request,
@@ -52,7 +59,7 @@ export async function GET(
 
     // 3. Stage 2 Data: Candidate Compounds & Screening
     const [compounds]: any = await pool.query(
-      "SELECT id, compoundName, molecularFormula, molecularWeight, pubchemId, canonicalSmiles, admeProperties FROM research_compounds WHERE projectId = ? ORDER BY id ASC",
+      "SELECT id, compoundName, molecularFormula, molecularWeight, pubchemId, smiles as canonicalSmiles, smiles FROM research_compounds WHERE projectId = ? ORDER BY id ASC",
       [projectId]
     );
 
@@ -183,22 +190,19 @@ export async function GET(
       decisionMap[d.areaKey] = d;
     }
 
-    const professionalReviews = REVIEW_AREAS.map((area) => {
-      const decision = decisionMap[area.key];
-      const covStatus = coverageMap[area.key];
-      const status = decision?.status || covStatus || "PENDING";
-      return {
-        key: area.key,
-        label: area.label,
-        reviewer: area.reviewer,
-        status: status === "APPROVED" ? "APPROVED" : status === "IN_REVIEW" ? "IN_REVIEW" : status === "REVISION_REQUESTED" ? "REVISION_REQUESTED" : "PENDING",
-        comments: decision?.comments || null,
-        submittedAt: decision?.submittedAt || null,
-      };
-    });
-
-    const approvedCount = professionalReviews.filter((r) => r.status === "APPROVED").length;
-    const isProfessionallyApproved = approvedCount === 5;
+    const stageReviewRes = await getAllProfessionalReviewStages(projectId);
+    const professionalReviews = stageReviewRes.areas.map((a) => ({
+      key: a.areaKey,
+      label: a.discipline,
+      reviewer: a.profession,
+      status: a.status,
+      comments: a.comments,
+      submittedAt: a.approvedAt,
+    }));
+    const approvedCount = stageReviewRes.areas.filter(
+      (a) => a.status === "APPROVED" || a.isCompleted
+    ).length;
+    const isProfessionallyApproved = approvedCount >= 5;
 
     // Check project stages
     const [stages]: any = await pool.query(
@@ -222,7 +226,7 @@ export async function GET(
 
     const isResearchComplete = completedStagesCount >= 5 || project.status === "COMPLETED";
 
-    // 9. Review History
+    // 9. Review History & Active Feedback
     const [historyRows]: any = await pool.query(
       `
       SELECT pr.id, pr.areaKey, pr.status, pr.comments, pr.submittedAt, u.name as reviewerName
@@ -234,8 +238,32 @@ export async function GET(
       [projectId]
     );
 
+    const [feedbackRows]: any = await pool.query(
+      `
+      SELECT rf.id, rf.title, rf.comment, rf.commentType, rf.severity, rf.status, rf.sectionName,
+             rf.createdAt, u.name as reviewerName
+      FROM review_feedback rf
+      LEFT JOIN users u ON rf.reviewerId = u.id
+      WHERE rf.projectId = ?
+      ORDER BY rf.createdAt DESC
+      `,
+      [projectId]
+    );
+
+    const revisionRequestedReview = professionalReviews.find((r) => r.status === "REVISION_REQUIRED");
+    const isRevisionMode = Boolean(
+      revisionRequestedReview ||
+      feedbackRows.some((f: any) => f.status === "OPEN" || f.status === "IN_REVIEW")
+    );
+
+    const stage6Status = stageReviewRes.stages[5]?.status || (isRevisionMode ? "REVISION_REQUIRED" : "PENDING");
+
     return NextResponse.json({
       success: true,
+      reviewStatus: stage6Status,
+      isRevisionMode,
+      overallAssessment: stageReviewRes.stages[5]?.comments || null,
+      reviewerName: stageReviewRes.stages[5]?.reviewerName || null,
       project: {
         id: project.id,
         title: project.title,
@@ -292,6 +320,8 @@ export async function GET(
       isProfessionallyApproved,
       isResearchComplete,
       completedStagesCount,
+      feedbackItems: feedbackRows,
+      revisionDiscipline: revisionRequestedReview?.label || null,
       synthesis: {
         keyFindings,
         evidenceAlignment,
@@ -321,9 +351,9 @@ export async function GET(
         },
       },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Knowledge Integration Stage GET error:", error);
-    return NextResponse.json({ error: "Failed to load knowledge integration stage data" }, { status: 500 });
+    return NextResponse.json({ error: error?.message || "Failed to load knowledge integration stage data" }, { status: 500 });
   }
 }
 
@@ -396,6 +426,9 @@ export async function POST(
     }
 
     const keyFindingsStr = Array.isArray(keyFindings) ? JSON.stringify(keyFindings) : String(keyFindings || "[]");
+    const isCompletionAction = action === "complete-research" || action === "complete";
+    const stageStatus = isCompletionAction ? "COMPLETED" : "IN_PROGRESS";
+    const completedAtVal = isCompletionAction ? new Date() : null;
 
     // Check or insert into research_completions
     const [existingComp]: any = await pool.query(
@@ -412,7 +445,7 @@ export async function POST(
              conclusion = ?,
              limitations = ?,
              stageStatus = ?,
-             completedAt = IF(? = 'complete-research', CURRENT_TIMESTAMP(3), completedAt),
+             completedAt = COALESCE(?, completedAt),
              updatedAt = CURRENT_TIMESTAMP(3)
          WHERE id = ?`,
         [
@@ -421,8 +454,8 @@ export async function POST(
           scientificInterpretation || "",
           finalConclusion || "",
           limitations || "",
-          action === "complete-research" ? "COMPLETED" : "IN_PROGRESS",
-          action,
+          stageStatus,
+          completedAtVal,
           existingComp[0].id,
         ]
       );
@@ -430,7 +463,7 @@ export async function POST(
       await pool.query(
         `INSERT INTO research_completions
          (projectId, finalTitle, abstract, keyFindings, evidenceAlignment, scientificInterpretation, conclusion, limitations, stageStatus, completedAt)
-         VALUES (?, 'Research Dossier', 'Dossier Abstract', ?, ?, ?, ?, ?, ?, IF(? = 'complete-research', CURRENT_TIMESTAMP(3), NULL))`,
+         VALUES (?, 'Research Dossier', 'Dossier Abstract', ?, ?, ?, ?, ?, ?, ?)`,
         [
           projectId,
           keyFindingsStr,
@@ -438,64 +471,138 @@ export async function POST(
           scientificInterpretation || "",
           finalConclusion || "",
           limitations || "",
-          action === "complete-research" ? "COMPLETED" : "IN_PROGRESS",
-          action,
+          stageStatus,
+          completedAtVal,
         ]
       );
     }
 
-    if (action === "complete-research") {
-      // 1. Mark Stage 6 as COMPLETED in research_project_stages
-      for (const stg of ["knowledge-integration", "expert-review"]) {
+    if (isCompletionAction) {
+      // 1. Fetch project and verify ownership
+      const [projRows]: any = await pool.query(
+        `SELECT rp.*, COALESCE(p.commonName, rp.plantCustomName, 'Botanical Subject') as plantName
+         FROM research_projects rp
+         LEFT JOIN plants p ON rp.plantId = p.id
+         WHERE rp.id = ? AND rp.researcherId = ? LIMIT 1`,
+        [projectId, session.id]
+      );
+      if (projRows.length === 0) {
+        return NextResponse.json({ error: "Project not found or unauthorized" }, { status: 404 });
+      }
+      const project = projRows[0];
+
+      // 2. Canonical required professional reviews evaluation using single source of truth
+      const stageReviewRes = await getAllProfessionalReviewStages(projectId);
+      const approvedAreas = stageReviewRes.areas.filter(
+        (a) => a.status === "APPROVED" || a.isCompleted
+      );
+      const approvedAreasCount = approvedAreas.length;
+      const totalRequired = stageReviewRes.areas.length || 5;
+
+      const reviewAreaStatusList = stageReviewRes.areas.map((a) => ({
+        key: a.areaKey,
+        label: a.discipline,
+        status: a.status,
+        isApproved: a.status === "APPROVED" || a.isCompleted,
+        hasRevisions: a.status === "REVISION_REQUIRED",
+      }));
+
+      // Query active open recommendations
+      const [openFeedbackRows]: any = await pool.query(
+        "SELECT id, areaKey, title, sectionName, comment, status FROM review_feedback WHERE projectId = ? AND status = 'OPEN'",
+        [projectId]
+      );
+
+      const revisionAreas = reviewAreaStatusList.filter((r) => r.hasRevisions);
+      const hasRevisions = revisionAreas.length > 0 || openFeedbackRows.length > 0;
+      const allReviewsApproved = approvedAreasCount >= totalRequired && !hasRevisions;
+
+      // 3. Check stages completion (Stages 1 through 5)
+      const stages1to5Complete = stageReviewRes.stages
+        .filter((s) => s.stageNumber >= 1 && s.stageNumber <= 5)
+        .every((s) => s.isReady || s.isCompleted || s.status === "APPROVED");
+
+      // If NOT eligible, reject with authoritative explanation
+      if (!allReviewsApproved) {
+        let reason = "APPROVALS_PENDING";
+        let message = `Professional peer validation in progress: ${approvedAreasCount} of ${totalRequired} areas approved.`;
+
+        if (hasRevisions) {
+          reason = "REVISIONS_REQUIRED";
+          message = `${revisionAreas.length || openFeedbackRows.length} professional review(s) require revisions before final approval.`;
+        } else if (!stages1to5Complete) {
+          reason = "STAGES_INCOMPLETE";
+          message = "All prior research stages (Stages 1 through 5) must be completed first.";
+        }
+
+        return NextResponse.json(
+          {
+            success: false,
+            canComplete: false,
+            error: "Professional Validation Required",
+            reason,
+            message,
+            approvedCount: approvedAreasCount,
+            totalRequired,
+            reviews: reviewAreaStatusList,
+            openFeedbackCount: openFeedbackRows.length,
+            stagesComplete: stages1to5Complete,
+          },
+          { status: 400 }
+        );
+      }
+
+      // 4. Eligible! Complete the research pipeline idempotently
+      for (const stg of [
+        "plant-literature",
+        "in-silico",
+        "docking",
+        "formulation-safety",
+        "safety",
+        "knowledge-integration",
+        "expert-review",
+      ]) {
         await pool.query(
           `INSERT INTO research_project_stages (projectId, stageKey, status, completedAt)
            VALUES (?, ?, 'COMPLETED', CURRENT_TIMESTAMP(3))
-           ON DUPLICATE KEY UPDATE status = 'COMPLETED', completedAt = CURRENT_TIMESTAMP(3)`,
+           ON DUPLICATE KEY UPDATE status = 'COMPLETED', completedAt = COALESCE(completedAt, CURRENT_TIMESTAMP(3))`,
           [projectId, stg]
         );
       }
 
-      // 2. Complete the research pipeline
-      await pool.query(
-        "UPDATE research_projects SET status = 'COMPLETED', updatedAt = CURRENT_TIMESTAMP(3) WHERE id = ?",
-        [projectId]
-      );
-
-      // 3. Ensure Pharmacognosy final review assignment is queued or intact
-      const [latestSub]: any = await pool.query(
-        "SELECT id FROM review_submissions WHERE projectId = ? ORDER BY id DESC LIMIT 1",
-        [projectId]
-      );
-      const submissionId = latestSub[0]?.id;
-      if (submissionId) {
+      // Update research_projects
+      try {
         await pool.query(
-          `INSERT INTO review_assignments (projectId, submissionId, specialtyNeeded, status, reviewRound)
-           VALUES (?, ?, 'pharmacognosy', 'PENDING', 1)
-           ON DUPLICATE KEY UPDATE status = IF(status = 'APPROVED', 'APPROVED', 'PENDING')`,
-          [projectId, submissionId]
+          `UPDATE research_projects
+           SET status = 'COMPLETED', progressPercent = 100, currentStage = 'knowledge-integration', completedAt = CURRENT_TIMESTAMP(3), updatedAt = CURRENT_TIMESTAMP(3)
+           WHERE id = ?`,
+          [projectId]
         );
+      } catch (colErr: any) {
+        if (colErr?.message?.includes("Unknown column 'completedAt'")) {
+          await pool.query(
+            `UPDATE research_projects
+             SET status = 'COMPLETED', progressPercent = 100, currentStage = 'knowledge-integration', updatedAt = CURRENT_TIMESTAMP(3)
+             WHERE id = ?`,
+            [projectId]
+          );
+        } else {
+          throw colErr;
+        }
       }
 
-      // 4. Check whether all 5 professional reviews are approved
-      const [approvedRows]: any = await pool.query(
-        `SELECT COUNT(*) as approvedCount
-         FROM review_area_coverage
-         WHERE projectId = ? AND status = 'APPROVED'`,
-        [projectId]
-      );
-      const isFullyApproved = (approvedRows[0]?.approvedCount || 0) >= 5;
-
-      // 5. Log activity
+      // Log activity
       await pool.query(
-        `INSERT INTO research_activity_logs (projectId, userId, activityType, description)
-         VALUES (?, ?, 'PROJECT_COMPLETED', 'Completed the 6-stage research pipeline and finalized the research dossier.')`,
+        `INSERT INTO research_activity_logs (projectId, researcherId, actionType, description)
+         VALUES (?, ?, 'PROJECT_COMPLETED', 'All research stages and required professional reviews completed and finalized.')`,
         [projectId, session.id]
       );
 
       return NextResponse.json({
         success: true,
-        message: "Research completed! Research dossier finalized.",
-        isFullyApproved,
+        canComplete: true,
+        message: "Research completed successfully! All required professional reviews verified.",
+        redirectUrl: `/researcher/projects?completed=true&projectId=${projectId}&plantName=${encodeURIComponent(project.plantName)}`,
       });
     }
 
@@ -503,8 +610,8 @@ export async function POST(
       success: true,
       message: "Knowledge integration saved successfully.",
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Knowledge Integration Stage POST error:", error);
-    return NextResponse.json({ error: "Failed to save knowledge integration" }, { status: 500 });
+    return NextResponse.json({ error: error?.message || "Failed to save knowledge integration" }, { status: 500 });
   }
 }

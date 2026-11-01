@@ -64,7 +64,7 @@ export default function ReviewerHeader({
   };
 
   const navLinks = [
-    { name: "Review Workspace", href: "/reviewer", icon: LayoutDashboard },
+    { name: "Dashboard", href: "/reviewer", icon: LayoutDashboard },
     { name: "All Research Projects", href: "/reviewer/projects", icon: Layers },
     { name: "Ask NatureAide", href: "/reviewer/assistant", icon: Sparkles },
     { name: "Profile", href: "/reviewer/profile", icon: User },
@@ -210,7 +210,7 @@ export default function ReviewerHeader({
                     className="flex items-center gap-2 px-4 py-2 hover:bg-slate-50 text-slate-700 hover:text-blue-600 font-semibold transition-colors"
                   >
                     <LayoutDashboard className="w-3.5 h-3.5 text-blue-600" />
-                    <span>Review Workspace</span>
+                    <span>Dashboard</span>
                   </Link>
                   <Link
                     href="/reviewer/assistant"

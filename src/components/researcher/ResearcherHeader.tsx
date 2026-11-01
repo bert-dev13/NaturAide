@@ -1,13 +1,19 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 import {
   Menu,
   X,
   PlusCircle,
   Sparkles,
+  Bell,
+  AlertCircle,
+  CheckCircle2,
+  Clock,
+  ArrowRight,
 } from "lucide-react";
 import LogoutButton from "@/components/LogoutButton";
 import ResearcherNavSections from "./ResearcherNavSections";
@@ -23,6 +29,40 @@ export default function ResearcherHeader({
   };
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const pathname = usePathname();
+
+  useEffect(() => {
+    async function fetchNotifs() {
+      try {
+        const res = await fetch("/api/researcher/notifications");
+        if (res.ok) {
+          const data = await res.json();
+          setNotifications(data.notifications || []);
+          setUnreadCount(data.unreadCount || 0);
+        }
+      } catch (err) {
+        console.error("Notifications fetch error:", err);
+      }
+    }
+    fetchNotifs();
+  }, [pathname]);
+
+  const markAllRead = async () => {
+    try {
+      await fetch("/api/researcher/notifications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ markAll: true }),
+      });
+      setUnreadCount(0);
+      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: 1 })));
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   return (
     <>
@@ -80,6 +120,114 @@ export default function ResearcherHeader({
             <PlusCircle className="w-3.5 h-3.5 text-emerald-300" />
             <span>New Research</span>
           </Link>
+
+          {/* Notification Bell Dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setNotifOpen(!notifOpen)}
+              className="relative p-2 rounded-xl text-slate-700 hover:text-slate-900 hover:bg-[#edf2ee] transition-colors border border-[#dde6df] bg-white cursor-pointer shadow-2xs"
+              title="Research Notifications"
+              aria-label="Research Notifications"
+            >
+              <Bell className="w-4 h-4 transition-transform group-hover:scale-110" />
+              {unreadCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-amber-500 ring-2 ring-white animate-pulse" />
+              )}
+            </button>
+
+            {notifOpen && (
+              <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl bg-white border border-slate-200 shadow-2xl py-3 z-50 text-slate-900 animate-in fade-in slide-in-from-top-2">
+                <div className="flex items-center justify-between px-4 pb-2 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-900">Notifications</span>
+                    {unreadCount > 0 && (
+                      <span className="px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold">
+                        {unreadCount} new
+                      </span>
+                    )}
+                  </div>
+                  {unreadCount > 0 && (
+                    <button
+                      onClick={markAllRead}
+                      className="text-[11px] font-semibold text-emerald-700 hover:underline cursor-pointer"
+                    >
+                      Mark all as read
+                    </button>
+                  )}
+                </div>
+
+                <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
+                  {notifications.length === 0 ? (
+                    <div className="py-6 text-center text-xs text-slate-400">
+                      No notifications yet
+                    </div>
+                  ) : (
+                    notifications.map((n, nIdx) => {
+                      const isRev = n.type === "REVISION_REQUESTED";
+                      const isApp = n.type === "ACCEPTED_FOR_NEXT_STAGE";
+
+                      return (
+                        <div
+                          key={`notif-${n.id || nIdx}-${nIdx}`}
+                          className={`p-3.5 hover:bg-slate-50 transition-colors ${
+                            n.isRead ? "opacity-75" : "bg-emerald-50/20"
+                          }`}
+                        >
+                          <div className="flex items-start gap-2.5">
+                            <div
+                              className={`p-1.5 rounded-lg shrink-0 mt-0.5 ${
+                                isRev
+                                  ? "bg-amber-100 text-amber-700"
+                                  : isApp
+                                  ? "bg-emerald-100 text-emerald-700"
+                                  : "bg-blue-100 text-blue-700"
+                              }`}
+                            >
+                              {isRev ? (
+                                <AlertCircle className="w-3.5 h-3.5" />
+                              ) : isApp ? (
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                              ) : (
+                                <Clock className="w-3.5 h-3.5" />
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <h4 className="text-xs font-bold text-slate-900 leading-snug">
+                                {n.title}
+                              </h4>
+                              <p className="text-[11.5px] text-slate-600 mt-0.5 leading-relaxed">
+                                {n.message}
+                              </p>
+                              <div className="flex items-center justify-between mt-2 pt-1">
+                                <span className="text-[10px] text-slate-400 font-mono">
+                                  {new Date(n.createdAt).toLocaleDateString(undefined, {
+                                    month: "short",
+                                    day: "numeric",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
+                                </span>
+                                {n.link && (
+                                  <Link
+                                    href={n.link}
+                                    onClick={() => setNotifOpen(false)}
+                                    className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:text-emerald-900 transition-colors"
+                                  >
+                                    <span>{isRev ? "View Revisions" : isApp ? "View Stage" : "View Feedback"}</span>
+                                    <ArrowRight className="w-3 h-3" />
+                                  </Link>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
 
           <div className="hidden sm:flex items-center gap-2 pl-3 border-l border-[#dde6df]">
             <Link

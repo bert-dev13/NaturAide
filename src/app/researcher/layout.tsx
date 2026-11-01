@@ -24,7 +24,7 @@ export default async function ResearcherLayout({
   }
 
   return (
-    <div className="h-screen flex flex-col lg:flex-row bg-[#faf9f5] text-[#131b17] font-sans antialiased overflow-hidden">
+    <div suppressHydrationWarning className="h-screen flex flex-col lg:flex-row bg-[#faf9f5] text-[#131b17] font-sans antialiased overflow-hidden">
       {/* Desktop Sticky / Fixed Sidebar */}
       <ResearcherSidebar user={session} />
 
