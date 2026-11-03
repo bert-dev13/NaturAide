@@ -1,26 +1,35 @@
 /**
  * Community Chat Router & Context Handling Engine
  * 
+ * Multilingual, context-aware routing supporting English, Filipino/Tagalog, Taglish,
+ * Cebuano, and Ilocano for Ask NatureAide.
+ * 
  * Implements strict hierarchy:
- * current user intent > current explicit entity > conversational context > previous entity
+ * Emergency/Safety Screen > Explicit Intent > Explicit Entity > Conversational Context > Previous Entity
  */
+
+export type SupportedLanguage = "en" | "fil" | "taglish" | "ceb" | "ilo";
 
 export type ChatIntent =
   | "GREETING"
   | "CONVERSATION"
   | "GENERAL_QUESTION"
   | "GENERAL_KNOWLEDGE"
+  | "RESEARCH_EXPLANATION"
   | "USER_NAME_QUERY"
   | "USER_NAME_SET"
   | "PLANT_LOOKUP"
   | "PLANT_FOLLOWUP"
+  | "PLANT_COMPARISON"
   | "PRODUCT_LOOKUP"
   | "PRODUCT_FOLLOWUP"
   | "PRODUCTS"
   | "PREPARATION"
   | "SAFETY"
   | "EVIDENCE"
+  | "SYMPTOM"
   | "HEALTH_CONCERN"
+  | "PROFESSIONAL_CARE"
   | "EMERGENCY"
   | "THANKS"
   | "GOODBYE"
@@ -29,12 +38,16 @@ export type ChatIntent =
 export type AssistantRoute =
   | "CONVERSATION"
   | "GENERAL_KNOWLEDGE"
+  | "RESEARCH_EXPLANATION"
   | "NATURAIDE_PLANT"
   | "NATURAIDE_PRODUCT"
   | "NATURAIDE_PREPARATION"
   | "NATURAIDE_SAFETY"
   | "NATURAIDE_EVIDENCE"
+  | "PLANT_COMPARISON"
+  | "SYMPTOM"
   | "HEALTH_GENERAL"
+  | "PROFESSIONAL_CARE"
   | "EMERGENCY";
 
 export type EvidenceLevel =
@@ -49,20 +62,25 @@ export type EvidenceLevel =
   | "GUIDELINE";
 
 export interface ConversationEntity {
-  type: "PLANT" | "PRODUCT";
+  type: "PLANT" | "PRODUCT" | "COMPARISON";
   id: string;
   name: string;
   slug?: string;
   scientificName?: string;
   source: "EXPLICIT" | "CONTEXTUAL";
+  secondaryPlantId?: string;
+  secondaryPlantName?: string;
 }
 
-export interface ConversationTurnSummary {
-  sender: "USER" | "ASSISTANT";
-  content: string;
-  intent?: ChatIntent;
-  entityId?: string | null;
-  entityType?: "PLANT" | "PRODUCT" | "NONE";
+export interface DetectedSymptom {
+  key: string;
+  nameEn: string;
+  nameFil: string;
+  associatedPlantIds: string[];
+  primaryPlantId: string;
+  isRedFlag: boolean;
+  warningEn?: string;
+  warningFil?: string;
 }
 
 /**
@@ -77,10 +95,73 @@ export function normalizeMessage(message: string): string {
 }
 
 /**
- * Detects emergency or high-risk medical safety triggers.
+ * Detects the language of the user message.
+ */
+export function detectLanguage(text: string): SupportedLanguage {
+  const norm = normalizeMessage(text);
+  const words = norm.split(/\s+/);
+
+  // Cebuano / Bisaya markers
+  const cebMarkers = [
+    "unsa", "kini", "niana", "tambal", "tanom", "dughan", "ngipon", "lawas",
+    "kalibanga", "mangihi", "mabdos", "unsaon", "epekto", "luwas", "dili",
+    "makaginhawa", "lisod", "giubo", "nag-ubo"
+  ];
+  if (cebMarkers.some((m) => norm.includes(m))) {
+    return "ceb";
+  }
+
+  // Ilocano markers
+  const iloMarkers = [
+    "ania", "agas", "mula", "ubog", "tian", "kasano", "aramiden",
+    "aganges", "marigatan"
+  ];
+  if (iloMarkers.some((m) => norm.includes(m))) {
+    return "ilo";
+  }
+
+  // Filipino / Tagalog specific markers
+  const filMarkers = [
+    "ano", "anong", "mga", "halaman", "halamang", "gamot", "para", "sa", "ng", "ang",
+    "ubo", "inuubo", "may", "tiyan", "ulo", "lalamunan", "lagnat", "nito", "nila",
+    "ito", "dito", "ba", "po", "opo", "kumusta", "kamusta", "masakit", "paano",
+    "ihanda", "gamitin", "bata", "buntis", "ligtas", "meron", "mayroon", "pag-aaral",
+    "ebidensya", "pakuluan", "tsaa", "dahon", "sakit", "lason", "nahihirapan", "huminga",
+    "buni", "an-an", "alipunga", "manas", "rayuma", "tatae", "nagtatae", "kabag"
+  ];
+
+  let filCount = 0;
+  for (const w of words) {
+    if (filMarkers.includes(w)) filCount++;
+  }
+
+  // English markers
+  const enMarkers = [
+    "what", "is", "are", "how", "the", "for", "with", "can", "should", "does",
+    "cough", "stomach", "headache", "safe", "safety", "evidence", "research",
+    "prepare", "preparation", "products", "pregnant", "children", "side", "effects"
+  ];
+
+  let enCount = 0;
+  for (const w of words) {
+    if (enMarkers.includes(w)) enCount++;
+  }
+
+  if (filCount > 0 && enCount > 0) {
+    return "taglish";
+  }
+  if (filCount > 0) {
+    return "fil";
+  }
+  return "en";
+}
+
+/**
+ * Detects emergency or high-risk medical safety triggers across English, Filipino, Taglish, and dialects.
  */
 export function detectEmergencyOrHighRiskIntent(normalized: string): "EMERGENCY" | "HEALTH_CONCERN" | null {
   const emergencyKeywords = [
+    // English
     "emergency",
     "cannot breathe",
     "cant breathe",
@@ -94,12 +175,60 @@ export function detectEmergencyOrHighRiskIntent(normalized: string): "EMERGENCY"
     "overdose",
     "unconscious",
     "passed out",
+    "loss of consciousness",
     "severe bleeding",
     "bleeding heavily",
     "anaphylaxis",
     "severe allergic reaction",
     "swollen throat",
     "choking",
+    "coughing blood",
+    "cough blood",
+    "blood in cough",
+    "vomiting blood",
+    "going to faint",
+    "feeling faint",
+
+    // Filipino / Tagalog / Taglish
+    "nahihirapang huminga",
+    "nahihirapan huminga",
+    "hirap huminga",
+    "di makahinga",
+    "hindi makahinga",
+    "hindi ako makahinga",
+    "di ako makahinga",
+    "sumisikip ang dibdib",
+    "masakit ang dibdib",
+    "paninikip ng dibdib",
+    "atake sa puso",
+    "umuubo ng dugo",
+    "inuubo ng dugo",
+    "may dugo ang ubo",
+    "may dugo ang inuubo",
+    "dumudugo ang ubo",
+    "nagsusuka ng dugo",
+    "nahimatay",
+    "nawalan ng malay",
+    "hinihimatay",
+    "nalason",
+    "lason",
+    "sobrang inom ng gamot",
+    "namamaga ang lalamunan",
+    "matinding allergy",
+
+    // Cebuano
+    "dili makaginhawa",
+    "lisod iginhawa",
+    "naglisod og ginhawa",
+    "sakit ang dughan",
+    "nag-ubo og dugo",
+    "naay dugo ang ubo",
+    "nakuyapan",
+
+    // Ilocano
+    "marigatan nga aganges",
+    "di makaanges",
+    "agub-ubor ti dara"
   ];
 
   for (const kw of emergencyKeywords) {
@@ -109,6 +238,7 @@ export function detectEmergencyOrHighRiskIntent(normalized: string): "EMERGENCY"
   }
 
   const healthConcernKeywords = [
+    // English
     "i feel sick",
     "i have severe",
     "cure my",
@@ -116,6 +246,10 @@ export function detectEmergencyOrHighRiskIntent(normalized: string): "EMERGENCY"
     "my symptoms are",
     "i am suffering from",
     "treat my infection",
+    // Filipino
+    "masama ang pakiramdam ko",
+    "gamutin ang sakit ko",
+    "anong sakit ko"
   ];
 
   for (const kw of healthConcernKeywords) {
@@ -128,55 +262,182 @@ export function detectEmergencyOrHighRiskIntent(normalized: string): "EMERGENCY"
 }
 
 /**
+ * Detects common symptoms and retrieves verified associated NatureAide medicinal plants.
+ */
+export function detectSymptomAndAssociatedPlants(normalized: string): DetectedSymptom | null {
+  // 1. Cough / Respiratory
+  const coughKeywords = [
+    "cough", "coughing", "dry cough", "wet cough", "phlegm",
+    "ubo", "inuubo", "may ubo", "may plema", "plema", "ubong", "ubo ko",
+    "gi-ubo", "giubo", "nag-ubo"
+  ];
+  if (coughKeywords.some((kw) => new RegExp(`\\b${kw}\\b`, "i").test(normalized) || normalized.includes(kw))) {
+    return {
+      key: "cough",
+      nameEn: "Cough & Respiratory Discomfort",
+      nameFil: "Ubo at Panlalamig sa Dibdib",
+      associatedPlantIds: ["lagundi", "ginger"],
+      primaryPlantId: "lagundi",
+      isRedFlag: false,
+      warningEn: "If accompanied by high fever, difficulty breathing, or coughing blood, seek immediate emergency medical care.",
+      warningFil: "Kung may kasamang mataas na lagnat, hirap sa paghinga, o pag-ubo ng dugo, magpatingin agad sa pinakamalapit na pagamutan.",
+    };
+  }
+
+  // 2. Stomach / Digestive / Diarrhea
+  const stomachKeywords = [
+    "stomach ache", "stomach pain", "stomach hurts", "abdominal pain", "cramps",
+    "diarrhea", "bloated", "bloating", "indigestion", "gut pain",
+    "masakit ang tiyan", "sakit ng tiyan", "sakit sa tiyan", "nagtatae", "pagtatae",
+    "kabag", "humihilab ang tiyan", "hilab ng tiyan", "kumukulo ang tiyan",
+    "sakit ang tiyan", "kalibanga"
+  ];
+  if (stomachKeywords.some((kw) => normalized.includes(kw))) {
+    return {
+      key: "stomach",
+      nameEn: "Stomach Discomfort & Abdominal Cramps",
+      nameFil: "Sakit ng Tiyan at Pagtatae",
+      associatedPlantIds: ["tsaang-gubat", "bayabas", "ginger"],
+      primaryPlantId: "tsaang-gubat",
+      isRedFlag: false,
+      warningEn: "Persistent severe abdominal pain, dehydration, or blood in stool requires prompt physician evaluation.",
+      warningFil: "Ang patuloy na matinding pananakit ng tiyan, pagkatuyo, o dugo sa dumi ay nangangailangan ng agarang patingin sa doktor.",
+    };
+  }
+
+  // 3. Headache / Toothache / Pain
+  const headacheKeywords = [
+    "headache", "head hurts", "toothache", "tooth hurts", "muscle pain", "body ache",
+    "masakit ang ulo", "sakit ng ulo", "sakit sa ulo", "masakit ang ngipin", "sakit ng ngipin",
+    "pananakit ng katawan", "sakit ang ulo", "sakit ang ngipon"
+  ];
+  if (headacheKeywords.some((kw) => normalized.includes(kw))) {
+    return {
+      key: "headache",
+      nameEn: "Headache, Toothache & Mild Discomfort",
+      nameFil: "Sakit ng Ulo, Ngipin at Pananakit ng Katawan",
+      associatedPlantIds: ["yerba-buena"],
+      primaryPlantId: "yerba-buena",
+      isRedFlag: false,
+      warningEn: "Sudden thunderclap headaches, vision changes, or severe neurological symptoms require urgent evaluation.",
+      warningFil: "Ang biglaang napakatinding sakit ng ulo na may kasamang pagkahilo o paglabo ng paningin ay nangangailangan ng agarang pagsusuri.",
+    };
+  }
+
+  // 4. Kidney stones / Urinary / Edema (Manas)
+  const kidneyKeywords = [
+    "kidney stone", "kidney stones", "urolithiasis", "urinary", "difficulty urinating",
+    "edema", "swelling", "water retention",
+    "bato sa bato", "bato sa pantog", "manas", "hirap umihi", "masakit umihi",
+    "bato sa kidney", "lisod mangihi"
+  ];
+  if (kidneyKeywords.some((kw) => normalized.includes(kw))) {
+    return {
+      key: "kidney",
+      nameEn: "Urinary Health, Mild Edema & Kidney Support",
+      nameFil: "Pangangalaga sa Bato, Ihi at Manas",
+      associatedPlantIds: ["sambong"],
+      primaryPlantId: "sambong",
+      isRedFlag: false,
+      warningEn: "Severe flank pain, fever with urinary burning, or inability to pass urine requires urgent medical evaluation.",
+      warningFil: "Ang matinding kirot sa tagiliran, lagnat na may kasamang hapdi sa pag-ihi, o hindi maihi ay nangangailangan ng agarang medikal na atensyon.",
+    };
+  }
+
+  // 5. Blood Sugar / Diabetes
+  const diabetesKeywords = [
+    "diabetes", "blood sugar", "hyperglycemia", "glucose",
+    "asukal sa dugo", "mataas ang asukal", "asukal"
+  ];
+  if (diabetesKeywords.some((kw) => normalized.includes(kw))) {
+    return {
+      key: "diabetes",
+      nameEn: "Blood Glucose Supportive Care",
+      nameFil: "Pangangalaga sa Antas ng Asukal sa Dugo",
+      associatedPlantIds: ["ampalaya"],
+      primaryPlantId: "ampalaya",
+      isRedFlag: false,
+      warningEn: "Herbal options are supportive adjuncts and must not replace prescribed anti-diabetic medication or insulin.",
+      warningFil: "Ang mga halamang gamot ay pantulong lamang at hindi dapat ipalit sa iniresetang gamot o insulin ng doktor.",
+    };
+  }
+
+  // 6. Uric Acid / Gout / Joint Discomfort
+  const goutKeywords = [
+    "uric acid", "gout", "arthritis", "stiff joint", "joint pain",
+    "rayuma", "kirot sa kasu-kasuan", "kasu-kasuan", "mataas na uric acid"
+  ];
+  if (goutKeywords.some((kw) => normalized.includes(kw))) {
+    return {
+      key: "gout",
+      nameEn: "Serum Uric Acid & Joint Discomfort",
+      nameFil: "Mataas na Uric Acid at Kirot sa Kasu-kasuan",
+      associatedPlantIds: ["ulasimang-bato", "turmeric"],
+      primaryPlantId: "ulasimang-bato",
+      isRedFlag: false,
+    };
+  }
+
+  // 7. Skin Fungal / Buni / An-an / Wounds
+  const skinKeywords = [
+    "fungal", "ringworm", "athlete s foot", "tinea", "skin sore", "wound",
+    "buni", "an-an", "alipunga", "sugat", "galis", "makating balat"
+  ];
+  if (skinKeywords.some((kw) => normalized.includes(kw))) {
+    return {
+      key: "skin",
+      nameEn: "Fungal Skin Discomfort & Antiseptic Care",
+      nameFil: "Pangangalaga sa Balat, Buni, An-an at Sugat",
+      associatedPlantIds: ["akapulko", "bayabas"],
+      primaryPlantId: "akapulko",
+      isRedFlag: false,
+    };
+  }
+
+  // 8. Fever / Lagnat
+  const feverKeywords = [
+    "fever", "high temperature", "chills",
+    "lagnat", "nilalagnat", "sinat", "mataas ang lagnat"
+  ];
+  if (feverKeywords.some((kw) => normalized.includes(kw))) {
+    return {
+      key: "fever",
+      nameEn: "Mild Fever & Cold Chills",
+      nameFil: "Lagnat at Sinat",
+      associatedPlantIds: ["lagundi", "ginger"],
+      primaryPlantId: "lagundi",
+      isRedFlag: false,
+      warningEn: "High or prolonged fever exceeding 3 days requires direct clinical evaluation.",
+      warningFil: "Ang mataas o pabalik-balik na lagnat na lumalagpas sa 3 araw ay dapat maipatingin sa doktor.",
+    };
+  }
+
+  return null;
+}
+
+/**
  * Detects whether the message is a pure greeting.
- * Greetings: hi, hello, hey, good morning, good afternoon, kumusta, kamusta, etc.
  */
 export function isGreeting(normalized: string): boolean {
   const greetingExact = [
-    "hi",
-    "hello",
-    "hey",
-    "heya",
-    "howdy",
-    "yo",
-    "sup",
-    "good morning",
-    "good afternoon",
-    "good evening",
-    "good day",
-    "kumusta",
-    "kamusta",
-    "kumusta po",
-    "kamusta po",
-    "hello po",
-    "hi po",
-    "magandang araw",
-    "magandang umaga",
-    "magandang hapon",
-    "magandang gabi",
-    "hi naturamide",
-    "hello naturamide",
-    "hi naturamide",
-    "hello naturamide",
+    "hi", "hello", "hey", "heya", "howdy", "yo", "sup",
+    "good morning", "good afternoon", "good evening", "good day",
+    "kumusta", "kamusta", "kumusta po", "kamusta po", "hello po", "hi po",
+    "magandang araw", "magandang umaga", "magandang hapon", "magandang gabi",
+    "hi natureaide", "hello natureaide", "hi naturamide", "hello naturamide"
   ];
 
   if (greetingExact.includes(normalized)) return true;
 
-  // Pattern checks for greetings at start with greeting only or trivial punctuation
   const greetingPrefixes = [
-    /^hi\b/,
-    /^hello\b/,
-    /^hey\b/,
-    /^kumusta\b/,
-    /^kamusta\b/,
+    /^hi\b/, /^hello\b/, /^hey\b/, /^kumusta\b/, /^kamusta\b/,
     /^good (morning|afternoon|evening|day)\b/,
   ];
 
   for (const regex of greetingPrefixes) {
     if (regex.test(normalized)) {
       const rest = normalized.replace(regex, "").trim();
-      // If the rest is empty or just generic salutation like "there", "friend", "po", "bot", "assistant"
-      if (!rest || /^(there|friend|po|assistant|bot|naturamide)$/.test(rest)) {
+      if (!rest || /^(there|friend|po|assistant|bot|natureaide|naturamide)$/.test(rest)) {
         return true;
       }
     }
@@ -186,28 +447,16 @@ export function isGreeting(normalized: string): boolean {
 }
 
 /**
- * Detects thanks or gratitude messages.
+ * Detects thanks or gratitude messages in English or Filipino.
  */
 export function isThanks(normalized: string): boolean {
   const thanksExact = [
-    "thanks",
-    "thank you",
-    "thank u",
-    "thx",
-    "ty",
-    "salamat",
-    "salamat po",
-    "maraming salamat",
-    "maraming salamat po",
-    "many thanks",
-    "thanks a lot",
-    "thank you so much",
-    "okay thanks",
-    "ok thanks",
-    "ok thank you",
-    "okay thank you",
+    "thanks", "thank you", "thank u", "thx", "ty",
+    "salamat", "salamat po", "maraming salamat", "maraming salamat po",
+    "daghang salamat", "agyamanak",
+    "many thanks", "thanks a lot", "thank you so much",
+    "okay thanks", "ok thanks", "ok thank you", "okay thank you"
   ];
-
   return thanksExact.includes(normalized);
 }
 
@@ -216,59 +465,30 @@ export function isThanks(normalized: string): boolean {
  */
 export function isGoodbye(normalized: string): boolean {
   const goodbyeExact = [
-    "bye",
-    "goodbye",
-    "bye bye",
-    "byebye",
-    "paalam",
-    "paalam po",
-    "see you",
-    "see ya",
-    "cya",
-    "good night",
-    "take care",
+    "bye", "goodbye", "bye bye", "byebye", "paalam", "paalam po",
+    "babay", "see you", "see ya", "cya", "good night", "take care"
   ];
-
   return goodbyeExact.includes(normalized);
 }
 
 /**
- * Detects general conversational questions like "how are you", "tell me a joke", "who are you".
+ * Detects conversational chitchat or identity questions.
  */
 export function isConversational(normalized: string): boolean {
   const conversationalPhrases = [
-    "how are you",
-    "how are you doing",
-    "hows it going",
-    "how is it going",
-    "how are things",
-    "how do you do",
-    "whats up",
-    "what is up",
-    "sup",
-    "kumusta ka",
-    "kamusta ka",
-    "tell me a joke",
-    "tell a joke",
-    "say a joke",
-    "make me laugh",
-    "say something funny",
-    "who are you",
-    "who made you",
-    "who created you",
-    "what are you",
-    "are you an ai",
-    "what can you do",
-    "tell me about yourself",
-    "introduce yourself",
+    "how are you", "how are you doing", "hows it going", "how is it going",
+    "how are things", "how do you do", "whats up", "what is up", "sup",
+    "kumusta ka", "kamusta ka", "kumusta ka po", "kamusta ka po",
+    "tell me a joke", "tell a joke", "say a joke", "make me laugh", "say something funny",
+    "who are you", "who made you", "who created you", "what are you", "sino ka",
+    "ano ka", "are you an ai", "what can you do", "ano kaya mong gawin", "anong pwede mong gawin",
+    "tell me about yourself", "introduce yourself", "magpakilala ka"
   ];
 
   for (const phrase of conversationalPhrases) {
     const escaped = phrase.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
     const pattern = new RegExp(`\\b${escaped}\\b`, "i");
-    if (pattern.test(normalized)) {
-      return true;
-    }
+    if (pattern.test(normalized)) return true;
   }
 
   return false;
@@ -279,42 +499,36 @@ export function isConversational(normalized: string): boolean {
  */
 export function isUserNameQuestion(normalized: string): boolean {
   const patterns = [
-    /\bwhat is my name\b/,
-    /\bwhats my name\b/,
-    /\bdo you know my name\b/,
-    /\bwho am i\b/,
-    /\bremember my name\b/,
-    /\btell me my name\b/,
+    /\bwhat is my name\b/, /\bwhats my name\b/, /\bdo you know my name\b/,
+    /\bwho am i\b/, /\bremember my name\b/, /\btell me my name\b/,
+    /\bkilala mo ba ako\b/, /\bano pangalan ko\b/, /\banong pangalan ko\b/
   ];
   return patterns.some((p) => p.test(normalized));
 }
 
 /**
- * Extracts user's introduced name from messages like:
- * "My name is Maria", "I am Juan", "Call me Alex", "Ako si Ana"
+ * Extracts user's introduced name.
  */
 export function extractUserNameMention(normalized: string, rawText?: string): string | null {
   const text = rawText || normalized;
-
-  // Patterns: "my name is [Name]", "call me [Name]", "ako si [Name]"
   const explicitPatterns = [
     /\bmy name is\s+([A-Za-zÀ-ÿ]+)/i,
     /\bcall me\s+([A-Za-zÀ-ÿ]+)/i,
     /\bako si\s+([A-Za-zÀ-ÿ]+)/i,
+    /\bang pangalan ko ay\s+([A-Za-zÀ-ÿ]+)/i,
   ];
 
   for (const pattern of explicitPatterns) {
     const match = text.match(pattern);
     if (match && match[1]) {
       const candidate = match[1].trim();
-      const forbidden = ["a", "an", "the", "not", "asking", "user", "guest", "here"];
+      const forbidden = ["a", "an", "the", "not", "asking", "user", "guest", "here", "may", "ano"];
       if (candidate.length >= 2 && !forbidden.includes(candidate.toLowerCase())) {
         return candidate.charAt(0).toUpperCase() + candidate.slice(1);
       }
     }
   }
 
-  // "I am [Name]" or "I'm [Name]" - require capital letter or check against health/state words
   const iamPattern = /\b(?:i am|i'm|im)\s+([A-Za-zÀ-ÿ]+)/i;
   const iamMatch = text.match(iamPattern);
   if (iamMatch && iamMatch[1]) {
@@ -323,10 +537,9 @@ export function extractUserNameMention(normalized: string, rawText?: string): st
       "sick", "ill", "fine", "good", "well", "okay", "ok", "great",
       "pregnant", "nursing", "breastfeeding", "allergic", "suffering",
       "tired", "hurting", "pain", "here", "curious", "asking", "interested",
-      "looking", "wondering", "diabetic", "hypertensive", "experiencing", "a", "an", "the"
+      "looking", "wondering", "diabetic", "hypertensive", "experiencing", "a", "an", "the", "coughing"
     ];
     if (candidate.length >= 2 && !commonStates.includes(candidate.toLowerCase())) {
-      // If raw text has uppercase first letter or user explicitly introduced themselves
       return candidate.charAt(0).toUpperCase() + candidate.slice(1);
     }
   }
@@ -336,126 +549,40 @@ export function extractUserNameMention(normalized: string, rawText?: string): st
 
 /**
  * Detects general conceptual science, botany, or research questions that do not mention a specific plant.
- * e.g., "what is photosynthesis", "what is biodiversity", "what are medicinal plants".
  */
 export function isGeneralKnowledgeQuestion(normalized: string): boolean {
-  if (isGeneralQuestion(normalized)) {
-    return true;
-  }
+  if (isGeneralQuestion(normalized)) return true;
 
   const generalKnowledgeKeywords = [
-    "photosynthesis",
-    "biodiversity",
-    "biological diversity",
-    "what is botany",
-    "what is biology",
-    "what is chemistry",
-    "what is science",
-    "what is an ecosystem",
-    "how do plants make food",
-    "how do plants grow",
-    "why are leaves green",
-    "chlorophyll",
-    "what kinds of research are used",
-    "types of research",
-    "what is a clinical trial",
-    "what is in vitro",
-    "what is in vivo",
-    "what is a randomized controlled trial",
-    "what is preclinical",
+    "photosynthesis", "biodiversity", "biological diversity",
+    "what is botany", "what is biology", "what is chemistry", "what is science",
+    "what is an ecosystem", "how do plants make food", "how do plants grow",
+    "why are leaves green", "chlorophyll", "types of research",
+    "what is an extract", "ano ang extract", "what is a decoction", "ano ang decoction",
+    "what is traditional use", "ano ang traditional use",
+    "difference between herbal medicine and supplements", "herbal medicine vs supplement"
   ];
 
-  for (const kw of generalKnowledgeKeywords) {
-    if (normalized.includes(kw)) {
-      return true;
-    }
-  }
-
-  return false;
+  return generalKnowledgeKeywords.some((kw) => normalized.includes(kw));
 }
 
 /**
- * Sanitizes raw marketing phrases from botanical and commercial product texts
- * to maintain strict scientific and regulatory objectivity.
+ * Detects research education questions (molecular docking, binding affinity, phytochemicals, etc.).
  */
-export function sanitizeEvidenceMarketingLanguage(text: string): string {
-  if (!text) return "";
-  return text
-    .replace(/\bclinically proven and doh-approved\b/gi, "documented in Philippine medicinal-plant references")
-    .replace(/\bclinically proven\b/gi, "clinically evaluated")
-    .replace(/\bclinically-proven\b/gi, "clinically evaluated")
-    .replace(/\bdoh-approved\b/gi, "documented in Philippine health references (DOH/PITAHC)")
-    .replace(/\bguaranteed effective\b/gi, "traditionally and scientifically documented")
-    .replace(/\beffective cure\b/gi, "documented therapeutic support")
-    .replace(/\bproven cure\b/gi, "documented herbal support")
-    .replace(/\bproven to dissolve\b/gi, "investigated for antiurolithic activity regarding")
-    .replace(/\s+/g, " ")
-    .trim();
+export function isResearchEducationQuestion(normalized: string): boolean {
+  const researchKeywords = [
+    "molecular docking", "docking", "binding affinity",
+    "phytochemical", "phytochemicals", "phytochemistry",
+    "in-silico", "in silico", "-7", "kcal/mol", "kcal mol",
+    "pharmacology", "pharmacognosy", "bioactive", "compounds",
+    "what does -7", "what does binding affinity mean", "ano ang molecular docking",
+    "ano ang phytochemical"
+  ];
+  return researchKeywords.some((kw) => normalized.includes(kw));
 }
 
 /**
- * Determines the architectural AssistantRoute for a given query and context.
- */
-export function determineAssistantRoute(
-  normalized: string,
-  explicitEntity: ConversationEntity | null,
-  previousEntity: { type: "PLANT" | "PRODUCT"; id: string; name: string } | null,
-  isFollowUp: boolean
-): AssistantRoute {
-  if (detectEmergencyOrHighRiskIntent(normalized) === "EMERGENCY") {
-    return "EMERGENCY";
-  }
-
-  // If no explicit entity and not a contextual follow-up, check conversational and general knowledge
-  if (!explicitEntity && !isFollowUp) {
-    if (
-      isGreeting(normalized) ||
-      isThanks(normalized) ||
-      isGoodbye(normalized) ||
-      isConversational(normalized) ||
-      isUserNameQuestion(normalized) ||
-      extractUserNameMention(normalized) !== null
-    ) {
-      return "CONVERSATION";
-    }
-
-    if (isGeneralKnowledgeQuestion(normalized)) {
-      return "GENERAL_KNOWLEDGE";
-    }
-
-    if (detectEmergencyOrHighRiskIntent(normalized) === "HEALTH_CONCERN") {
-      return "HEALTH_GENERAL";
-    }
-  }
-
-  // Active entity resolution
-  const resolved = explicitEntity || (isFollowUp ? previousEntity : null);
-  if (resolved) {
-    if (resolved.type === "PRODUCT") {
-      return "NATURAIDE_PRODUCT";
-    }
-    const intent = classifyIntent(normalized);
-    if (intent === "PREPARATION") return "NATURAIDE_PREPARATION";
-    if (intent === "SAFETY" || intent === "HEALTH_CONCERN") return "NATURAIDE_SAFETY";
-    if (intent === "EVIDENCE") return "NATURAIDE_EVIDENCE";
-    if (intent === "PRODUCTS") return "NATURAIDE_PRODUCT";
-    return "NATURAIDE_PLANT";
-  }
-
-  if (isGeneralKnowledgeQuestion(normalized)) {
-    return "GENERAL_KNOWLEDGE";
-  }
-
-  if (detectEmergencyOrHighRiskIntent(normalized) === "HEALTH_CONCERN") {
-    return "HEALTH_GENERAL";
-  }
-
-  return "CONVERSATION";
-}
-
-/**
- * Detects general, conceptual educational questions about medicinal plants or platform.
- * e.g., "what is medicinal plants", "what are medicinal plants", "how do herbs work".
+ * Detects general educational questions about medicinal plants or the platform.
  */
 export function isGeneralQuestion(normalized: string): boolean {
   const generalPatterns = [
@@ -464,11 +591,21 @@ export function isGeneralQuestion(normalized: string): boolean {
     /\bdefine medicinal plants?\b/,
     /\bmeaning of medicinal plants?\b/,
     /\bwhat (is|are) herbal medicines?\b/,
+    /\bano ang (mga )?halamang gamot\b/,
+    /\bano ang herbal medicine\b/,
     /\bhow do (medicinal plants|herbal medicines|herbs) work\b/,
     /\bwhat plants are (available|endorsed|included|recommended)\b/,
+    /\bwhat medicinal plants do you know\b/,
+    /\banong mga halaman(g gamot)? ang alam mo\b/,
+    /\banong halamang gamot ang alam mo\b/,
+    /\bano ang mga halamang nasa natureaide\b/,
     /\bwhat are (the )?(10|ten) (doh|pitahc) medicinal plants\b/,
     /\blist of medicinal plants\b/,
+    /\blista ng mga halamang gamot\b/,
     /\bwhat can you (do|help with)\b/,
+    /\bano ang natureaide\b/,
+    /\bwhat is natureaide\b/,
+    /\babout natureaide\b/,
     /\bwhat is naturamide\b/,
     /\babout naturamide\b/,
     /\bhow to use medicinal plants\b/,
@@ -480,7 +617,21 @@ export function isGeneralQuestion(normalized: string): boolean {
 }
 
 /**
- * Classifies the high-level intent of the current normalized message.
+ * Detects plant comparison intent (e.g. "Lagundi vs Tsaang Gubat", "Ano difference nila").
+ */
+export function isPlantComparison(normalized: string): boolean {
+  const comparisonPatterns = [
+    /\bvs\b/, /\bversus\b/,
+    /\bdifference\b/,
+    /\b(pagkakaiba|pinagkaiba|pagkaiba|pinag-iba)\b/,
+    /\balin ang mas\b/, /\bwhich has (more|stronger|better)\b/,
+    /\bcompare\b/, /\bipagkumpara\b/, /\bpagkumparahin\b/
+  ];
+  return comparisonPatterns.some((p) => p.test(normalized));
+}
+
+/**
+ * Classifies the high-level intent of the user message.
  */
 export function classifyIntent(normalized: string): ChatIntent {
   const safety = detectEmergencyOrHighRiskIntent(normalized);
@@ -494,51 +645,86 @@ export function classifyIntent(normalized: string): ChatIntent {
   if (isThanks(normalized)) return "THANKS";
   if (isGoodbye(normalized)) return "GOODBYE";
   if (isConversational(normalized)) return "CONVERSATION";
+
+  if (isPlantComparison(normalized)) return "PLANT_COMPARISON";
+  if (isResearchEducationQuestion(normalized)) return "RESEARCH_EXPLANATION";
   if (isGeneralQuestion(normalized)) return "GENERAL_QUESTION";
   if (isGeneralKnowledgeQuestion(normalized)) return "GENERAL_KNOWLEDGE";
 
-  // Preparation intent
+  // Check Symptom intent
+  const symptom = detectSymptomAndAssociatedPlants(normalized);
+  if (symptom) return "SYMPTOM";
+
+  // Preparation intent across English, Filipino, Taglish
   if (
     normalized.includes("how is it prepared") ||
     normalized.includes("how is this prepared") ||
     normalized.includes("how do i prepare") ||
     normalized.includes("how to prepare") ||
+    normalized.includes("paano ihanda") ||
+    normalized.includes("paano ito ihanda") ||
+    normalized.includes("paano gamitin") ||
+    normalized.includes("paano gawin") ||
+    normalized.includes("paano gumawa ng tsaa") ||
+    normalized.includes("pwede bang pakuluan") ||
+    normalized.includes("pwede pakuluan") ||
+    normalized.includes("anong parte") ||
+    normalized.includes("anong bahagi") ||
+    normalized.includes("which part") ||
+    normalized.includes("plant part") ||
+    normalized.includes("make tea") ||
+    normalized.includes("boil the leaves") ||
     normalized.includes("preparation method") ||
     normalized.includes("preparation steps") ||
-    normalized.includes("how to cook") ||
-    normalized.includes("how to brew") ||
     normalized.includes("decoction") ||
     normalized.includes("poultice") ||
     normalized.includes("infusion") ||
-    normalized.includes("tea method")
+    normalized.includes("tea method") ||
+    normalized.includes("unsaon pag-andam")
   ) {
     return "PREPARATION";
   }
 
-  // Safety / Precaution intent
+  // Safety / Precaution intent across English, Filipino, Taglish
   if (
     normalized.includes("precaution") ||
     normalized.includes("safety") ||
-    normalized.includes("side effect") ||
-    normalized.includes("contraindication") ||
-    normalized.includes("warning") ||
+    normalized.includes("safe ba") ||
+    normalized.includes("ligtas ba") ||
     normalized.includes("is it safe") ||
     normalized.includes("safe for") ||
-    normalized.includes("who should avoid") ||
-    normalized.includes("who should be careful") ||
+    normalized.includes("side effect") ||
+    normalized.includes("side effects") ||
+    normalized.includes("contraindication") ||
+    normalized.includes("warning") ||
+    normalized.includes("pwede ba sa bata") ||
+    normalized.includes("pwede sa bata") ||
+    normalized.includes("can children use") ||
+    normalized.includes("pwede ba sa buntis") ||
+    normalized.includes("pwede sa buntis") ||
+    normalized.includes("can pregnant") ||
+    normalized.includes("buntis") ||
     normalized.includes("pregnant") ||
-    normalized.includes("pregnancy") ||
     normalized.includes("nursing") ||
     normalized.includes("breastfeeding") ||
-    normalized.includes("dose") ||
-    normalized.includes("dosage") ||
+    normalized.includes("maintenance") ||
+    normalized.includes("with my medicine") ||
+    normalized.includes("kasabay ng gamot") ||
+    normalized.includes("interaksyon") ||
     normalized.includes("interaction") ||
-    normalized.includes("overdose")
+    normalized.includes("who should avoid") ||
+    normalized.includes("sino ang hindi dapat") ||
+    normalized.includes("who should be careful") ||
+    normalized.includes("overdose") ||
+    normalized.includes("sobrang inom") ||
+    normalized.includes("take too much") ||
+    normalized.includes("dose") ||
+    normalized.includes("dosage")
   ) {
     return "SAFETY";
   }
 
-  // Evidence / Research intent
+  // Evidence / Research intent across English, Filipino, Taglish
   if (
     normalized.includes("clinical benefit") ||
     normalized.includes("verified benefit") ||
@@ -546,28 +732,43 @@ export function classifyIntent(normalized: string): ChatIntent {
     normalized.includes("research") ||
     normalized.includes("study") ||
     normalized.includes("studies") ||
+    normalized.includes("may studies ba") ||
+    normalized.includes("may research ba") ||
+    normalized.includes("may pag-aaral ba") ||
+    normalized.includes("pag-aaral") ||
+    normalized.includes("ebidensya") ||
+    normalized.includes("patunay") ||
     normalized.includes("clinical trial") ||
     normalized.includes("clinical") ||
     normalized.includes("proof") ||
     normalized.includes("pubmed") ||
     normalized.includes("what does research say") ||
     normalized.includes("is it proven") ||
-    normalized.includes("scientific evidence")
+    normalized.includes("scientifically proven") ||
+    normalized.includes("scientific evidence") ||
+    normalized.includes("saan galing") ||
+    normalized.includes("where did this information come from") ||
+    normalized.includes("source") ||
+    normalized.includes("sources")
   ) {
     return "EVIDENCE";
   }
 
-  // Products intent
+  // Products intent across English, Filipino, Taglish
   if (
     normalized.includes("products containing") ||
     normalized.includes("what products contain") ||
     normalized.includes("show me products") ||
-    /show (me|us).*\bproducts?\b/.test(normalized) ||
-    normalized.includes("does it have products") ||
+    normalized.includes("may product ba") ||
+    normalized.includes("mga produkto") ||
+    normalized.includes("anong produkto") ||
+    normalized.includes("available products") ||
+    normalized.includes("fda registered") ||
+    normalized.includes("registered product") ||
     normalized.includes("commercial product") ||
     normalized.includes("herbal product") ||
     normalized.includes("available brands") ||
-    normalized.includes("registered products") ||
+    normalized.includes("ascof") ||
     /\b(products?|brands?|syrup|capsule|tablet)\b/.test(normalized)
   ) {
     return "PRODUCTS";
@@ -575,6 +776,24 @@ export function classifyIntent(normalized: string): ChatIntent {
 
   return "UNCLEAR";
 }
+
+/**
+ * Known aliases for Philippine medicinal plants and products.
+ */
+export const PLANT_ALIASES_MAP: Record<string, string[]> = {
+  lagundi: ["vitex negundo", "dangla", "five-leaved chaste tree", "five leaved chaste tree"],
+  sambong: ["blumea balsamifera", "subusub", "ngai camphor", "gabuen", "lakad-bulan"],
+  "tsaang-gubat": ["carmona retusa", "wild tea", "chaang gubat", "fukien tea", "putputay", "forest tea"],
+  "yerba-buena": ["mentha cordifolia", "hierba buena", "peppermint", "marsh mint", "mint"],
+  ampalaya: ["momordica charantia", "bitter melon", "bitter gourd", "paria", "balsam apple"],
+  akapulko: ["senna alata", "cassia alata", "ringworm bush", "katanda", "bikas-bikas"],
+  bawang: ["allium sativum", "garlic", "ajos"],
+  bayabas: ["psidium guajava", "guava", "kalimbahin", "tayabas"],
+  "niyog-niyogan": ["quisqualis indica", "chinese honeysuckle", "combretum indicum", "tartaraok", "balitadham"],
+  "ulasimang-bato": ["peperomia pellucida", "pansit-pansitan", "pansit pansitan", "clearweed", "ulasiman"],
+  ginger: ["luya", "zingiber officinale"],
+  turmeric: ["luyang dilaw", "dilaw", "curcuma longa", "kalawag"],
+};
 
 /**
  * Searches the current query for an explicitly named plant or product from the catalog.
@@ -586,7 +805,49 @@ export function detectExplicitEntity(
   plantAliases: Record<string, string[]> = {},
   productAliases: Record<string, string[]> = {}
 ): ConversationEntity | null {
-  // 1. Check products first
+  // 1. Check for plant comparison (e.g., "Lagundi vs Tsaang Gubat", "Ano ang pinagkaiba ng Sambong at Lagundi")
+  if (normalized.includes("vs") || normalized.includes("versus") || isPlantComparison(normalized)) {
+    const matchedPlants: Array<{ id: string; name: string; slug?: string; scientificName?: string }> = [];
+
+    for (const p of plants) {
+      const aliases = [
+        p.commonName.toLowerCase().replace(/\s*\([^)]*\)/, "").trim(),
+        p.scientificName.toLowerCase().trim(),
+        p.slug?.toLowerCase().trim() || "",
+        ...(PLANT_ALIASES_MAP[p.id] || []),
+        ...(plantAliases[p.id] || [])
+      ].filter(Boolean);
+
+      for (const tok of aliases) {
+        if (tok.length >= 3 && new RegExp(`\\b${tok.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&")}\\b`, "i").test(normalized)) {
+          if (!matchedPlants.some((mp) => mp.id === p.id)) {
+            matchedPlants.push({
+              id: p.id,
+              name: p.commonName,
+              slug: p.slug,
+              scientificName: p.scientificName,
+            });
+          }
+          break;
+        }
+      }
+    }
+
+    if (matchedPlants.length >= 2) {
+      return {
+        type: "COMPARISON",
+        id: matchedPlants[0].id,
+        name: matchedPlants[0].name,
+        slug: matchedPlants[0].slug,
+        scientificName: matchedPlants[0].scientificName,
+        source: "EXPLICIT",
+        secondaryPlantId: matchedPlants[1].id,
+        secondaryPlantName: matchedPlants[1].name,
+      };
+    }
+  }
+
+  // 2. Check products
   for (const prod of products) {
     const aliases = productAliases[prod.id] || [];
     const tokens = [
@@ -599,7 +860,6 @@ export function detectExplicitEntity(
     for (const tok of tokens) {
       const cleanTok = tok.toLowerCase().trim();
       if (!cleanTok || cleanTok.length < 3) continue;
-      // Word boundary regex check
       const escaped = cleanTok.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
       const pattern = new RegExp(`\\b${escaped}\\b`, "i");
       if (pattern.test(normalized)) {
@@ -614,9 +874,14 @@ export function detectExplicitEntity(
     }
   }
 
-  // 2. Check plants
+  // 3. Check plants with alias map
   for (const plant of plants) {
-    const aliases = plantAliases[plant.id] || plantAliases[plant.slug || ""] || [];
+    const aliases = [
+      ...(plantAliases[plant.id] || []),
+      ...(plantAliases[plant.slug || ""] || []),
+      ...(PLANT_ALIASES_MAP[plant.id] || []),
+      ...(PLANT_ALIASES_MAP[plant.slug || ""] || []),
+    ];
     const cleanCommon = plant.commonName.replace(/\s*\([^)]*\)/, "").toLowerCase().trim();
     const tokens = [
       cleanCommon,
@@ -649,16 +914,24 @@ export function detectExplicitEntity(
 
 /**
  * Checks whether the message syntactically contains follow-up pronouns or phrases
- * (independent of whether an entity is actually currently available).
+ * in English, Filipino, Taglish, or dialects.
  */
 export function hasFollowUpIndicators(normalized: string): boolean {
   const pronounPatterns = [
+    // English
     /\b(it|its)\b/,
     /\b(this|that)\b/,
     /\b(this plant|that plant|the plant)\b/,
     /\b(this herb|that herb|the herb)\b/,
     /\b(this product|that product|the product)\b/,
     /\b(this remedy|that remedy|the remedy)\b/,
+    // Filipino / Taglish
+    /\b(ito|nito|dito)\b/,
+    /\b(ang halaman|halamang ito|itong halaman)\b/,
+    /\b(ang produkto|produktong ito|itong produkto)\b/,
+    /\b(siya|nila|kanila)\b/,
+    // Cebuano
+    /\b(kini|niana|kining tanom)\b/
   ];
 
   if (pronounPatterns.some((p) => p.test(normalized))) {
@@ -666,35 +939,21 @@ export function hasFollowUpIndicators(normalized: string): boolean {
   }
 
   const followUpPhrases = [
-    "what about its",
-    "how is it",
-    "how do i prepare it",
-    "how to prepare it",
-    "what are its",
-    "what about safety",
-    "what are the precautions",
-    "what are the side effects",
-    "what does it do",
-    "what part is used",
-    "what evidence supports that",
-    "what studies support that",
-    "what products contain it",
-    "tell me more",
-    "what else",
-    "is it safe",
-    "can it help",
-    "does it work",
-    "how much to drink",
-    "how much should i take",
+    // English
+    "what about its", "how is it", "how do i prepare it", "how to prepare it",
+    "what are its", "what about safety", "what are the precautions", "what are the side effects",
+    "what does it do", "what part is used", "what evidence supports that", "what studies support that",
+    "what products contain it", "tell me more", "what else", "is it safe", "can it help",
+    "does it work", "how much to drink", "how much should i take",
+    // Filipino
+    "ano ang mga gamit nito", "paano ito ihanda", "paano ihanda ito", "paano ito gamitin",
+    "ligtas ba ito", "safe ba ito", "may side effects ba ito", "may side effect ba ito",
+    "pwede ba ito sa bata", "pwede ba ito sa buntis", "may studies ba tungkol dito",
+    "may research ba dito", "may produkto ba nito", "may product ba ito",
+    "ano pa ang alam mo dito", "magkwento ka pa tungkol dito", "unsaon pag-andam niini"
   ];
 
-  for (const phrase of followUpPhrases) {
-    if (normalized.includes(phrase)) {
-      return true;
-    }
-  }
-
-  return false;
+  return followUpPhrases.some((phrase) => normalized.includes(phrase));
 }
 
 /**
@@ -703,7 +962,7 @@ export function hasFollowUpIndicators(normalized: string): boolean {
  */
 export function isContextualFollowUp(
   normalized: string,
-  previousEntity?: { type: "PLANT" | "PRODUCT"; id: string; name: string } | null,
+  previousEntity?: { type: "PLANT" | "PRODUCT" | "COMPARISON"; id: string; name: string } | null,
   isEntityEligible: boolean = true
 ): boolean {
   if (!previousEntity || !isEntityEligible) {
@@ -714,25 +973,15 @@ export function isContextualFollowUp(
     return true;
   }
 
-  // Attribute queries without naming the plant (e.g., user just says "preparations", "dosage", "side effects")
   const shortAttributeQueries = [
-    "preparations",
-    "preparation",
-    "precautions",
-    "side effects",
-    "contraindications",
-    "evidence",
-    "research",
-    "dosage",
-    "dose",
-    "products",
+    // English
+    "preparations", "preparation", "precautions", "safety", "side effects",
+    "contraindications", "evidence", "research", "studies", "dosage", "dose", "products",
+    // Filipino
+    "paghahanda", "kaligtasan", "ebidensya", "pag-aaral", "produkto", "mga produkto"
   ];
 
-  if (shortAttributeQueries.includes(normalized)) {
-    return true;
-  }
-
-  return false;
+  return shortAttributeQueries.includes(normalized);
 }
 
 /**
@@ -800,7 +1049,25 @@ export function assessEvidenceLevel(
 }
 
 /**
- * Standard development logger conforming to prompt specification.
+ * Sanitizes raw marketing phrases from botanical and commercial product texts.
+ */
+export function sanitizeEvidenceMarketingLanguage(text: string): string {
+  if (!text) return "";
+  return text
+    .replace(/\bclinically proven and doh-approved\b/gi, "documented in Philippine medicinal-plant references")
+    .replace(/\bclinically proven\b/gi, "clinically evaluated")
+    .replace(/\bclinically-proven\b/gi, "clinically evaluated")
+    .replace(/\bdoh-approved\b/gi, "documented in Philippine health references (DOH/PITAHC)")
+    .replace(/\bguaranteed effective\b/gi, "traditionally and scientifically documented")
+    .replace(/\beffective cure\b/gi, "documented therapeutic support")
+    .replace(/\bproven cure\b/gi, "documented herbal support")
+    .replace(/\bproven to dissolve\b/gi, "investigated for antiurolithic activity regarding")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Standard development logger.
  */
 export function logRoutingDecision(params: {
   message: string;
@@ -810,6 +1077,7 @@ export function logRoutingDecision(params: {
   isContextualFollowUp: boolean;
   resolvedEntity: string | null;
   route: string;
+  language?: string;
 }) {
   if (process.env.NODE_ENV !== "production") {
     console.log(`
@@ -821,6 +1089,7 @@ PREVIOUS ENTITY: ${params.previousEntity ?? "null"}
 CONTEXTUAL FOLLOW-UP: ${params.isContextualFollowUp}
 RESOLVED ENTITY: ${params.resolvedEntity ?? "null"}
 ROUTE: ${params.route}
+LANGUAGE: ${params.language ?? "en"}
 `);
   }
 }

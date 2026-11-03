@@ -32,17 +32,28 @@ function textFromUnknown(value: unknown): string {
     .trim();
 }
 
+function cleanOutput(text: string): string {
+  if (!text) return "";
+  let cleaned = text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+  cleaned = cleaned.replace(/<think>[\s\S]*/gi, "").trim();
+  return cleaned || text.trim();
+}
+
 function readCompletion(data: {
   choices?: { message?: { content?: unknown; reasoning?: unknown; reasoning_content?: unknown }; text?: unknown }[];
 }) {
   const message = data?.choices?.[0]?.message;
+  const rawContent = textFromUnknown(message?.content);
+  if (rawContent) {
+    const cleaned = cleanOutput(rawContent);
+    if (cleaned) return cleaned;
+  }
   const candidates = [
-    textFromUnknown(message?.content),
     textFromUnknown(message?.reasoning),
     textFromUnknown(message?.reasoning_content),
     textFromUnknown(data?.choices?.[0]?.text),
   ].filter(Boolean);
-  return candidates.find((text) => text.includes("{") && text.includes("}")) || candidates[0] || "";
+  return candidates.find((text) => text.includes("{") && text.includes("}")) || cleanOutput(candidates[0] || "") || "";
 }
 
 function togetherModels() {

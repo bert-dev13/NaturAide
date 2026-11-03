@@ -328,7 +328,8 @@ export async function POST(request: NextRequest) {
         resolution.knowledgeContextText,
         resolution.isUnknownEntity,
         false,
-        userDisplayName
+        userDisplayName,
+        resolution.detectedLanguage || "en"
       );
 
       const history = (recentMsgs || []).reverse();

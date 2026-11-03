@@ -69,20 +69,28 @@ interface ActiveChatContext {
 
 const SUGGESTED_QUESTIONS = [
   {
+    text: "Ano ang mga halamang para sa ubo?",
+    desc: "Filipino/Tagalog: Gabay sa halamang gamot, ubo at tamang paghahanda",
+  },
+  {
     text: "What is Lagundi used for?",
     desc: "Documented uses, indications & traditional health benefits",
+  },
+  {
+    text: "Safe ba ang Lagundi sa mga bata?",
+    desc: "Taglish: Safety, precautions & health screening reminders",
+  },
+  {
+    text: "Lagundi vs Tsaang Gubat",
+    desc: "Plant comparison: Indications, preparations & differences",
   },
   {
     text: "How is Sambong traditionally prepared?",
     desc: "Step-by-step preparation, decoction measurements & safety",
   },
   {
-    text: "What precautions does Ampalaya have?",
-    desc: "Contraindications, medications & sensitive populations",
-  },
-  {
-    text: "Show products containing Lagundi",
-    desc: "Commercial herbal syrups, capsules & regulatory status",
+    text: "What does binding affinity -7.5 kcal/mol mean?",
+    desc: "In-silico research concept: Molecular docking & simulation",
   },
 ];
 
