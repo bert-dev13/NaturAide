@@ -4,7 +4,7 @@ import { getSession } from "@/lib/auth";
 import pool from "@/lib/db";
 import { RowDataPacket } from "mysql2";
 import ResearcherAssistantClient from "@/components/researcher/assistant/ResearcherAssistantClient";
-import { Loader2 } from "lucide-react";
+import AssistantLoadingFallback from "@/components/researcher/assistant/AssistantLoadingFallback";
 
 export const metadata = {
   title: "Ask NatureAide — AI Research Assistant | NaturAide Lab",
@@ -55,16 +55,7 @@ export default async function ResearcherAssistantPage() {
   }
 
   return (
-    <Suspense
-      fallback={
-        <div className="w-full h-[600px] flex flex-col items-center justify-center space-y-3">
-          <Loader2 className="w-8 h-8 text-emerald-600 animate-spin" />
-          <p className="text-sm font-semibold text-[#475550]">
-            Initializing Ask NatureAide...
-          </p>
-        </div>
-      }
-    >
+    <Suspense fallback={<AssistantLoadingFallback />}>
       <ResearcherAssistantClient initialProjects={initialProjects} />
     </Suspense>
   );
