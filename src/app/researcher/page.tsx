@@ -2,6 +2,7 @@ import React from "react";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import pool from "@/lib/db";
+import { calculateV2ProjectProgress } from "@/lib/v2-progress-service";
 import ResearcherDashboardClient, {
   type DashboardStats,
   type ProjectData,
@@ -56,7 +57,7 @@ export default async function ResearcherDashboardPage() {
     FROM research_projects rp
     LEFT JOIN plants p ON rp.plantId = p.id
     WHERE rp.researcherId = ? 
-      AND rp.status IN ('IN_PROGRESS', 'DRAFT', 'REVISION_REQUIRED', 'UNDER_REVIEW')
+      AND rp.status IN ('IN_PROGRESS', 'DRAFT', 'REVISION_REQUIRED', 'REVISION_REQUESTED', 'UNDER_REVIEW', 'APPROVED')
       AND rp.status != 'ARCHIVED'
     ORDER BY
       CASE WHEN rp.title LIKE 'Automated Verification Project%' THEN 1 ELSE 0 END ASC,
@@ -66,7 +67,7 @@ export default async function ResearcherDashboardPage() {
     [researcherId]
   );
 
-  // For active projects, fetch their stages map to show live status on the 12-stage stepper
+  // For active projects, fetch their stages map & latest review submission approval count
   const activeProjects: ProjectData[] = [];
   for (const r of activeProjectRows) {
     const [stageRows]: any = await pool.query(
@@ -78,12 +79,85 @@ export default async function ResearcherDashboardPage() {
       stagesMap[s.stageKey] = s.status;
     }
 
+    let approvedCount = 0;
+    let revCount = 0;
+    let hasSub = false;
+    try {
+      const [subRows]: any = await pool.query(
+        `SELECT id FROM review_submissions WHERE projectId = ? ORDER BY reviewRound DESC, id DESC LIMIT 1`,
+        [r.id]
+      );
+      if (subRows && subRows.length > 0) {
+        hasSub = true;
+        const [covRows]: any = await pool.query(
+          `SELECT status FROM review_area_coverage WHERE submissionId = ?`,
+          [subRows[0].id]
+        );
+        for (const c of covRows || []) {
+          const cst = String(c.status || "").toUpperCase();
+          if (cst === "APPROVED" || cst === "COMPLETED") approvedCount++;
+          else if (cst === "REVISION_REQUIRED" || cst === "REVISION_REQUESTED") revCount++;
+        }
+      }
+    } catch {
+      // Non-fatal
+    }
+
+    const stUpper = String(r.status || "").toUpperCase();
+    let displayStatus = r.status;
+    if (stUpper === "REVISION_REQUIRED" || stUpper === "REVISION_REQUESTED" || revCount > 0) {
+      displayStatus = "Revisions Required";
+    } else if (stUpper === "APPROVED" || (hasSub && approvedCount >= 3 && revCount === 0)) {
+      displayStatus = "Fully Approved — Ready to Complete";
+    } else if (stUpper === "UNDER_REVIEW" || stUpper === "READY_FOR_REVIEW" || hasSub) {
+      displayStatus = `Under Professional Review — ${approvedCount}/3 Approved`;
+    }
+
+    // Resolve V2 section progression
+    let continueRoute = `/researcher/projects/${r.id}/formulation-rd`;
+    let currentSectionNum = 1;
+    let currentSectionTitle = "1. Formulation R&D";
+    let computedProgress = Number(r.progressPercent || 0);
+
+    try {
+      const v2Prog = await calculateV2ProjectProgress(r.id);
+      const isSec1Done = v2Prog.section1.status === "COMPLETED";
+      const isSec2Done = v2Prog.section2.status === "COMPLETED";
+      const isSec3Done = v2Prog.section3.status === "COMPLETED";
+      computedProgress = v2Prog.overallProgressPercent;
+
+      if (stUpper === "COMPLETED") {
+        continueRoute = `/researcher/projects/${r.id}/completion`;
+        currentSectionNum = 4;
+        currentSectionTitle = "Completed Research";
+      } else if (!isSec1Done) {
+        continueRoute = `/researcher/projects/${r.id}/formulation-rd`;
+        currentSectionNum = 1;
+        currentSectionTitle = "1. Formulation R&D";
+      } else if (!isSec2Done) {
+        continueRoute = `/researcher/projects/${r.id}/in-silico`;
+        currentSectionNum = 2;
+        currentSectionTitle = "2. In-Silico Analysis";
+      } else if (!isSec3Done) {
+        continueRoute = `/researcher/projects/${r.id}/submission`;
+        currentSectionNum = 3;
+        currentSectionTitle = "3. Paper Submission";
+      } else {
+        continueRoute = `/researcher/projects/${r.id}/completion`;
+        currentSectionNum = 4;
+        currentSectionTitle = "4. Professional Approval";
+      }
+    } catch {}
+
     activeProjects.push({
       id: r.id,
       title: r.title,
-      status: r.status,
+      status: displayStatus,
       currentStage: r.currentStage || "plant-literature",
-      progressPercent: Number(r.progressPercent || 0),
+      continueRoute,
+      currentSectionNum,
+      currentSectionTitle,
+      progressPercent: computedProgress,
       updatedAt: r.updatedAt ? new Date(r.updatedAt).toISOString() : new Date().toISOString(),
       plantName: r.plantName,
       plantScientificName: r.plantScientificName,

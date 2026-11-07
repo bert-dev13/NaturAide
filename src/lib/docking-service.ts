@@ -19,6 +19,8 @@ export interface VinaExecutionResult {
   bestAffinity: number | null;
   poses: VinaPose[];
   exitCode: number | null;
+  timedOut?: boolean;
+  elapsedMs?: number;
   outputPdbqtPath?: string;
   logPath?: string;
   rawStdout: string;
@@ -48,11 +50,11 @@ export function getDockingPaths() {
   // Intelligent project-relative AutoDock Vina resolution
   let vinaBin = process.env.VINA_BIN?.trim();
   if (vinaBin && !path.isAbsolute(vinaBin)) {
-    vinaBin = path.resolve(root, vinaBin);
+    vinaBin = path.resolve(/*turbopackIgnore: true*/ root, vinaBin);
   }
-  if (!vinaBin || !fs.existsSync(vinaBin)) {
+  if (!vinaBin || !fs.existsSync(/*turbopackIgnore: true*/ vinaBin)) {
     const defaultVina = path.join(root, "tools", "vina", process.platform === "win32" ? "vina.exe" : "vina");
-    if (fs.existsSync(defaultVina)) {
+    if (fs.existsSync(/*turbopackIgnore: true*/ defaultVina)) {
       vinaBin = defaultVina;
     } else {
       vinaBin = vinaBin || defaultVina;
@@ -62,15 +64,15 @@ export function getDockingPaths() {
   // Intelligent project-relative Python resolution
   let pythonBin = process.env.DOCKING_PYTHON?.trim();
   if (pythonBin && !path.isAbsolute(pythonBin)) {
-    pythonBin = path.resolve(root, pythonBin);
+    pythonBin = path.resolve(/*turbopackIgnore: true*/ root, pythonBin);
   }
-  if (!pythonBin || !fs.existsSync(pythonBin)) {
+  if (!pythonBin || !fs.existsSync(/*turbopackIgnore: true*/ pythonBin)) {
     const defaultVenvPython = path.join(
       root,
       ".docking-venv",
       process.platform === "win32" ? "Scripts/python.exe" : "bin/python"
     );
-    if (fs.existsSync(defaultVenvPython)) {
+    if (fs.existsSync(/*turbopackIgnore: true*/ defaultVenvPython)) {
       pythonBin = defaultVenvPython;
     } else {
       pythonBin = pythonBin || (process.platform === "win32" ? "python.exe" : "python3");
@@ -79,7 +81,7 @@ export function getDockingPaths() {
 
   let artifactDir = process.env.DOCKING_ARTIFACT_DIR?.trim();
   if (artifactDir && !path.isAbsolute(artifactDir)) {
-    artifactDir = path.resolve(root, artifactDir);
+    artifactDir = path.resolve(/*turbopackIgnore: true*/ root, artifactDir);
   }
   if (!artifactDir) {
     artifactDir = path.join(root, ".docking-artifacts");
@@ -179,15 +181,16 @@ export async function prepareLigand(smiles: string, outputPrefix: string): Promi
   const { pythonBin, workerScript } = getDockingPaths();
   fs.mkdirSync(path.dirname(outputPrefix), { recursive: true });
 
-  // Reuse existing valid prepared ligand PDBQT without regenerating
+  // Reuse existing valid prepared ligand PDBQT without regenerating (unless it contains legacy unrigidified -OH branches)
   const existingPdbqt = `${outputPrefix}.pdbqt`;
   if (fs.existsSync(existingPdbqt)) {
     const inspection = inspectPdbqt(existingPdbqt, "ligand");
-    if (inspection.ok) {
+    if (inspection.ok && !inspection.hasDummyHydroxylBranches) {
       return {
         ok: true,
         pdbqt: existingPdbqt,
         heavyAtoms: inspection.atoms,
+        torsions: inspection.torsions,
         method: "Pre-prepared ligand structure (cached)",
       };
     }
@@ -204,6 +207,40 @@ export async function prepareLigand(smiles: string, outputPrefix: string): Promi
     return { ok: false, error: err.message || "Failed to prepare ligand" };
   }
 }
+
+export interface RdkitMolecularProperties {
+  ok: boolean;
+  molecularWeight?: number;
+  exactMolecularWeight?: number;
+  molecularFormula?: string;
+  logP?: number;
+  tpsa?: number;
+  hBondDonors?: number;
+  hBondAcceptors?: number;
+  rotatableBonds?: number;
+  aromaticRings?: number;
+  heavyAtoms?: number;
+  fractionCsp3?: number;
+  rdkitVersion?: string;
+  error?: string;
+}
+
+export async function calculateMolecularPropertiesWithRdkit(
+  smiles: string
+): Promise<RdkitMolecularProperties> {
+  const { pythonBin, workerScript } = getDockingPaths();
+  try {
+    const { stdout } = await execFileAsync(
+      pythonBin,
+      [workerScript, "calc-props", "--smiles", smiles.trim()],
+      { timeout: 30000 }
+    );
+    return parseWorkerJson(stdout);
+  } catch (err: any) {
+    return { ok: false, error: err.message || "Failed to calculate RDKit properties" };
+  }
+}
+
 
 export async function downloadAndPrepReceptor(pdbId: string, outputPrefix: string): Promise<{
   ok: boolean;
@@ -386,8 +423,10 @@ export async function runVinaSimulation(params: {
   if (fs.existsSync(params.outputPdbqtPath)) fs.unlinkSync(params.outputPdbqtPath);
 
   const cpus = os.cpus()?.length || 4;
-  const maxConcurrency = Math.min(3, Math.max(1, Math.floor(cpus / 3)));
-  const cpuThreads = Math.max(1, Math.min(6, Math.floor(cpus / maxConcurrency)));
+  // Reserve at least 2 logical cores so background docking never starves the Next.js server or database
+  const availableCpus = Math.max(1, cpus - 2);
+  const maxConcurrency = Math.min(2, Math.max(1, Math.floor(availableCpus / 2)));
+  const cpuThreads = Math.max(1, Math.min(4, Math.floor(availableCpus / maxConcurrency)));
 
   const args = [
     "--receptor", params.receptorPdbqt,
@@ -408,9 +447,18 @@ export async function runVinaSimulation(params: {
   ];
 
   const header = [`$ vina ${args.join(" ")}`, ""].join("\n");
-  const timeout = parseInt(process.env.DOCKING_TIMEOUT_SECONDS || "900", 10) * 1000;
+  const timeoutSec = parseInt(process.env.DOCKING_TIMEOUT_SECONDS || "180", 10);
+  const timeout = timeoutSec * 1000;
+  const startedAtMs = Date.now();
 
-  const finish = (exitCode: number | null, stdout: string, stderr: string, error?: string): VinaExecutionResult => {
+  const finish = (
+    exitCode: number | null,
+    stdout: string,
+    stderr: string,
+    error?: string,
+    timedOut = false
+  ): VinaExecutionResult => {
+    const elapsedMs = Date.now() - startedAtMs;
     let poseText = "";
     if (fs.existsSync(params.outputPdbqtPath)) {
       try {
@@ -427,13 +475,15 @@ export async function runVinaSimulation(params: {
       /* log path is best-effort; the DB still stores stdout/stderr */
     }
     const produced = fs.existsSync(params.outputPdbqtPath) && fs.statSync(params.outputPdbqtPath).size > 0;
-    const ok = exitCode === 0 && produced && parsed.poses.length > 0 && parsed.bestAffinity != null;
+    const ok = !timedOut && exitCode === 0 && produced && parsed.poses.length > 0 && parsed.bestAffinity != null;
     return {
       ok,
       version: parsed.version,
       bestAffinity: ok ? parsed.bestAffinity : null,
       poses: ok ? parsed.poses : [],
       exitCode,
+      timedOut,
+      elapsedMs,
       outputPdbqtPath: produced ? params.outputPdbqtPath : undefined,
       logPath: params.logPath,
       rawStdout: stdout,
@@ -448,20 +498,34 @@ export async function runVinaSimulation(params: {
   };
 
   try {
-    const { stdout, stderr } = await execFileAsync(vinaBin, args, { timeout, maxBuffer: 16 * 1024 * 1024 });
-    return finish(0, stdout || "", stderr || "");
+    const { stdout, stderr } = await execFileAsync(vinaBin, args, {
+      timeout,
+      maxBuffer: 16 * 1024 * 1024,
+      windowsHide: true,
+    });
+    return finish(0, stdout || "", stderr || "", undefined, false);
   } catch (err: any) {
     const stdout = String(err?.stdout || "");
     const stderr = String(err?.stderr || "");
     if (err?.code === "ENOENT") {
-      return finish(null, stdout, stderr, ENGINE_MISS);
+      return finish(null, stdout, stderr, ENGINE_MISS, false);
     }
+    const isTimeout = Boolean(err?.killed || err?.signal === "SIGTERM" || /timed out|ETIMEDOUT/i.test(String(err?.message || "")));
     const code = typeof err?.code === "number" ? err.code : 1;
-    return finish(code, stdout, stderr, err?.killed ? "AutoDock Vina timed out." : undefined);
+    return finish(
+      code,
+      stdout,
+      stderr,
+      isTimeout ? `AutoDock Vina timed out after ${timeoutSec}s.` : undefined,
+      isTimeout
+    );
   }
 }
 
-export function inspectPdbqt(file: string, kind: "ligand" | "receptor"): { ok: boolean; atoms: number; error?: string } {
+export function inspectPdbqt(
+  file: string,
+  kind: "ligand" | "receptor"
+): { ok: boolean; atoms: number; torsions?: number; hasDummyHydroxylBranches?: boolean; error?: string } {
   if (!file || !fs.existsSync(file) || fs.statSync(file).size === 0) {
     return { ok: false, atoms: 0, error: "Prepared PDBQT file is missing." };
   }
@@ -474,5 +538,15 @@ export function inspectPdbqt(file: string, kind: "ligand" | "receptor"): { ok: b
   if (kind === "ligand" && !/^TORSDOF\b/m.test(text)) {
     return { ok: false, atoms, error: "Ligand PDBQT is missing rotatable-bond records." };
   }
-  return { ok: true, atoms };
+  let torsions: number | undefined;
+  const torsMatch = text.match(/^TORSDOF\s+(\d+)/m);
+  if (torsMatch) {
+    torsions = parseInt(torsMatch[1], 10);
+  }
+  const hasDummyHydroxylBranches =
+    kind === "ligand" &&
+    /BRANCH\s+\d+\s+\d+\r?\nATOM\s+[^\r\n]+\s+OA\s*\r?\nATOM\s+[^\r\n]+\s+HD\s*\r?\nENDBRANCH\s+\d+\s+\d+/m.test(
+      text
+    );
+  return { ok: true, atoms, torsions, hasDummyHydroxylBranches };
 }

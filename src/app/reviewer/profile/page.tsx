@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   User,
   ShieldCheck,
@@ -31,6 +32,7 @@ const AREA_ICONS: Record<string, React.ElementType> = {
 };
 
 export default function ProfessionalProfilePage() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [profile, setProfile] = useState<any>(null);
@@ -75,8 +77,9 @@ export default function ProfessionalProfilePage() {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          firstName: name.split(" ")[0] || name,
-          lastName: name.split(" ").slice(1).join(" ") || "",
+          name: name.trim(),
+          firstName: name.trim().split(" ")[0] || name.trim(),
+          lastName: name.trim().split(" ").slice(1).join(" ") || "",
           professionalTitle,
           institution,
           licenseNumber,
@@ -84,6 +87,27 @@ export default function ProfessionalProfilePage() {
       });
 
       if (res.ok) {
+        const data = await res.json();
+        const updatedName = data.name || name.trim();
+
+        setProfile((prev: any) => ({
+          ...prev,
+          name: updatedName,
+          professionalTitle,
+          institution,
+          licenseNumber,
+        }));
+
+        // Broadcast to sidebar and header immediately
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("natureaide:user-profile-updated", {
+              detail: { name: updatedName },
+            })
+          );
+        }
+
+        router.refresh();
         setToastMessage("Professional profile credentials saved successfully.");
         setTimeout(() => setToastMessage(null), 3500);
       } else {

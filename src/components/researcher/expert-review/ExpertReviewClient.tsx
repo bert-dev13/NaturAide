@@ -326,14 +326,12 @@ export default function ExpertReviewClient({ projectId }: Props) {
       `${dossier.finalConclusion || "Research synthesis verified."}`,
       ``,
       `## 4. Professional Scientific Review Record`,
-      `- Overall Status: ${phase === "approved" ? "APPROVED (5/5 Scientific Disciplines Verified)" : phase.toUpperCase()}`,
+      `- Overall Status: ${phase === "approved" ? "APPROVED (3/3 Professional Reviewer Roles Verified)" : phase.toUpperCase()}`,
       `- Review Cycle: Cycle ${latestSubmission?.reviewRound || 1}`,
       `- Approval Date: ${latestDecision?.decidedAt ? new Date(latestDecision.decidedAt).toLocaleDateString() : new Date().toLocaleDateString()}`,
-      `- Pharmacognosy Review: ${coverageAreas.find((a: any) => a.key === "pharmacognosy")?.isApproved ? "Approved ✓" : "Pending / In Progress"}`,
-      `- Bioinformatics Review: ${coverageAreas.find((a: any) => a.key === "bioinformatics")?.isApproved ? "Approved ✓" : "Pending / In Progress"}`,
-      `- Pharmacology Review: ${coverageAreas.find((a: any) => a.key === "pharmacology")?.isApproved ? "Approved ✓" : "Pending / In Progress"}`,
-      `- Formulation Review: ${coverageAreas.find((a: any) => a.key === "pharmacy")?.isApproved ? "Approved ✓" : "Pending / In Progress"}`,
-      `- Clinical Safety Review: ${coverageAreas.find((a: any) => a.key === "clinical")?.isApproved ? "Approved ✓" : "Pending / In Progress"}`,
+      `- Formulation & Pharmacognosy Review (Section 1): ${coverageAreas.find((a: any) => a.key === "formulation" || a.key === "pharmacognosy")?.isApproved ? "Approved ✓" : "Pending / In Progress"}`,
+      `- Bioinformatics & In-Silico Review (Section 2): ${coverageAreas.find((a: any) => a.key === "bioinformatics")?.isApproved ? "Approved ✓" : "Pending / In Progress"}`,
+      `- Clinical Pharmacology & Paper Review (Section 3): ${coverageAreas.find((a: any) => a.key === "pharmacology" || a.key === "clinical_safety")?.isApproved ? "Approved ✓" : "Pending / In Progress"}`,
     ];
 
     const blob = new Blob([lines.join("\n")], { type: "text/markdown;charset=utf-8" });
@@ -558,7 +556,7 @@ export default function ExpertReviewClient({ projectId }: Props) {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {coverageAreas.map((area: any) => {
               const isApproved = area.isApproved;
               const isRevision = area.isRevisionRequired;

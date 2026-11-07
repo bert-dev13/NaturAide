@@ -1,3 +1,5 @@
+import { lookupTargetByPdbId } from "@/lib/target-protein-catalog";
+
 export interface StructureHit {
   pdbId: string;
   title: string;
@@ -9,6 +11,39 @@ export interface StructureHit {
   pubmedId: string | null;
   doi: string | null;
   rcsbUrl: string;
+}
+
+/**
+ * Strips verbose UniProt / RCSB synonym lists and [Contains: ...] / [Cleaved into: ...]
+ * annotations from target protein descriptions, preferring curated catalog names when available.
+ */
+export function cleanTargetProteinName(rawName: string, pdbId?: string | null): string {
+  if (pdbId) {
+    const curated = lookupTargetByPdbId(pdbId);
+    if (curated?.targetName) {
+      return curated.targetName;
+    }
+  }
+
+  let cleaned = String(rawName || "").trim();
+  if (!cleaned) return "Target Protein";
+
+  // Remove [Contains: ...] or [Cleaved into: ...] blocks (including truncated ones)
+  cleaned = cleaned.replace(/\s*\[(Contains|Cleaved into|Includes):[\s\S]*$/i, "").trim();
+
+  // If there are multiple chained parenthetical synonyms like:
+  // "Tumor necrosis factor (TNF-alpha) (Tumor necrosis factor ligand superfamily member 2) (TNF-a) (Cachectin)"
+  // keep the base name and at most the first short acronym (<= 15 chars), stripping the rest.
+  const firstParenIdx = cleaned.indexOf("(");
+  if (firstParenIdx > 0) {
+    const baseName = cleaned.slice(0, firstParenIdx).trim();
+    const rest = cleaned.slice(firstParenIdx);
+    const parenMatches = Array.from(rest.matchAll(/\(([^()]+)\)/g)).map((m) => m[1].trim());
+    const shortAcronym = parenMatches.find((p) => p.length <= 15 && !/\b(member|family|form|subunit|chain)\b/i.test(p));
+    cleaned = shortAcronym ? `${baseName} (${shortAcronym})` : baseName;
+  }
+
+  return cleaned || String(rawName || "Target Protein").trim();
 }
 
 function pdbOk(id: string) {
@@ -42,7 +77,7 @@ export async function describeStructure(pdbId: string): Promise<StructureHit | n
     if (polyRes.ok) {
       const poly = await polyRes.json();
       const desc = String(poly?.rcsb_polymer_entity?.pdbx_description || "").trim();
-      if (desc) description = desc;
+      if (desc) description = cleanTargetProteinName(desc, id);
       const geneName = poly?.rcsb_polymer_entity?.rcsb_gene_name;
       const symbol = Array.isArray(geneName) ? geneName[0]?.value || geneName[0] : geneName;
       if (typeof symbol === "string" && symbol.trim()) gene = symbol.trim();

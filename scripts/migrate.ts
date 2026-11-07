@@ -71,6 +71,22 @@ async function getMigrationsList(): Promise<{ file: string; migration: Migration
   return migrations;
 }
 
+async function ensureDatabaseExists() {
+  try {
+    const adminConn = await mysql.createConnection({
+      host: process.env.DB_HOST || "localhost",
+      port: process.env.DB_PORT ? parseInt(process.env.DB_PORT, 10) : 3306,
+      user: process.env.DB_USER || "root",
+      password: process.env.DB_PASSWORD ?? "",
+    });
+    const dbName = process.env.DB_NAME || "natureaide_db";
+    await adminConn.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`);
+    await adminConn.end();
+  } catch {
+    // If admin connection fails, proceed with normal pool connection
+  }
+}
+
 async function ensureMigrationTable(conn: PoolConnection) {
   await conn.query(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -85,6 +101,7 @@ async function ensureMigrationTable(conn: PoolConnection) {
 }
 
 async function runStatus() {
+  await ensureDatabaseExists();
   const pool = mysql.createPool({
     host: process.env.DB_HOST || "localhost",
     port: process.env.DB_PORT ? parseInt(process.env.DB_PORT, 10) : 3306,
@@ -129,6 +146,7 @@ async function runStatus() {
 }
 
 async function runMigrate() {
+  await ensureDatabaseExists();
   const pool = mysql.createPool({
     host: process.env.DB_HOST || "localhost",
     port: process.env.DB_PORT ? parseInt(process.env.DB_PORT, 10) : 3306,

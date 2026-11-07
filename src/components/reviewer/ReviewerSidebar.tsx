@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import Image from "next/image";
@@ -19,6 +19,10 @@ import {
   CircleAlert,
   Circle,
   RefreshCw,
+  ClipboardList,
+  ClipboardCheck,
+  MessageSquare,
+  RotateCcw,
   type LucideIcon,
 } from "lucide-react";
 import LogoutButton from "@/components/LogoutButton";
@@ -37,50 +41,26 @@ const RESEARCH_REVIEW_FLOW_STAGES: ReviewFlowStageItem[] = [
   {
     number: "01",
     stageNumber: 1,
-    stageName: "Plant & Literature",
-    professionalExpert: "Pharmacist / Pharmacognosist",
-    expertise: "Pharmacognosy",
-    areaKey: "pharmacognosy",
+    stageName: "Section 1 · Formulation R&D",
+    professionalExpert: "Formulation Scientist / Pharmacognosist",
+    expertise: "Formulation Science & Pharmacognosy",
+    areaKey: "formulation",
   },
   {
     number: "02",
     stageNumber: 2,
-    stageName: "In-Silico Analysis",
+    stageName: "Section 2 · In-Silico Docking",
     professionalExpert: "Bioinformatician / Computational Scientist",
-    expertise: "Bioinformatics",
+    expertise: "Bioinformatics & In-Silico",
     areaKey: "bioinformatics",
   },
   {
     number: "03",
     stageNumber: 3,
-    stageName: "Molecular Docking",
-    professionalExpert: "Pharmacologist",
-    expertise: "Pharmacology",
+    stageName: "Section 3 · Paper Submission",
+    professionalExpert: "Clinical Pharmacologist / Medical Reviewer",
+    expertise: "Clinical Pharmacology & Paper",
     areaKey: "pharmacology",
-  },
-  {
-    number: "04",
-    stageNumber: 4,
-    stageName: "Formulation",
-    professionalExpert: "Pharmacist / Pharmaceutical Scientist",
-    expertise: "Formulation",
-    areaKey: "formulation",
-  },
-  {
-    number: "05",
-    stageNumber: 5,
-    stageName: "Safety / Clinical",
-    professionalExpert: "Physician / Clinical Pharmacist",
-    expertise: "Clinical Safety",
-    areaKey: "clinical_safety",
-  },
-  {
-    number: "06",
-    stageNumber: 6,
-    stageName: "Knowledge Integration",
-    professionalExpert: "Pharmacist / Pharmacognosist",
-    expertise: "Pharmacognosy",
-    areaKey: "pharmacognosy",
   },
 ];
 
@@ -129,25 +109,42 @@ function getStageStatusConfig(status?: string): {
         textColor: "text-sky-300",
         isApproved: false,
       };
+    case "PENDING":
     case "NEEDS_REVIEW":
     case "AWAITING_REVIEW":
       return {
-        icon: CircleAlert,
-        label: "Needs Review",
-        iconColor: "text-blue-400",
-        textColor: "text-blue-200",
+        icon: Circle,
+        label: "Pending",
+        iconColor: "text-slate-400",
+        textColor: "text-slate-300",
         isApproved: false,
       };
     case "NOT_SUBMITTED":
     default:
       return {
         icon: Circle,
-        label: "Not Submitted",
+        label: "Pending",
         iconColor: "text-slate-400",
         textColor: "text-slate-400",
         isApproved: false,
       };
   }
+}
+
+function getStageApprovalPercent(stageOrStatus?: any): number {
+  if (stageOrStatus && typeof stageOrStatus === "object") {
+    if (typeof stageOrStatus.approvedPercent === "number") {
+      return stageOrStatus.approvedPercent;
+    }
+    const norm = (stageOrStatus.status || "").toUpperCase();
+    if (norm === "APPROVED" || norm === "COMPLETED") return 100;
+    if (norm === "IN_REVIEW" || norm === "UNDER_REVIEW") return 50;
+    return 0;
+  }
+  const norm = (stageOrStatus || "").toUpperCase();
+  if (norm === "APPROVED" || norm === "COMPLETED") return 100;
+  if (norm === "IN_REVIEW" || norm === "UNDER_REVIEW") return 50;
+  return 0;
 }
 
 export default function ReviewerSidebar({
@@ -160,24 +157,157 @@ export default function ReviewerSidebar({
     role: string;
   };
 }) {
+  const [userName, setUserName] = useState(user?.name || "Professional Reviewer");
   const [collapsed, setCollapsed] = useState(false);
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { activeProject } = useReviewerProject();
 
+  useEffect(() => {
+    if (user?.name) {
+      setUserName(user.name);
+    }
+  }, [user?.name]);
+
+  useEffect(() => {
+    const handleProfileUpdate = (e: any) => {
+      if (e.detail?.name) {
+        setUserName(e.detail.name);
+      }
+    };
+    window.addEventListener("natureaide:user-profile-updated", handleProfileUpdate);
+    return () => {
+      window.removeEventListener("natureaide:user-profile-updated", handleProfileUpdate);
+    };
+  }, []);
+
+  React.useEffect(() => {
+    const updateSidebarVar = () => {
+      if (window.innerWidth < 1024) {
+        document.documentElement.style.setProperty("--sidebar-width", "0px");
+      } else {
+        document.documentElement.style.setProperty(
+          "--sidebar-width",
+          collapsed ? "80px" : "305px"
+        );
+      }
+    };
+    updateSidebarVar();
+    window.addEventListener("resize", updateSidebarVar);
+    return () => window.removeEventListener("resize", updateSidebarVar);
+  }, [collapsed]);
+
   const isWorkspaceActive = pathname === "/reviewer";
-  const isProjectsActive = pathname === "/reviewer/projects" || pathname.startsWith("/reviewer/projects/");
-  const currentStageParam = searchParams?.get("stage");
+  const isProjectsActive = pathname === "/reviewer/projects";
+  const isRevisionsActive = pathname === "/reviewer/revisions" || pathname.startsWith("/reviewer/revisions");
+  const currentSpecialtyParam = searchParams?.get("specialty");
   const isCheckingPath = pathname?.startsWith("/reviewer/checking/");
 
+  // Live count of revisions waiting for reviewer action
+  const [openRevisionsCount, setOpenRevisionsCount] = React.useState<number>(0);
+  React.useEffect(() => {
+    const fetchRevCount = () => {
+      fetch("/api/reviewer/revisions")
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data?.revisions) {
+            const count = data.revisions.filter(
+              (r: any) => r.findingStatus === "ADDRESSED" || r.findingStatus === "OPEN"
+            ).length;
+            setOpenRevisionsCount(count);
+          }
+        })
+        .catch(() => {});
+    };
+
+    fetchRevCount();
+    window.addEventListener("natureaide:revisions-updated", fetchRevCount);
+    window.addEventListener("natureaide:review-updated", fetchRevCount);
+    return () => {
+      window.removeEventListener("natureaide:revisions-updated", fetchRevCount);
+      window.removeEventListener("natureaide:review-updated", fetchRevCount);
+    };
+  }, [pathname]);
+
+  // Extract project ID from URL if currently on a project page or fallback to active context
+  const projectUrlMatch = pathname?.match(/\/reviewer\/projects\/(\d+)/);
+  const currentProjectId = projectUrlMatch ? parseInt(projectUrlMatch[1], 10) : null;
+  const [inferredProjectId, setInferredProjectId] = useState<number | null>(null);
+  const effectiveProjectId = currentProjectId || activeProject?.id || inferredProjectId;
+
+  // Authoritative project stage data directly maintained by sidebar
+  const [sidebarProject, setSidebarProject] = useState<any>(null);
+
+  const loadSidebarProject = useCallback(async (pid: number) => {
+    try {
+      const res = await fetch(`/api/reviewer/projects/${pid}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json?.project) {
+          setSidebarProject(json.project);
+        }
+      }
+    } catch (e) {}
+  }, []);
+
+  useEffect(() => {
+    if (effectiveProjectId) {
+      loadSidebarProject(effectiveProjectId);
+    } else {
+      // If no active project in URL or context, load first reviewer project
+      fetch("/api/reviewer/projects")
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data?.projects && data.projects.length > 0) {
+            const firstId = Number(data.projects[0].id);
+            setInferredProjectId(firstId);
+            loadSidebarProject(firstId);
+          }
+        })
+        .catch(() => {});
+    }
+
+    const handleUpdate = () => {
+      if (effectiveProjectId) {
+        loadSidebarProject(effectiveProjectId);
+      }
+    };
+    window.addEventListener("natureaide:review-updated", handleUpdate);
+    window.addEventListener("natureaide:project-updated", handleUpdate);
+    return () => {
+      window.removeEventListener("natureaide:review-updated", handleUpdate);
+      window.removeEventListener("natureaide:project-updated", handleUpdate);
+    };
+  }, [effectiveProjectId, loadSidebarProject]);
+
+  const projToUse = sidebarProject || activeProject;
+
   const stagesToRender = RESEARCH_REVIEW_FLOW_STAGES.map((base) => {
-    const dynamic = activeProject?.stages?.find((s) => s.stageNumber === base.stageNumber);
+    const dynamic = projToUse?.stages?.find(
+      (s: any) => Number(s.stageNumber) === base.stageNumber || s.areaKey === base.areaKey
+    );
+    const approvedStepCount = dynamic?.approvedStepCount ?? (dynamic?.approvedSteps?.length || 0);
+    const totalStepCount =
+      dynamic?.totalStepCount ?? (base.stageNumber === 1 ? 6 : base.stageNumber === 2 ? 8 : 2);
+    const stUpper = String(dynamic?.status || "").toUpperCase();
+    const isApproved =
+      stUpper === "APPROVED" || stUpper === "COMPLETED" || approvedStepCount >= totalStepCount;
+
+    const approvedPercent = isApproved
+      ? 100
+      : typeof dynamic?.approvedPercent === "number" && dynamic.approvedPercent > 0
+      ? dynamic.approvedPercent
+      : Math.round((approvedStepCount / totalStepCount) * 100);
+
     return {
       ...base,
-      status: dynamic?.status || "NOT_SUBMITTED",
-      statusLabel: dynamic?.statusLabel || "Not Submitted",
+      status: isApproved ? "APPROVED" : dynamic?.status || "PENDING",
+      statusLabel: isApproved ? "Approved" : dynamic?.statusLabel || dynamic?.status || "Pending",
       reviewerName: dynamic?.reviewerName || null,
       approvedAt: dynamic?.approvedAt || null,
+      approvedStepCount,
+      totalStepCount,
+      approvedPercent,
     };
   });
 
@@ -260,44 +390,76 @@ export default function ReviewerSidebar({
                   ? "bg-blue-600 text-white shadow-md shadow-blue-900/40"
                   : "text-slate-300 hover:text-white hover:bg-white/10"
               }`}
-              title="All Research Projects"
+              title="Review Queue & All Projects"
             >
               <Layers className="w-4 h-4 shrink-0 text-blue-300" />
-              {!collapsed && <span>All Research Projects</span>}
+              {!collapsed && <span>Review Queue</span>}
+            </Link>
+
+            {/* Dedicated Revisions Page */}
+            <Link
+              href="/reviewer/revisions"
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl font-heading font-bold text-xs transition-all ${
+                isRevisionsActive
+                  ? "bg-blue-600 text-white shadow-md shadow-blue-900/40"
+                  : "text-slate-300 hover:text-white hover:bg-white/10"
+              }`}
+              title="Revisions & Findings Queue"
+            >
+              <RotateCcw className="w-4 h-4 shrink-0 text-amber-300" />
+              {!collapsed && (
+                <div className="flex items-center justify-between flex-1 min-w-0">
+                  <span className="truncate">Revisions</span>
+                  {openRevisionsCount > 0 && (
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold font-mono bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                      {openRevisionsCount}
+                    </span>
+                  )}
+                </div>
+              )}
             </Link>
           </div>
 
           {/* SECTION: PROJECT REVIEW (Selected Botanical Subject) */}
           <div className="space-y-1">
             {!collapsed ? (
-              <div className="px-3 py-2.5 rounded-xl bg-[#0a2318] border border-emerald-600/35 text-white shadow-xs space-y-1">
+              <div className="p-2.5 rounded-xl bg-[#0a2318] border border-emerald-600/35 text-white shadow-xs space-y-1">
                 <div className="flex items-center justify-between pb-1 border-b border-emerald-600/25">
-                  <p className="text-[10px] font-extrabold tracking-wider text-emerald-400 uppercase flex items-center gap-1.5">
+                  <p className="text-[9.5px] font-extrabold tracking-wider text-emerald-400 uppercase flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                     PROJECT REVIEW
                   </p>
                   <Link
                     href="/reviewer/projects"
-                    className="text-[10px] font-medium text-emerald-300 hover:text-white underline transition-colors cursor-pointer"
+                    className="text-[9.5px] font-medium text-emerald-300 hover:text-white underline transition-colors cursor-pointer"
                     title="Change to another research project"
                   >
                     {activeProject ? "Change" : "Select"}
                   </Link>
                 </div>
                 {activeProject ? (
-                  <div className="pt-0.5 space-y-0.5">
-                    <p className="font-heading font-extrabold text-xs text-white leading-snug">
-                      {activeProject.plantName}
-                    </p>
-                    {activeProject.plantScientificName && (
-                      <p className="italic font-serif text-[11px] text-emerald-300/85 truncate">
-                        {activeProject.plantScientificName}
-                      </p>
-                    )}
-                    <p className="text-[10px] text-slate-400 truncate pt-0.5" title={activeProject.title}>
+                  <Link
+                    href={`/reviewer/projects/${activeProject.id}?tab=section1`}
+                    className="block group pt-0.5"
+                    title={`View ${activeProject.title}`}
+                  >
+                    <p
+                      className="font-heading font-extrabold text-xs text-white leading-snug line-clamp-2 group-hover:text-emerald-300 transition-colors"
+                      title={activeProject.title}
+                    >
                       {activeProject.title}
                     </p>
-                  </div>
+                  </Link>
+                ) : effectiveProjectId ? (
+                  <Link
+                    href={`/reviewer/projects/${effectiveProjectId}?tab=section1`}
+                    className="block group pt-0.5"
+                    title={`View Research Project #${effectiveProjectId}`}
+                  >
+                    <p className="font-heading font-extrabold text-xs text-white leading-snug line-clamp-2 group-hover:text-emerald-300 transition-colors">
+                      Research Project #{effectiveProjectId}
+                    </p>
+                  </Link>
                 ) : (
                   <div className="py-1 text-center">
                     <p className="text-[11px] text-slate-300">No project active</p>
@@ -339,24 +501,28 @@ export default function ReviewerSidebar({
               {stagesToRender.map((stage) => {
                 const statusConfig = getStageStatusConfig(stage.status);
                 const StatusIcon = statusConfig.icon;
+                const percent = stage.approvedPercent ?? getStageApprovalPercent(stage);
+                const targetTab =
+                  stage.stageNumber === 1
+                    ? "section1"
+                    : stage.stageNumber === 2
+                    ? "section2"
+                    : "section3";
+
                 const isStageActive = (() => {
-                  if (!isCheckingPath) return false;
-                  if (stage.stageNumber === 6) {
-                    return pathname === "/reviewer/checking/pharmacognosy" && currentStageParam === "6";
+                  if (pathname?.startsWith("/reviewer/projects/")) {
+                    const currentTab = searchParams?.get("tab") || "section1";
+                    return currentTab === targetTab;
                   }
-                  if (stage.stageNumber === 1) {
-                    return pathname === "/reviewer/checking/pharmacognosy" && currentStageParam !== "6";
+                  if (isCheckingPath) {
+                    return pathname === `/reviewer/checking/${stage.areaKey}`;
                   }
-                  return pathname === `/reviewer/checking/${stage.areaKey}`;
+                  return false;
                 })();
 
-                const targetHref = activeProject
-                  ? stage.stageNumber === 6
-                    ? `/reviewer/checking/pharmacognosy?projectId=${activeProject.id}&stage=6`
-                    : `/reviewer/checking/${stage.areaKey}?projectId=${activeProject.id}`
-                  : stage.stageNumber === 6
-                  ? `/reviewer/checking/pharmacognosy?stage=6`
-                  : `/reviewer/checking/${stage.areaKey}`;
+                const targetHref = effectiveProjectId
+                  ? `/reviewer/projects/${effectiveProjectId}?tab=${targetTab}&specialty=${stage.areaKey}`
+                  : `/reviewer/projects`;
 
                 if (collapsed) {
                   return (
@@ -368,10 +534,12 @@ export default function ReviewerSidebar({
                           ? "bg-blue-600 text-white border-blue-400 shadow-md"
                           : "bg-white/5 border-white/10 hover:bg-white/15 text-slate-300"
                       }`}
-                      title={`Stage ${stage.number} — ${stage.stageName}\n${stage.professionalExpert}\n${stage.expertise}\nStatus: ${statusConfig.label}`}
+                      title={`Stage ${stage.number} — ${stage.stageName}\n${stage.professionalExpert}\nApproval: ${percent}% (${statusConfig.label})`}
                     >
                       <span className="text-[10px] font-mono font-bold leading-none">{stage.number}</span>
-                      <StatusIcon className={`w-3.5 h-3.5 mt-0.5 ${statusConfig.iconColor}`} />
+                      <span className={`text-[8.5px] font-mono font-bold mt-0.5 ${percent === 100 ? "text-emerald-300" : "text-slate-300"}`}>
+                        {percent}%
+                      </span>
                     </Link>
                   );
                 }
@@ -380,14 +548,14 @@ export default function ReviewerSidebar({
                   <Link
                     key={stage.number}
                     href={targetHref}
-                    className={`group block px-2.5 py-1.5 rounded-xl transition-all border ${
+                    className={`group block px-2.5 py-2 rounded-xl transition-all border ${
                       isStageActive
                         ? "bg-blue-600/30 text-white border-blue-400 shadow-sm"
                         : "bg-white/[0.03] border-white/10 hover:bg-white/[0.08] hover:border-white/20 text-slate-200"
                     }`}
-                    title={`${stage.number} ${stage.stageName} · ${stage.professionalExpert} · ${statusConfig.label}`}
+                    title={`${stage.number} ${stage.stageName} · ${stage.professionalExpert} · ${percent}% Approved`}
                   >
-                    {/* ROW 1: STATUS ICON + STAGE NUMBER + STAGE NAME + STATUS BADGE */}
+                    {/* ROW 1: STATUS ICON + STAGE NUMBER + STAGE NAME + APPROVAL PERCENTAGE */}
                     <div className="flex items-center justify-between gap-1.5 min-w-0">
                       <div className="flex items-center gap-1.5 min-w-0">
                         <span className={`shrink-0 ${statusConfig.iconColor}`}>
@@ -400,18 +568,143 @@ export default function ReviewerSidebar({
                           {stage.stageName}
                         </span>
                       </div>
-                      <span className={`shrink-0 inline-flex items-center gap-1 text-[10px] font-bold ${statusConfig.textColor}`}>
-                        {statusConfig.label}
+                      <span
+                        className={`shrink-0 inline-flex items-center gap-1 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                          percent === 100
+                            ? "bg-emerald-500/20 text-emerald-300 border border-emerald-400/30"
+                            : "bg-white/10 text-slate-300"
+                        }`}
+                      >
+                        {percent}% Approved
                       </span>
                     </div>
 
-                    {/* ROW 2: PROFESSIONAL EXPERT */}
-                    <div className="mt-0.5 pl-5 flex items-center justify-between text-[11px] text-slate-300 truncate">
-                      <span className="truncate">{stage.professionalExpert}</span>
+                    {/* ROW 2: PROFESSIONAL EXPERT & PROGRESS BAR */}
+                    <div className="mt-1 pl-5 space-y-1">
+                      <div className="flex items-center justify-between text-[10.5px] text-slate-300">
+                        <span className="truncate">{stage.professionalExpert}</span>
+                        <span className={`text-[10px] font-medium ${statusConfig.textColor}`}>
+                          {statusConfig.label}
+                        </span>
+                      </div>
+                      <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full transition-all duration-300 ${
+                            percent === 100
+                              ? "bg-emerald-400"
+                              : percent > 0
+                              ? "bg-sky-400"
+                              : "bg-white/15"
+                          }`}
+                          style={{ width: `${percent}%` }}
+                        />
+                      </div>
                     </div>
                   </Link>
                 );
               })}
+
+              {/* PROFESSIONAL EVALUATION PANEL (3 ROLES) */}
+              {(() => {
+                const approvedCount = stagesToRender.filter(
+                  (s) => s.approvedPercent === 100
+                ).length;
+                const totalApprovalPercent = Math.round(
+                  stagesToRender.reduce((sum, s) => sum + s.approvedPercent, 0) / 3
+                );
+
+                const isEvaluationActive = (() => {
+                  if (pathname?.startsWith("/reviewer/projects/")) {
+                    const currentTab = searchParams?.get("tab");
+                    return currentTab === "evaluation";
+                  }
+                  return pathname === "/reviewer/evaluation";
+                })();
+
+                const evaluationHref = effectiveProjectId
+                  ? `/reviewer/projects/${effectiveProjectId}?tab=evaluation`
+                  : "/reviewer/evaluation";
+
+                if (collapsed) {
+                  return (
+                    <Link
+                      href={evaluationHref}
+                      className={`w-10 h-10 mx-auto rounded-lg flex flex-col items-center justify-center transition-all border mt-2 ${
+                        isEvaluationActive
+                          ? "bg-indigo-600 text-white border-indigo-400 shadow-md"
+                          : "bg-indigo-950/40 border-indigo-500/30 hover:bg-indigo-900/40 text-indigo-200"
+                      }`}
+                      title={`Professional Evaluation Panel (3 Roles)\nTotal Approval: ${totalApprovalPercent}% (${approvedCount}/3 Approved)`}
+                    >
+                      <ClipboardCheck
+                        className={`w-4 h-4 ${
+                          totalApprovalPercent === 100 ? "text-emerald-300" : "text-indigo-300"
+                        }`}
+                      />
+                      <span className="text-[8.5px] font-mono font-bold mt-0.5">
+                        {totalApprovalPercent}%
+                      </span>
+                    </Link>
+                  );
+                }
+
+                return (
+                  <Link
+                    href={evaluationHref}
+                    className={`group block px-2.5 py-2 rounded-xl transition-all border mt-2 ${
+                      isEvaluationActive
+                        ? "bg-indigo-600/35 text-white border-indigo-400 shadow-sm"
+                        : "bg-gradient-to-r from-indigo-950/40 via-blue-950/30 to-indigo-950/40 border-indigo-500/30 hover:border-indigo-400/50 hover:bg-indigo-900/30 text-slate-200"
+                    }`}
+                    title="Professional Multidisciplinary Review Panel (3 Roles)"
+                  >
+                    <div className="flex items-center justify-between gap-1.5 min-w-0">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <ClipboardCheck
+                          className={`w-4 h-4 shrink-0 ${
+                            totalApprovalPercent === 100
+                              ? "text-emerald-400"
+                              : "text-indigo-400"
+                          }`}
+                        />
+                        <span className="font-heading font-bold text-xs text-white leading-tight truncate">
+                          Professional Evaluation
+                        </span>
+                      </div>
+                      <span
+                        className={`shrink-0 inline-flex items-center gap-1 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                          totalApprovalPercent === 100
+                            ? "bg-emerald-500/20 text-emerald-300 border border-emerald-400/30"
+                            : "bg-white/10 text-indigo-200 border border-indigo-400/20"
+                        }`}
+                      >
+                        {totalApprovalPercent}% Total
+                      </span>
+                    </div>
+
+                    <div className="mt-1 pl-5 space-y-1">
+                      <div className="flex items-center justify-between text-[10.5px] text-slate-300">
+                        <span className="truncate">3 Professional Roles</span>
+                        <span className="text-[10px] font-mono text-indigo-300 font-semibold">
+                          {approvedCount} of 3 Approved
+                        </span>
+                      </div>
+                      <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full transition-all duration-300 ${
+                            totalApprovalPercent === 100
+                              ? "bg-emerald-400"
+                              : totalApprovalPercent > 0
+                              ? "bg-indigo-400"
+                              : "bg-white/20"
+                          }`}
+                          style={{ width: `${totalApprovalPercent}%` }}
+                        />
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })()}
             </div>
           </div>
 
@@ -464,17 +757,17 @@ export default function ReviewerSidebar({
               <Link
                 href="/reviewer/profile"
                 className="flex items-center gap-2.5 min-w-0 flex-1 group"
-                title="Professional Reviewer"
+                title={`${userName} (Reviewer Profile)`}
               >
-                <div className="w-8 h-8 rounded-full bg-blue-500/30 text-blue-300 flex items-center justify-center shrink-0 border border-blue-400/40">
-                  <ShieldCheck className="w-4 h-4 text-blue-300" />
+                <div className="w-8 h-8 rounded-full bg-blue-500/30 text-blue-300 font-bold text-xs flex items-center justify-center shrink-0 border border-blue-400/40">
+                  {(userName || "P").charAt(0).toUpperCase()}
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-bold text-white truncate group-hover:text-blue-300 transition-colors">
-                    Professional Reviewer
+                    {userName}
                   </p>
                   <span className="text-[10px] text-blue-300/80 font-bold tracking-wider uppercase truncate block">
-                    Scientific Review Platform
+                    Reviewer
                   </span>
                 </div>
               </Link>
@@ -485,10 +778,10 @@ export default function ReviewerSidebar({
           <div className="flex flex-col items-center gap-2">
             <Link
               href="/reviewer/profile"
-              className="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-blue-300 transition-colors"
-              title="Professional Reviewer"
+              className="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-blue-300 font-bold text-xs transition-colors"
+              title={`${userName} (Reviewer Profile)`}
             >
-              <ShieldCheck className="w-5 h-5 text-blue-300" />
+              {(userName || "P").charAt(0).toUpperCase()}
             </Link>
             <LogoutButton iconOnly className="w-10 h-10 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 hover:text-white border border-rose-400/30 flex items-center justify-center transition-colors cursor-pointer" />
           </div>

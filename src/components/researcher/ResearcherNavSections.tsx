@@ -7,37 +7,37 @@ import {
   LayoutDashboard,
   FolderKanban,
   FlaskConical,
+  MessageSquareWarning,
   UserRound,
   Sparkles,
-  MessageSquareWarning,
+  ChevronRight,
+  CheckCircle2,
+  Clock,
+  Layers,
+  FileCheck2,
+  Cpu,
+  Award,
 } from "lucide-react";
-import { WORKFLOW_STAGES } from "@/lib/workflow-stages";
 
-interface ProjectDetails {
-  id: number;
-  title: string;
-  plantName?: string;
-  plantScientificName?: string;
-  currentStage?: string;
-  status?: string;
+interface V2ProgressResponse {
+  section1: { status: string; completedSteps: number; totalSteps: number };
+  section2: { status: string; completedSteps: number; totalSteps: number };
+  section3: { status: string; completedSteps: number; totalSteps: number };
+  section4?: { status: string; completedSteps: number; totalSteps: number };
+  overallStatus: string;
+  overallProgressPercent: number;
+  sectionApprovalPercent?: {
+    section1: number;
+    section2: number;
+    section3: number;
+    overall: number;
+  };
+  approvedStepsBySection?: {
+    section1: number[];
+    section2: number[];
+    section3: number[];
+  };
 }
-
-interface StageRecord {
-  stageKey: string;
-  status: string;
-}
-
-interface ProjectApiResponse {
-  success: boolean;
-  project: ProjectDetails;
-  stages: StageRecord[];
-  completedStagesCount: number;
-  openFeedbackCount?: number;
-  reviewerFeedback?: any[];
-}
-
-// In-memory cache across navigation within the researcher platform
-const projectCache = new Map<number, ProjectApiResponse>();
 
 export default function ResearcherNavSections({
   collapsed = false,
@@ -53,18 +53,19 @@ export default function ResearcherNavSections({
   const routeProjectId = projectMatch ? parseInt(projectMatch[1], 10) : null;
   const activeSubpath = projectMatch && projectMatch[2] ? projectMatch[2] : "";
 
-  // Persistent active project id across researcher pages
+  // Active project ID state
   const [activeProjectId, setActiveProjectId] = useState<number | null>(routeProjectId);
+  const [projectTitle, setProjectTitle] = useState<string>("Active Project");
+  const [v2Progress, setV2Progress] = useState<V2ProgressResponse | null>(null);
+  const [openRevisionsCount, setOpenRevisionsCount] = useState<number>(0);
 
-  // Sync routeProjectId with sessionStorage / local state
+  // Sync routeProjectId with sessionStorage
   useEffect(() => {
     if (routeProjectId) {
       setActiveProjectId(routeProjectId);
       try {
         sessionStorage.setItem("natureaide_active_project_id", String(routeProjectId));
-      } catch {
-        // ignore
-      }
+      } catch {}
     } else {
       try {
         const saved = sessionStorage.getItem("natureaide_active_project_id");
@@ -72,140 +73,143 @@ export default function ResearcherNavSections({
           const parsed = parseInt(saved, 10);
           if (!isNaN(parsed)) setActiveProjectId(parsed);
         }
-      } catch {
-        // ignore
-      }
+      } catch {}
     }
   }, [routeProjectId]);
 
-  // Project state
-  const [projectData, setProjectData] = useState<ProjectApiResponse | null>(() => {
-    return activeProjectId && projectCache.has(activeProjectId)
-      ? projectCache.get(activeProjectId)!
-      : null;
-  });
-
+  // Load project details and V2 progress when activeProjectId is set
   useEffect(() => {
     if (!activeProjectId) {
-      let isMounted = true;
+      // Fetch user's first project if none active
       fetch("/api/researcher/projects")
         .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
-          if (!isMounted || !data?.projects || data.projects.length === 0) return;
-          const firstProj = data.projects[0];
-          setActiveProjectId(firstProj.id);
+          if (data?.projects && data.projects.length > 0) {
+            setActiveProjectId(data.projects[0].id);
+            setProjectTitle(data.projects[0].title || "Active Project");
+          }
         })
         .catch(() => {});
-      return () => {
-        isMounted = false;
-      };
+      return;
     }
 
-    if (projectCache.has(activeProjectId)) {
-      setProjectData(projectCache.get(activeProjectId)!);
-    }
-
-    let isMounted = true;
-
-    const fetchProject = async () => {
+    const loadData = async () => {
       try {
-        const res = await fetch(`/api/researcher/projects/${activeProjectId}`);
-        if (!res.ok) return;
-        const data: ProjectApiResponse = await res.json();
-        if (data.success && isMounted) {
-          projectCache.set(activeProjectId, data);
-          setProjectData(data);
+        const [projRes, progRes, revRes] = await Promise.all([
+          fetch(`/api/researcher/projects/${activeProjectId}`),
+          fetch(`/api/researcher/projects/${activeProjectId}/v2-progress`),
+          fetch(`/api/researcher/projects/${activeProjectId}/feedback`),
+        ]);
+
+        if (projRes.ok) {
+          const pData = await projRes.json();
+          if (pData?.project?.title) setProjectTitle(pData.project.title);
+        }
+
+        if (progRes.ok) {
+          const progData = await progRes.json();
+          if (progData?.progress) setV2Progress(progData.progress);
+        }
+
+        if (revRes.ok) {
+          const revData = await revRes.json();
+          if (revData?.feedback) {
+            const openCount = revData.feedback.filter((f: any) => f.status === "OPEN" || f.status === "IN_REVIEW").length;
+            setOpenRevisionsCount(openCount);
+          }
         }
       } catch (err) {
-        console.error("Error fetching project for sidebar:", err);
+        console.error("Error loading active project nav data:", err);
       }
     };
 
-    fetchProject();
+    loadData();
 
-    const handleUpdate = () => fetchProject();
+    const handleUpdate = () => loadData();
     window.addEventListener("natureaide:project-updated", handleUpdate);
     window.addEventListener("natureaide:revisions-updated", handleUpdate);
-
+    window.addEventListener("natureaide:review-updated", handleUpdate);
     return () => {
-      isMounted = false;
       window.removeEventListener("natureaide:project-updated", handleUpdate);
       window.removeEventListener("natureaide:revisions-updated", handleUpdate);
+      window.removeEventListener("natureaide:review-updated", handleUpdate);
     };
   }, [activeProjectId, pathname]);
 
-  // Active section helpers
+  // Active path matchers
   const isDashboardActive = pathname === "/researcher";
+  const isMyResearchActive = pathname === "/researcher/projects" || pathname === "/researcher/projects/new" || pathname.includes("new=true");
   const isAssistantActive = pathname.startsWith("/researcher/assistant");
-  const isProjectsActive =
-    pathname === "/researcher/projects" || pathname.startsWith("/researcher/projects?new=true");
-
-  const isRevisionsActive =
-    pathname.endsWith("/revisions") ||
-    activeSubpath === "revisions" ||
-    (activeProjectId !== null && pathname === `/researcher/projects/${activeProjectId}/revisions`);
-
-  const isWorkspaceActive =
-    routeProjectId !== null && (activeSubpath === "" || activeSubpath === undefined);
-
-  const isJourneyActive =
-    routeProjectId !== null &&
-    (activeSubpath === "journey" ||
-      WORKFLOW_STAGES.some((s) => s.path === activeSubpath || s.key === activeSubpath));
-
+  const isWorkspaceActive = routeProjectId !== null && (activeSubpath === "" || activeSubpath === undefined);
+  const isSection1Active = activeSubpath === "formulation-rd" || activeSubpath === "formulation" || activeSubpath === "formulation-safety" || activeSubpath === "plant-literature";
+  const isSection2Active = activeSubpath === "in-silico" || activeSubpath === "docking";
+  const isSection3Active = activeSubpath === "submission" || activeSubpath === "knowledge-integration";
+  const isCompletionActive = activeSubpath === "completion" || activeSubpath === "complete";
+  const isReviewFeedbackActive = pathname.includes("/revisions") || activeSubpath === "revisions" || pathname.startsWith("/researcher/review-feedback");
+  const isCompletedResearchActive = pathname.startsWith("/researcher/completed");
   const isProfileActive = pathname.startsWith("/researcher/profile");
 
-  // Stage status mapping
-  const stageStatusMap: Record<string, string> = {};
-  if (projectData?.stages) {
-    for (const s of projectData.stages) {
-      stageStatusMap[s.stageKey] = s.status;
+  const progressPercent = v2Progress?.overallProgressPercent ?? 0;
+  const projectStatusDisplay = v2Progress?.overallStatus || "Draft";
+  const overallApprovalPct = v2Progress?.sectionApprovalPercent?.overall ?? 0;
+
+  const getSectionBadge = (
+    status?: string,
+    approvalPct?: number
+  ) => {
+    if (typeof approvalPct === "number" && approvalPct > 0) {
+      if (approvalPct >= 100) {
+        return (
+          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400 bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-500/30">
+            <CheckCircle2 className="w-2.5 h-2.5 text-emerald-400" />
+            <span>Approved</span>
+          </span>
+        );
+      }
+      return (
+        <span className="inline-flex items-center gap-1 text-[10px] font-semibold font-mono text-emerald-300 bg-emerald-950/70 px-1.5 py-0.5 rounded border border-emerald-600/40">
+          {approvalPct}% Approved
+        </span>
+      );
     }
-  }
+    if (status === "COMPLETED") {
+      return (
+        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400 bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-500/30">
+          Complete
+        </span>
+      );
+    }
+    if (status === "IN_PROGRESS") {
+      return (
+        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-300 bg-amber-950/60 px-1.5 py-0.5 rounded border border-amber-500/30">
+          In Progress
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] text-slate-400 bg-slate-800/60 px-1.5 py-0.5 rounded">
+        Not Started
+      </span>
+    );
+  };
 
-  // Count completed stages
-  const completedCount =
-    typeof projectData?.completedStagesCount === "number"
-      ? projectData.completedStagesCount
-      : WORKFLOW_STAGES.filter((s) => stageStatusMap[s.key] === "COMPLETED").length;
-
-  const progressPercent = Math.min(100, Math.round((completedCount / 6) * 100));
-
-  // Current stage info
-  const rawCurrentStage = String(projectData?.project?.currentStage || "plant-literature");
-  const stageNum = parseInt(rawCurrentStage, 10);
-  const currentStageIndex = WORKFLOW_STAGES.findIndex(
-    (s) =>
-      s.key === rawCurrentStage ||
-      s.path === rawCurrentStage ||
-      (!isNaN(stageNum) && s.number === stageNum)
-  );
-  const currentStageObj =
-    currentStageIndex !== -1 ? WORKFLOW_STAGES[currentStageIndex] : WORKFLOW_STAGES[0];
-  const currentStageNumber = currentStageObj.number;
-
-  const projectTitle = projectData?.project?.title || "Phytochemical & In-Silico Study";
-  const scientificName =
-    projectData?.project?.plantScientificName ||
-    projectData?.project?.plantName ||
-    "Botanical Specimen";
-
-  const openRevisionsCount =
-    typeof projectData?.openFeedbackCount === "number"
-      ? projectData.openFeedbackCount
-      : (projectData?.reviewerFeedback?.filter(
-          (f: any) => f.status === "OPEN" || f.status === "IN_REVIEW"
-        ).length || 0);
+  const getStatusBadge = (status?: string) => {
+    if (status === "COMPLETED") {
+      return <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400 bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-500/30">Complete</span>;
+    }
+    if (status === "IN_PROGRESS") {
+      return <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-300 bg-amber-950/60 px-1.5 py-0.5 rounded border border-amber-500/30">In Progress</span>;
+    }
+    return <span className="inline-flex items-center gap-1 text-[10px] text-slate-400 bg-slate-800/60 px-1.5 py-0.5 rounded">Not Started</span>;
+  };
 
   return (
-    <nav className="space-y-4 text-white select-none" aria-label="Researcher Platform Navigation">
-      {/* ================================================== */}
-      {/* 1. WORKSPACE SECTION                               */}
-      {/* ================================================== */}
+    <nav className="space-y-4 text-white select-none" aria-label="NatureAide Researcher Navigation">
+      {/* 1. MAIN NAVIGATION */}
       <div className="space-y-1">
         {!collapsed && (
           <p className="px-3 pb-1 text-[11px] font-medium uppercase tracking-wider text-emerald-400/70">
-            Workspace
+            Main
           </p>
         )}
 
@@ -220,57 +224,43 @@ export default function ResearcherNavSections({
           }`}
           title={collapsed ? "Dashboard" : undefined}
         >
-          <LayoutDashboard
-            className={`w-4 h-4 shrink-0 transition-colors ${
-              isDashboardActive ? "text-emerald-300" : "text-slate-400"
-            }`}
-          />
+          <LayoutDashboard className={`w-4 h-4 shrink-0 ${isDashboardActive ? "text-emerald-300" : "text-slate-400"}`} />
           {!collapsed && <span className="truncate">Dashboard</span>}
         </Link>
 
-        {/* My Research Projects */}
+        {/* My Research */}
         <Link
           href="/researcher/projects"
           onClick={onNavigate}
           className={`relative flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
-            isProjectsActive
+            isMyResearchActive
               ? "bg-emerald-600/25 text-emerald-300 font-semibold border-l-2 border-emerald-400"
               : "text-slate-300 hover:text-white hover:bg-white/5"
           }`}
-          title={collapsed ? "My Research Projects" : undefined}
+          title={collapsed ? "My Research" : undefined}
         >
-          <FolderKanban
-            className={`w-4 h-4 shrink-0 transition-colors ${
-              isProjectsActive ? "text-emerald-300" : "text-slate-400"
-            }`}
-          />
-          {!collapsed && <span className="truncate">My Research Projects</span>}
+          <FolderKanban className={`w-4 h-4 shrink-0 ${isMyResearchActive ? "text-emerald-300" : "text-slate-400"}`} />
+          {!collapsed && <span className="truncate">My Research</span>}
         </Link>
 
-        {/* Research Revisions */}
+        {/* Review Feedback / Revisions */}
         <Link
           href={
             activeProjectId
-              ? `/researcher/projects/${activeProjectId}/revisions`
-              : "/researcher/projects"
+              ? `/researcher/revisions?projectId=${activeProjectId}`
+              : "/researcher/revisions"
           }
           onClick={onNavigate}
           className={`relative flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
-            isRevisionsActive
+            isReviewFeedbackActive
               ? "bg-emerald-600/25 text-emerald-300 font-semibold border-l-2 border-emerald-400"
               : "text-slate-300 hover:text-white hover:bg-white/5"
           }`}
-          title={
-            collapsed
-              ? openRevisionsCount > 0
-                ? `Research Revisions (${openRevisionsCount} required)`
-                : "Research Revisions"
-              : undefined
-          }
+          title={collapsed ? "Review Revisions & Feedback" : undefined}
         >
           <MessageSquareWarning
-            className={`w-4 h-4 shrink-0 transition-colors ${
-              isRevisionsActive
+            className={`w-4 h-4 shrink-0 ${
+              isReviewFeedbackActive
                 ? "text-emerald-300"
                 : openRevisionsCount > 0
                 ? "text-amber-400"
@@ -279,7 +269,7 @@ export default function ResearcherNavSections({
           />
           {!collapsed ? (
             <div className="flex items-center justify-between flex-1 min-w-0">
-              <span className="truncate">Research Revisions</span>
+              <span className="truncate">Review Revisions</span>
               {openRevisionsCount > 0 && (
                 <span className="px-1.5 py-0.5 rounded text-[10px] font-bold font-mono bg-amber-500/20 text-amber-300 border border-amber-500/40">
                   {openRevisionsCount}
@@ -293,156 +283,211 @@ export default function ResearcherNavSections({
           )}
         </Link>
 
-        {/* Ask NatureAide */}
+        {/* Completed Research */}
         <Link
-          href="/researcher/assistant"
+          href="/researcher/completed"
           onClick={onNavigate}
           className={`relative flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
-            isAssistantActive
+            isCompletedResearchActive
               ? "bg-emerald-600/25 text-emerald-300 font-semibold border-l-2 border-emerald-400"
               : "text-slate-300 hover:text-white hover:bg-white/5"
           }`}
-          title={collapsed ? "Ask NatureAide" : undefined}
+          title={collapsed ? "Completed Research" : undefined}
         >
-          <Sparkles
-            className={`w-4 h-4 shrink-0 transition-colors ${
-              isAssistantActive ? "text-emerald-300" : "text-slate-400"
-            }`}
-          />
-          {!collapsed && (
-            <div className="flex items-center justify-between flex-1 min-w-0">
-              <span className="truncate">Ask NatureAide</span>
-              <span className="text-[10px] font-mono font-medium text-emerald-300/80 bg-emerald-950/60 px-1.5 py-0.2 rounded border border-emerald-700/40">
-                AI
-              </span>
-            </div>
-          )}
+          <Award className={`w-4 h-4 shrink-0 ${isCompletedResearchActive ? "text-emerald-300" : "text-slate-400"}`} />
+          {!collapsed && <span className="truncate">Completed Research</span>}
         </Link>
       </div>
 
-      {/* ================================================== */}
-      {/* 2. CURRENT INVESTIGATION SECTION                   */}
-      {/* ================================================== */}
+      {/* 2. RESEARCH WORKSPACE (V2 3 SECTIONS) */}
       <div className="space-y-1.5 pt-3 border-t border-emerald-900/50">
         {!collapsed && (
-          <p className="px-3 pb-1 text-[11px] font-medium uppercase tracking-wider text-emerald-400/70">
-            Current Investigation
-          </p>
+          <div className="flex items-center justify-between px-3 pb-1">
+            <span className="text-[11px] font-medium uppercase tracking-wider text-emerald-400/70">
+              Research Workspace
+            </span>
+            {activeProjectId && (
+              <span className="text-[10px] font-mono font-semibold text-emerald-400 bg-emerald-950/70 px-1.5 py-0.5 rounded border border-emerald-800/40">
+                {overallApprovalPct > 0 ? `${overallApprovalPct}% Approved` : `${progressPercent}%`}
+              </span>
+            )}
+          </div>
         )}
 
-        {/* Dynamic Project Anchor Card */}
-        {activeProjectId && projectData?.project ? (
+        {activeProjectId ? (
           <div className="space-y-1.5">
-            {!collapsed && (
-              <div className="mx-1 p-3 rounded-lg bg-emerald-950/40 border border-emerald-900/60 space-y-2">
-                <div className="flex items-center justify-between text-[10px] font-medium uppercase tracking-wider text-emerald-300/80">
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                    Active Study
+            {/* Overview / Project Hub */}
+            <Link
+              href={`/researcher/projects/${activeProjectId}`}
+              onClick={onNavigate}
+              className={`relative flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
+                isWorkspaceActive
+                  ? "bg-emerald-600/25 text-emerald-300 font-semibold border-l-2 border-emerald-400"
+                  : "text-slate-300 hover:text-white hover:bg-white/5"
+              }`}
+              title={collapsed ? "Project Overview" : undefined}
+            >
+              <FlaskConical className={`w-4 h-4 shrink-0 ${isWorkspaceActive ? "text-emerald-300" : "text-slate-400"}`} />
+              {!collapsed && (
+                <div className="flex items-center justify-between flex-1 min-w-0">
+                  <span className="truncate">Overview</span>
+                  <span className="text-[10px] font-mono text-emerald-300/80 bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-700/40">
+                    {projectStatusDisplay}
                   </span>
-                  <span className="font-mono text-emerald-300 font-semibold">
-                    {progressPercent}%
-                  </span>
                 </div>
+              )}
+            </Link>
 
-                <div className="space-y-0.5">
-                  <h3
-                    className="font-medium text-xs text-white leading-snug line-clamp-2"
-                    title={projectTitle}
-                  >
-                    {projectTitle}
-                  </h3>
-                  <p
-                    className="text-[11px] italic text-emerald-300/70 font-normal truncate"
-                    title={scientificName}
-                  >
-                    {scientificName}
-                  </p>
+            {/* Section 1: Formulation Research & Development */}
+            <Link
+              href={`/researcher/projects/${activeProjectId}/formulation-rd`}
+              onClick={onNavigate}
+              className={`relative flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                isSection1Active
+                  ? "bg-emerald-600/25 text-emerald-300 font-semibold border-l-2 border-emerald-400"
+                  : "text-slate-300 hover:text-white hover:bg-white/5"
+              }`}
+              title={collapsed ? "Section 1: Formulation R&D" : undefined}
+            >
+              <Layers className={`w-4 h-4 shrink-0 ${isSection1Active ? "text-emerald-300" : "text-slate-400"}`} />
+              {!collapsed && (
+                <div className="flex items-center justify-between flex-1 min-w-0">
+                  <span className="truncate">1. Formulation R&amp;D</span>
+                  {getSectionBadge(v2Progress?.section1?.status, v2Progress?.sectionApprovalPercent?.section1)}
                 </div>
+              )}
+            </Link>
 
-                <div className="space-y-1 pt-0.5">
-                  <div className="flex items-center justify-between text-[10px] text-emerald-300/60">
-                    <span>Stage {currentStageNumber} of 6</span>
-                    <span className="font-mono">{completedCount}/6</span>
-                  </div>
-                  <div className="w-full h-1 rounded-full bg-emerald-950 overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-emerald-500 transition-all duration-300"
-                      style={{ width: `${progressPercent}%` }}
-                    />
-                  </div>
+            {/* Section 2: In-Silico Analysis */}
+            <Link
+              href={`/researcher/projects/${activeProjectId}/in-silico`}
+              onClick={onNavigate}
+              className={`relative flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                isSection2Active
+                  ? "bg-emerald-600/25 text-emerald-300 font-semibold border-l-2 border-emerald-400"
+                  : "text-slate-300 hover:text-white hover:bg-white/5"
+              }`}
+              title={collapsed ? "Section 2: In-Silico Analysis" : undefined}
+            >
+              <Cpu className={`w-4 h-4 shrink-0 ${isSection2Active ? "text-emerald-300" : "text-slate-400"}`} />
+              {!collapsed && (
+                <div className="flex items-center justify-between flex-1 min-w-0">
+                  <span className="truncate">2. In-Silico Analysis</span>
+                  {getSectionBadge(v2Progress?.section2?.status, v2Progress?.sectionApprovalPercent?.section2)}
                 </div>
+              )}
+            </Link>
 
-                {/* Compact Revision Indicator on Active Study Card */}
-                {openRevisionsCount > 0 && (
-                  <Link
-                    href={`/researcher/projects/${activeProjectId}/revisions`}
-                    onClick={onNavigate}
-                    className="mt-2 flex items-center justify-between gap-1.5 px-2.5 py-1.5 rounded-md bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 text-[11px] font-medium transition-all group cursor-pointer"
-                    title={`${openRevisionsCount} revisions required`}
-                  >
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="flex h-1.5 w-1.5 relative shrink-0">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-400"></span>
-                      </span>
-                      <span className="truncate font-semibold">
-                        ! {openRevisionsCount} Revision{openRevisionsCount > 1 ? "s" : ""} Required
-                      </span>
-                    </div>
-                    <span className="text-[10px] text-amber-300/80 group-hover:text-amber-200 group-hover:translate-x-0.5 transition-transform shrink-0">
-                      &rarr;
-                    </span>
-                  </Link>
-                )}
-              </div>
-            )}
+            {/* Section 3: Research Paper Submission */}
+            <Link
+              href={`/researcher/projects/${activeProjectId}/submission`}
+              onClick={onNavigate}
+              className={`relative flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                isSection3Active
+                  ? "bg-emerald-600/25 text-emerald-300 font-semibold border-l-2 border-emerald-400"
+                  : "text-slate-300 hover:text-white hover:bg-white/5"
+              }`}
+              title={collapsed ? "Section 3: Paper Submission" : undefined}
+            >
+              <FileCheck2 className={`w-4 h-4 shrink-0 ${isSection3Active ? "text-emerald-300" : "text-slate-400"}`} />
+              {!collapsed && (
+                <div className="flex items-center justify-between flex-1 min-w-0">
+                  <span className="truncate">3. Paper Submission</span>
+                  {getSectionBadge(v2Progress?.section3?.status, v2Progress?.sectionApprovalPercent?.section3)}
+                </div>
+              )}
+            </Link>
 
-            {/* Current Project Sub-Navigation */}
-            <div className="space-y-1">
-              <Link
-                href={`/researcher/projects/${activeProjectId}`}
-                onClick={onNavigate}
-                className={`relative flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
-                  isWorkspaceActive || isJourneyActive
-                    ? "bg-emerald-600/25 text-emerald-300 font-semibold border-l-2 border-emerald-400"
-                    : "text-slate-300 hover:text-white hover:bg-white/5"
+            {/* Section 4: Professional Approval */}
+            <Link
+              href={`/researcher/projects/${activeProjectId}/completion`}
+              onClick={onNavigate}
+              className={`relative flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                isCompletionActive
+                  ? "bg-emerald-600/25 text-emerald-300 font-semibold border-l-2 border-emerald-400"
+                  : "text-slate-300 hover:text-white hover:bg-white/5"
+              }`}
+              title={collapsed ? "4. Professional Approval" : undefined}
+            >
+              <Award className={`w-4 h-4 shrink-0 ${isCompletionActive ? "text-emerald-300" : "text-slate-400"}`} />
+              {!collapsed && (
+                <div className="flex items-center justify-between flex-1 min-w-0">
+                  <span className="truncate">4. Professional Approval</span>
+                  {getSectionBadge(
+                    v2Progress?.section4?.status ||
+                      (v2Progress?.overallStatus === "Completed"
+                        ? "COMPLETED"
+                        : v2Progress?.section3?.status === "COMPLETED"
+                        ? "IN_PROGRESS"
+                        : "NOT_STARTED"),
+                    overallApprovalPct
+                  )}
+                </div>
+              )}
+            </Link>
+
+            {/* Ask NatureAide AI (After Section 4) */}
+            <Link
+              href="/researcher/assistant"
+              onClick={onNavigate}
+              className={`relative flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                isAssistantActive
+                  ? "bg-emerald-600/25 text-emerald-300 font-semibold border-l-2 border-emerald-400"
+                  : "text-slate-300 hover:text-white hover:bg-white/5"
+              }`}
+              title={collapsed ? "Ask NatureAide AI" : undefined}
+            >
+              <Sparkles
+                className={`w-4 h-4 shrink-0 ${
+                  isAssistantActive ? "text-emerald-300 animate-pulse" : "text-emerald-400"
                 }`}
-                title={collapsed ? "Project Workspace" : undefined}
-              >
-                <FlaskConical
-                  className={`w-4 h-4 shrink-0 transition-colors ${
-                    isWorkspaceActive || isJourneyActive ? "text-emerald-300" : "text-slate-400"
-                  }`}
-                />
-                {!collapsed && (
-                  <div className="flex items-center justify-between flex-1 min-w-0">
-                    <span className="truncate">Project Workspace</span>
-                    <span className="text-[10px] font-mono font-medium text-emerald-300/70 bg-emerald-950/60 px-1.5 py-0.2 rounded border border-emerald-700/40">
-                      6 Stages
-                    </span>
-                  </div>
-                )}
-              </Link>
-            </div>
+              />
+              {!collapsed && (
+                <div className="flex items-center justify-between flex-1 min-w-0">
+                  <span className="truncate">Ask NatureAide</span>
+                  <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-emerald-300 bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-500/30">
+                    AI
+                  </span>
+                </div>
+              )}
+            </Link>
           </div>
         ) : (
-          !collapsed && (
-            <div className="mx-1 p-3 rounded-lg bg-emerald-950/30 border border-emerald-900/40 border-dashed text-center space-y-1">
-              <p className="text-xs font-medium text-slate-300">
-                No Project Selected
-              </p>
-              <p className="text-[11px] text-slate-400 leading-snug">
-                Open a project from My Research Projects to access its workspace.
-              </p>
-            </div>
-          )
+          <div className="space-y-1.5">
+            {!collapsed && (
+              <div className="mx-1 p-2.5 rounded-lg bg-emerald-950/30 border border-emerald-900/40 border-dashed text-center">
+                <p className="text-[11px] text-slate-400">Select or start a research project to open workspace</p>
+              </div>
+            )}
+            <Link
+              href="/researcher/assistant"
+              onClick={onNavigate}
+              className={`relative flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                isAssistantActive
+                  ? "bg-emerald-600/25 text-emerald-300 font-semibold border-l-2 border-emerald-400"
+                  : "text-slate-300 hover:text-white hover:bg-white/5"
+              }`}
+              title={collapsed ? "Ask NatureAide AI" : undefined}
+            >
+              <Sparkles
+                className={`w-4 h-4 shrink-0 ${
+                  isAssistantActive ? "text-emerald-300 animate-pulse" : "text-emerald-400"
+                }`}
+              />
+              {!collapsed && (
+                <div className="flex items-center justify-between flex-1 min-w-0">
+                  <span className="truncate">Ask NatureAide</span>
+                  <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-emerald-300 bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-500/30">
+                    AI
+                  </span>
+                </div>
+              )}
+            </Link>
+          </div>
         )}
       </div>
 
-      {/* ================================================== */}
-      {/* 3. SETTINGS & ACCOUNT SECTION                      */}
-      {/* ================================================== */}
+      {/* 3. ACCOUNT */}
       <div className="space-y-1 pt-3 border-t border-emerald-900/50">
         {!collapsed && (
           <p className="px-3 pb-1 text-[11px] font-medium uppercase tracking-wider text-emerald-400/70">
@@ -461,12 +506,8 @@ export default function ResearcherNavSections({
           }`}
           title={collapsed ? "Profile" : undefined}
         >
-          <UserRound
-            className={`w-4 h-4 shrink-0 transition-colors ${
-              isProfileActive ? "text-emerald-300" : "text-slate-400"
-            }`}
-          />
-          {!collapsed && <span className="truncate">Profile &amp; Credentials</span>}
+          <UserRound className={`w-4 h-4 shrink-0 ${isProfileActive ? "text-emerald-300" : "text-slate-400"}`} />
+          {!collapsed && <span className="truncate">Profile</span>}
         </Link>
       </div>
     </nav>

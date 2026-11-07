@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth";
 import pool from "@/lib/db";
 import FormulationSafetyClient from "@/components/researcher/formulation-safety/FormulationSafetyClient";
 import { ensureDockingSchema } from "@/lib/docking-schema";
+import { ensureFormulationSchema } from "@/lib/formulation-schema";
 import { ensureReviewTables } from "@/lib/expert-review-assignment";
 import { getProfessionalReviewStageStatus } from "@/lib/professional-review-status";
 
@@ -24,6 +25,7 @@ export default async function FormulationSafetyStagePage({
   if (isNaN(projectId)) notFound();
   await ensureDockingSchema();
   await ensureReviewTables();
+  await ensureFormulationSchema();
 
   // 1. Query project verifying ownership
   const [projectRows]: any = await pool.query(
@@ -78,6 +80,7 @@ export default async function FormulationSafetyStagePage({
 
   let components: any[] = [];
   let steps: any[] = [];
+  let rationale: any = null;
 
   if (formulation) {
     const [vRows]: any = await pool.query(
@@ -98,8 +101,23 @@ export default async function FormulationSafetyStagePage({
         [activeVersionId]
       );
       steps = sRows;
+
+      const [rRows]: any = await pool.query(
+        `SELECT * FROM formulation_rationales WHERE versionId = ? LIMIT 1`,
+        [activeVersionId]
+      );
+      if (rRows && rRows.length > 0) {
+        rationale = rRows[0];
+      }
     }
   }
+
+  // 5b. Fetch Stage 1 Literature References
+  const [litRows]: any = await pool.query(
+    `SELECT id, title, authors, year, journalSource AS journal, pubmedId AS pmid, doiOrUrl AS doi FROM literature_references WHERE projectId = ? ORDER BY id ASC LIMIT 10`,
+    [projectId]
+  );
+  const literature = litRows || [];
 
   // 6. Review status & Stage status
   const [revRows]: any = await pool.query(
@@ -137,8 +155,10 @@ export default async function FormulationSafetyStagePage({
       initialFormulation={formulation}
       initialComponents={components}
       initialSteps={steps}
+      initialRationale={rationale}
+      literature={literature}
       stageStatus={stageStatus}
-      reviewStatus={stageReview.status}
+      reviewStatus={stageReview.status || reviewStatus}
       reviewerFeedback={fbRows}
       overallAssessment={stageReview.comments}
       reviewerName={stageReview.reviewerName}

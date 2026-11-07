@@ -126,7 +126,10 @@ export default function ResearcherRevisionsClient({ projectId }: { projectId: nu
   const [error, setError] = useState<string | null>(null);
   const [project, setProject] = useState<ProjectData | null>(null);
   const [activeStages, setActiveStages] = useState<StageRevisionGroup[]>([]);
+  const [allStagesSummary, setAllStagesSummary] = useState<StageRevisionGroup[]>([]);
   const [reviewHistory, setReviewHistory] = useState<ReviewHistoryItem[]>([]);
+  const [latestSubmission, setLatestSubmission] = useState<any>(null);
+  const [finalApprovalSummary, setFinalApprovalSummary] = useState<any>(null);
   const [openCount, setOpenCount] = useState<number>(0);
   const [stagesRequiringRevisionCount, setStagesRequiringRevisionCount] = useState<number>(0);
   const [addressedCount, setAddressedCount] = useState<number>(0);
@@ -149,7 +152,10 @@ export default function ResearcherRevisionsClient({ projectId }: { projectId: nu
 
       setProject(data.project);
       setActiveStages(data.activeStages || []);
+      setAllStagesSummary(data.allStagesSummary || []);
       setReviewHistory(data.reviewHistory || []);
+      setLatestSubmission(data.latestSubmission || null);
+      setFinalApprovalSummary(data.finalApprovalSummary || null);
       setOpenCount(data.openRecommendationsCount || 0);
       setStagesRequiringRevisionCount(data.stagesRequiringRevisionCount || 0);
       setAddressedCount(data.addressedRecommendationsCount || 0);
@@ -279,6 +285,91 @@ export default function ResearcherRevisionsClient({ projectId }: { projectId: nu
             </div>
           </div>
         </div>
+
+        {/* 5-Specialty Research Review Flow Bar */}
+        {allStagesSummary.length > 0 && (
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs space-y-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                Multidisciplinary Review Status ({latestSubmission?.versionTag || "v1.0"})
+              </span>
+              {activeStages.length > 0 && (
+                <Link
+                  href={`/researcher/projects/${projectId}/submission?step=3`}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white transition-colors"
+                >
+                  <span>Revise &amp; Resubmit in Section 3</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              )}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
+              {allStagesSummary.map((st) => {
+                const isApp = st.status === "APPROVED";
+                const isRev = st.status === "REVISION_REQUIRED";
+                return (
+                  <div
+                    key={st.stageNumber}
+                    className={`p-2.5 rounded-xl border text-xs ${
+                      isApp
+                        ? "bg-emerald-50/70 border-emerald-200 text-emerald-900"
+                        : isRev
+                        ? "bg-amber-50/80 border-amber-200 text-amber-900"
+                        : "bg-slate-50 border-slate-200 text-slate-700"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between font-bold">
+                      <span>
+                        0{st.stageNumber} {st.discipline}
+                      </span>
+                      {isApp ? (
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                      ) : isRev ? (
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                      ) : (
+                        <Clock className="w-3.5 h-3.5 text-slate-400" />
+                      )}
+                    </div>
+                    <p className="text-[11px] mt-0.5 opacity-85">
+                      {isApp
+                        ? "Approved"
+                        : isRev
+                        ? "Revision Required"
+                        : st.status === "IN_REVIEW"
+                        ? "In Review"
+                        : "Pending"}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Final Approval Summary Certificate Banner */}
+        {finalApprovalSummary && (
+          <div className="bg-emerald-50/90 border border-emerald-300 rounded-2xl p-5 space-y-3 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-emerald-700 shrink-0" />
+                <h2 className="text-sm sm:text-base font-bold text-emerald-950">
+                  Final Multidisciplinary Approval Achieved — Version{" "}
+                  {finalApprovalSummary.approvedVersionTag} Locked
+                </h2>
+              </div>
+              <Link
+                href={`/researcher/projects/${projectId}/submission?step=3`}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-700 hover:bg-emerald-800 text-white transition-colors"
+              >
+                <span>View Approved Research Dossier</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+            <p className="text-[11px] text-emerald-900 bg-white/80 p-3 rounded-xl border border-emerald-200">
+              <strong>Important Notice:</strong> {finalApprovalSummary.regulatoryDisclaimer}
+            </p>
+          </div>
+        )}
 
         {/* View Switcher Tabs: Active Revisions vs Review History */}
         <div className="flex items-center gap-2 border-b border-slate-200 pt-2">
@@ -505,18 +596,14 @@ export default function ResearcherRevisionsClient({ projectId }: { projectId: nu
                                     <span className="text-xs font-black text-slate-900">
                                       {rec.sectionName}
                                     </span>
-                                    {rec.fieldName ? (
+                                    {rec.fieldName && rec.fieldName.trim().toLowerCase() !== rec.comment.trim().toLowerCase() ? (
                                       <>
                                         <span className="text-slate-300">/</span>
                                         <span className="text-xs font-semibold text-slate-700">
                                           {rec.fieldName}
                                         </span>
                                       </>
-                                    ) : (
-                                      <span className="text-[11px] font-medium text-slate-500 italic bg-slate-100 px-2 py-0.5 rounded-md">
-                                        Section-level recommendation
-                                      </span>
-                                    )}
+                                    ) : null}
                                   </div>
 
                                   <span
@@ -532,7 +619,7 @@ export default function ResearcherRevisionsClient({ projectId }: { projectId: nu
 
                                 {/* Reviewer Comment (Only if present) */}
                                 {rec.comment && (
-                                  <p className="text-xs text-slate-800 leading-relaxed bg-slate-50/90 p-3.5 rounded-xl border border-slate-200/80">
+                                  <p className="text-xs text-slate-800 leading-relaxed bg-slate-50/90 p-3.5 rounded-xl border border-slate-200/80 font-medium whitespace-pre-line">
                                     <strong className="text-slate-900 font-bold block mb-1">
                                       Reviewer Note:
                                     </strong>
@@ -540,9 +627,10 @@ export default function ResearcherRevisionsClient({ projectId }: { projectId: nu
                                   </p>
                                 )}
 
-                                {/* Specific Actionable Recommendation (if any) */}
-                                {rec.recommendation && (
-                                  <p className="text-xs text-slate-700 leading-relaxed bg-amber-50/50 p-3 rounded-xl border border-amber-200/60">
+                                {/* Specific Actionable Recommendation (if distinct from comment) */}
+                                {rec.recommendation &&
+                                rec.recommendation.trim().toLowerCase() !== rec.comment.trim().toLowerCase() && (
+                                  <p className="text-xs text-slate-700 leading-relaxed bg-amber-50/50 p-3 rounded-xl border border-amber-200/60 font-medium whitespace-pre-line">
                                     <strong className="text-amber-900 font-bold block mb-0.5">
                                       Suggested Action:
                                     </strong>
@@ -556,11 +644,11 @@ export default function ResearcherRevisionsClient({ projectId }: { projectId: nu
                                     <span className="font-bold text-[10px] uppercase font-mono tracking-wider block text-teal-800">
                                       Researcher Resubmission Note:
                                     </span>
-                                    <p className="leading-relaxed">{rec.researcherReply}</p>
+                                    <p className="leading-relaxed font-medium">{rec.researcherReply}</p>
                                   </div>
                                 )}
 
-                                {/* Action Button & Severity */}
+                                {/* Only 1 Single Primary Button to Navigate to the Exact Step */}
                                 <div className="flex items-center justify-between pt-1">
                                   <div>
                                     {rec.severity ? (
@@ -572,33 +660,16 @@ export default function ResearcherRevisionsClient({ projectId }: { projectId: nu
 
                                   <Link
                                     href={rec.navigateTo}
-                                    className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs ${
-                                      isRecOpen
-                                        ? "bg-[#0f2c20] hover:bg-[#164130] text-white hover:shadow-xs"
-                                        : "bg-slate-100 hover:bg-slate-200 text-slate-700"
-                                    }`}
+                                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs hover:shadow-sm cursor-pointer active:scale-95"
                                   >
-                                    <span>
-                                      {rec.fieldName ? "Go to Field" : "Go to Section"}
-                                    </span>
-                                    <ArrowRight className="w-3.5 h-3.5 text-emerald-400" />
+                                    <span>Open Revision in Step Workspace</span>
+                                    <ArrowRight className="w-4 h-4 text-emerald-100" />
                                   </Link>
                                 </div>
                               </div>
                             );
                           })}
                         </div>
-                      </div>
-
-                      {/* Stage Bottom Action: Jump to Stage Workspace */}
-                      <div className="pt-2 flex justify-end">
-                        <Link
-                          href={`/researcher/projects/${projectId}/${stage.route}`}
-                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100 hover:bg-emerald-50 hover:text-emerald-900 text-slate-800 font-bold text-xs transition-colors border border-slate-200 hover:border-emerald-300 cursor-pointer"
-                        >
-                          <span>Open Stage 0{stage.stageNumber} Workspace</span>
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </Link>
                       </div>
                     </div>
                   </div>

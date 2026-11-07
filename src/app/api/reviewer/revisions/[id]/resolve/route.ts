@@ -22,15 +22,22 @@ export async function POST(
     const { action, notes } = body; // action: 'RESOLVE' | 'NEEDS_FURTHER_REVISION'
 
     const [rows]: any = await pool.query(
-      "SELECT id, projectId, submissionId, reviewerId, areaKey FROM review_feedback WHERE id = ? AND reviewerId = ? LIMIT 1",
-      [findingId, session.id]
+      "SELECT id, projectId, submissionId, reviewerId, areaKey, title, comment FROM review_feedback WHERE id = ? LIMIT 1",
+      [findingId]
     );
 
     if (rows.length === 0) {
-      return NextResponse.json({ error: "Finding not found or unauthorized" }, { status: 404 });
+      return NextResponse.json({ error: "Finding not found" }, { status: 404 });
     }
 
     const finding = rows[0];
+
+    // Fetch project info for notification
+    const [projRows]: any = await pool.query(
+      "SELECT id, title, researcherId FROM research_projects WHERE id = ? LIMIT 1",
+      [finding.projectId]
+    );
+    const project = projRows[0] || null;
 
     if (action === "RESOLVE") {
       await pool.query(
@@ -44,16 +51,42 @@ export async function POST(
 
       // Check if all findings for this submission/area are resolved
       const [remaining]: any = await pool.query(
-        `SELECT COUNT(*) as count FROM review_feedback WHERE submissionId = ? AND areaKey = ? AND status != 'RESOLVED'`,
-        [finding.submissionId, finding.areaKey]
+        `SELECT COUNT(*) as count FROM review_feedback WHERE projectId = ? AND status != 'RESOLVED'`,
+        [finding.projectId]
       );
 
-      const allResolvedForArea = (remaining[0]?.count || 0) === 0;
+      const allResolvedForProject = (remaining[0]?.count || 0) === 0;
+
+      // If all resolved, we can update project status to APPROVED if ready
+      if (allResolvedForProject && project) {
+        await pool.query(
+          `UPDATE research_projects SET status = 'APPROVED', updatedAt = CURRENT_TIMESTAMP(3) WHERE id = ? AND status = 'REVISION_REQUIRED'`,
+          [finding.projectId]
+        );
+      }
+
+      // Notify researcher
+      if (project?.researcherId) {
+        try {
+          await pool.query(
+            `INSERT INTO review_notifications (userId, type, title, message, link, isRead, createdAt)
+             VALUES (?, 'REVISION_RESOLVED', ?, ?, ?, 0, CURRENT_TIMESTAMP(3))`,
+            [
+              project.researcherId,
+              `Revision Verified & Resolved · ${project.title}`,
+              `Reviewer verified your response to "${finding.title || "finding"}" and signed off on the revision.`,
+              `/researcher/revisions?projectId=${finding.projectId}`,
+            ]
+          );
+        } catch (notifErr) {
+          console.warn("Could not dispatch researcher notification for resolved revision:", notifErr);
+        }
+      }
 
       return NextResponse.json({
         success: true,
         message: "Finding marked as resolved.",
-        allResolvedForArea,
+        allResolvedForProject,
       });
     } else {
       // NEEDS_FURTHER_REVISION
@@ -68,6 +101,30 @@ export async function POST(
         [notes || null, findingId]
       );
 
+      // Update project status back to REVISION_REQUIRED
+      await pool.query(
+        `UPDATE research_projects SET status = 'REVISION_REQUIRED', updatedAt = CURRENT_TIMESTAMP(3) WHERE id = ?`,
+        [finding.projectId]
+      );
+
+      // Notify researcher
+      if (project?.researcherId) {
+        try {
+          await pool.query(
+            `INSERT INTO review_notifications (userId, type, title, message, link, isRead, createdAt)
+             VALUES (?, 'REVISION_REQUIRED', ?, ?, ?, 0, CURRENT_TIMESTAMP(3))`,
+            [
+              project.researcherId,
+              `Further Revision Required · ${project.title}`,
+              `Reviewer reviewed your response to "${finding.title || "finding"}" and requested additional updates: "${(notes || "Please check revised instructions").slice(0, 120)}"`,
+              `/researcher/revisions?projectId=${finding.projectId}`,
+            ]
+          );
+        } catch (notifErr) {
+          console.warn("Could not dispatch researcher notification for further revision:", notifErr);
+        }
+      }
+
       return NextResponse.json({
         success: true,
         message: "Finding flagged for further revision.",
@@ -78,4 +135,3 @@ export async function POST(
     return NextResponse.json({ error: "Failed to update finding status" }, { status: 500 });
   }
 }
-

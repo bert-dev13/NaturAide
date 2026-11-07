@@ -1,8 +1,11 @@
 export interface ExpertReviewArea {
-  key: "pharmacognosy" | "bioinformatics" | "pharmacology" | "formulation" | "clinical_safety";
+  key: "formulation" | "bioinformatics" | "pharmacology";
   order: number;
   label: string;
   shortLabel: string;
+  sectionNumber: 1 | 2 | 3;
+  sectionTitle: string;
+  assignedSectionRoute: string;
   professionTitle: string;
   checkingTitle: string;
   detail: string;
@@ -14,168 +17,123 @@ export interface ExpertReviewArea {
 
 export const EXPERT_REVIEW_AREAS: readonly ExpertReviewArea[] = [
   {
-    key: "pharmacognosy",
+    key: "formulation",
     order: 1,
-    label: "Pharmacognosy",
-    shortLabel: "Pharmacognosy",
-    professionTitle: "Pharmacist / Pharmacognosist",
-    checkingTitle: "Pharmacognosy Checking",
-    detail: "Plant identity, plant material, phytochemicals, extraction and botanical literature",
-    aliases: ["pharmacognosy", "botany", "phytochemistry"],
+    label: "Formulation Science & Pharmacognosy",
+    shortLabel: "Formulation & Pharmacognosy",
+    sectionNumber: 1,
+    sectionTitle: "Section 1: Formulation R&D",
+    assignedSectionRoute: "formulation-rd",
+    professionTitle: "Formulation Scientist / Pharmacognosist",
+    checkingTitle: "Section 1: Formulation R&D Evaluation",
+    detail: "Botanical specimen verification, plant part selection, extraction methodology, phytochemical screening, AI formulation builder composition, and batch quality control analysis.",
+    aliases: [
+      "formulation",
+      "formulation_science",
+      "formulation-science",
+      "pharmacognosy",
+      "botany",
+      "phytochemistry",
+      "pharmacy",
+      "pharmaceutics",
+    ],
     criteria: [
-      "Plant taxonomic identity and authentication",
-      "Plant material and studied plant parts",
-      "Phytochemical characterization",
-      "Extraction method and solvent selection",
-      "Botanical and ethnomedicinal literature rigor",
-      "Botanical interpretation alignment",
+      "Botanical identity, scientific nomenclature, and plant part documentation (Steps 1 & 2)",
+      "Extraction methodology, solvent system suitability, and yield parameters (Step 3)",
+      "Phytochemical screening, compound identification, and bioactive constituents (Step 4)",
+      "AI formulation composition, dosage form design, and excipient compatibility (Step 5)",
+      "Automated batch quality control, pH, viscosity, and stability evaluation (Steps 6, 7 & 8)",
     ],
     checkingItems: [
-      "Botanical identity",
-      "Scientific & common name",
-      "Plant material",
-      "Plant part",
-      "Phytochemical information",
-      "Extraction information",
-      "Botanical literature",
-      "Supporting references",
-      "Scientific interpretation",
+      "Botanical Identity & Specimen",
+      "Extraction & Solvent Optimization",
+      "Phytochemical Profile",
+      "Formulation Composition & Excipients",
+      "Batch QC & Stability Analysis",
     ],
     stageLinks: [
-      { label: "Plant & Literature", sectionId: "plant-literature" },
-      { label: "Research Integration", sectionId: "research-integration" },
+      { label: "Formulation R&D (Section 1)", sectionId: "formulation-rd" },
+      { label: "Research Summary (Section 3)", sectionId: "research-summary" },
     ],
   },
   {
     key: "bioinformatics",
     order: 2,
-    label: "Bioinformatics",
-    shortLabel: "Bioinformatics",
-    professionTitle: "Bioinformatician / Computational Biologist",
-    checkingTitle: "Bioinformatics Checking",
-    detail: "Compound screening, computational methodology, target/PDB selection and docking results",
-    aliases: ["bioinformatics", "in-silico", "computational"],
+    label: "Bioinformatics & In-Silico Modeling",
+    shortLabel: "Bioinformatics & In-Silico",
+    sectionNumber: 2,
+    sectionTitle: "Section 2: In-Silico Molecular Docking",
+    assignedSectionRoute: "in-silico",
+    professionTitle: "Bioinformatician / Computational Scientist",
+    checkingTitle: "Section 2: In-Silico Molecular Docking Evaluation",
+    detail: "Target protein selection & active site validation, ligand 3D preparation, Lipinski & ADMET screening, AutoDock Vina molecular docking, binding affinity analysis, and 2D/3D interaction profiling.",
+    aliases: [
+      "bioinformatics",
+      "in-silico",
+      "insilico",
+      "computational",
+      "docking",
+      "modeling",
+    ],
     criteria: [
-      "Compound screening and physicochemical properties",
-      "Computational screening methodology (Lipinski, ADMET)",
-      "Target protein selection and justification",
-      "PDB crystal structure selection and quality",
-      "AutoDock Vina configuration (grid box, exhaustiveness)",
-      "Docking predicted affinity and pose plausibility",
-      "Computational interpretation and scientific limitations",
+      "Target protein selection, PDB structure integrity, and binding pocket active site validation (Steps 1 & 2)",
+      "Phytochemical ligand 3D conformation preparation and SMILES notation (Step 2)",
+      "Lipinski Rule of Five compliance and ADMET pharmacokinetics drug-likeness screening (Step 3)",
+      "AutoDock Vina docking simulation parameters, search space grid box, and RMSD (Steps 4 & 5)",
+      "Binding affinity scores (kcal/mol), hydrogen bonding, hydrophobic interactions, and scientific interpretation (Steps 6, 7 & 8)",
     ],
     checkingItems: [
-      "Selected compounds",
-      "Molecular information",
-      "Screening results",
-      "ADMET predictions",
-      "Target selection",
-      "PDB structure",
-      "AutoDock Vina setup",
-      "Docking affinity (PREDICTED)",
-      "Docking interpretation",
-      "Computational limitations",
+      "Target Protein & PDB Structure",
+      "Ligand 3D Conformation",
+      "Lipinski & ADMET Drug-Likeness",
+      "AutoDock Vina Docking Simulations",
+      "Binding Energy & 2D/3D Interactions",
     ],
     stageLinks: [
-      { label: "In-Silico Screening", sectionId: "in-silico" },
-      { label: "Molecular Docking", sectionId: "molecular-docking" },
-      { label: "Research Integration", sectionId: "research-integration" },
+      { label: "In-Silico Docking (Section 2)", sectionId: "in-silico" },
+      { label: "Research Summary (Section 3)", sectionId: "research-summary" },
     ],
   },
   {
     key: "pharmacology",
     order: 3,
-    label: "Pharmacology",
-    shortLabel: "Pharmacology",
-    professionTitle: "Pharmacologist",
-    checkingTitle: "Pharmacology Checking",
-    detail: "Predicted mechanisms, biological relevance, pharmacological literature and toxicity interpretation",
-    aliases: ["pharmacology", "pharmacological", "mechanisms"],
+    label: "Clinical Pharmacology & Paper Review",
+    shortLabel: "Clinical Pharmacology & Paper",
+    sectionNumber: 3,
+    sectionTitle: "Section 3: Research Paper Submission",
+    assignedSectionRoute: "submission",
+    professionTitle: "Clinical Pharmacologist / Medical Reviewer",
+    checkingTitle: "Section 3: Research Paper Submission Evaluation",
+    detail: "Cross-disciplinary research summary synthesis, manuscript paper completeness and figures, preclinical pharmacology, clinical safety considerations, and final publication sign-off.",
+    aliases: [
+      "pharmacology",
+      "pharmacological",
+      "clinical_safety",
+      "clinical-safety",
+      "clinical",
+      "medical",
+      "safety",
+      "submission",
+      "paper",
+      "manuscript",
+    ],
     criteria: [
-      "Predicted molecular mechanisms and pathways",
-      "Biological relevance of targeted receptors/enzymes",
-      "Pharmacological literature evidence grounding",
-      "Toxicity and safety profile interpretation",
-      "Assessing whether conclusions exceed available evidence boundaries",
+      "Cross-disciplinary research summary synthesis and cross-section scientific coherence (Step 1)",
+      "Uploaded research manuscript completeness, formatting, figures, and publication standard (Step 2)",
+      "Preclinical pharmacological mechanism of action and dose-response justification (Steps 1 & 2)",
+      "Clinical safety profile, predicted adverse risks, contraindications, and regulatory disclaimers (Step 1)",
+      "Final research dossier integrity, peer-review sign-off, and readiness for completion (Step 2)",
     ],
     checkingItems: [
-      "Proposed mechanisms",
-      "Biological relevance",
-      "Pharmacological literature",
-      "Compound-target interpretation",
-      "Toxicity evidence",
-      "Safety interpretation",
-      "Conclusions supported by available evidence",
+      "Research Summary & Coherence",
+      "Research Manuscript / Paper Upload",
+      "Preclinical Pharmacology & Mechanism",
+      "Clinical Safety & Risk Assessment",
+      "Final Approval & Completion Readiness",
     ],
     stageLinks: [
-      { label: "Molecular Docking", sectionId: "molecular-docking" },
-      { label: "Formulation & Safety", sectionId: "formulation-safety" },
-      { label: "Research Integration", sectionId: "research-integration" },
-    ],
-  },
-  {
-    key: "formulation",
-    order: 4,
-    label: "Formulation",
-    shortLabel: "Formulation",
-    professionTitle: "Pharmacist / Pharmaceutical Scientist",
-    checkingTitle: "Formulation Checking",
-    detail: "Formulation design, preparation, composition, solvent/extraction and concentration",
-    aliases: ["formulation", "pharmacy", "pharmaceutics"],
-    criteria: [
-      "Formulation prototype design and dosage form",
-      "Preparation methodology and procedural clarity",
-      "Component composition and vehicle suitability",
-      "Solvent and extraction efficiency parameters",
-      "Concentration benchmarks and reproducibility",
-      "Formulation limitations and stability considerations",
-    ],
-    checkingItems: [
-      "Formulation type",
-      "Plant material",
-      "Extraction method",
-      "Solvent",
-      "Active compounds",
-      "Composition",
-      "Concentration when available",
-      "Preparation",
-      "Formulation limitations",
-    ],
-    stageLinks: [
-      { label: "Formulation & Safety", sectionId: "formulation-safety" },
-      { label: "Plant & Literature", sectionId: "plant-literature" },
-    ],
-  },
-  {
-    key: "clinical_safety",
-    order: 5,
-    label: "Clinical Safety",
-    shortLabel: "Clinical Safety",
-    professionTitle: "Physician / Clinical Pharmacist",
-    checkingTitle: "Clinical Safety Checking",
-    detail: "Contraindications, drug interactions, precautions, dose limitations and clinical safety conclusions",
-    aliases: ["clinical_safety", "clinical-safety", "clinical", "medical", "safety"],
-    criteria: [
-      "Documented contraindications and vulnerable populations",
-      "Potential herb-drug interactions and CYP enzyme modulation",
-      "Safety precautions and usage warnings",
-      "Dose limitations and safety margins",
-      "Clinical relevance of proposed botanical use",
-      "Appropriateness of safety conclusions without over-claiming",
-    ],
-    checkingItems: [
-      "Contraindications",
-      "Drug/herb interactions",
-      "Precautions",
-      "Toxicity concerns",
-      "Dose/concentration limitations",
-      "Vulnerable populations",
-      "Clinical relevance",
-      "Safety conclusion",
-    ],
-    stageLinks: [
-      { label: "Formulation & Safety", sectionId: "formulation-safety" },
-      { label: "Research Integration", sectionId: "research-integration" },
+      { label: "Paper Submission (Section 3)", sectionId: "submission" },
+      { label: "Research Summary (Section 3)", sectionId: "research-summary" },
     ],
   },
 ] as const;
@@ -187,7 +145,12 @@ export function normalizeReviewAreaKeyOrNull(raw?: string | null): ExpertReviewA
   const clean = raw.trim().toLowerCase();
   const normalized = clean.replace(/-/g, "_");
   for (const area of EXPERT_REVIEW_AREAS) {
-    if (area.key === clean || area.key === normalized || area.aliases.includes(clean) || area.aliases.includes(normalized)) {
+    if (
+      area.key === clean ||
+      area.key === normalized ||
+      area.aliases.includes(clean) ||
+      area.aliases.includes(normalized)
+    ) {
       return area.key;
     }
   }
@@ -195,7 +158,7 @@ export function normalizeReviewAreaKeyOrNull(raw?: string | null): ExpertReviewA
 }
 
 export function normalizeReviewAreaKey(raw?: string | null): ExpertReviewAreaKey {
-  return normalizeReviewAreaKeyOrNull(raw) || "pharmacognosy";
+  return normalizeReviewAreaKeyOrNull(raw) || "formulation";
 }
 
 export function expertReviewAreaLabel(key?: string | null): string {

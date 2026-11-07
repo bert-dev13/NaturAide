@@ -4,8 +4,9 @@ import { getSession } from "@/lib/auth";
 import {
   retrieveProjectResearchRecord,
   executeResearcherChat,
+  AttachedPaperData,
 } from "@/lib/researcher-assistant-grounding";
-
+import { extractManuscriptTextForProject } from "@/lib/manuscript-text-extractor";
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,7 +16,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { conversationId, projectId, message } = body;
+    const { conversationId, projectId, message, attachedPaper } = body;
 
     if (!message || typeof message !== "string" || !message.trim()) {
       return NextResponse.json({ error: "Message cannot be empty" }, { status: 400 });
@@ -56,14 +57,66 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 2. Save user message to database
+    // 2. Resolve active attached paper (from current payload, previous turn, or project manuscript)
+    let activePaper: AttachedPaperData | null = attachedPaper || null;
+
+    // Check if previous messages in this conversation have an attached paper
+    if (!activePaper && currentConvId) {
+      const [prevMsgs]: any = await pool.query(
+        `SELECT metadata FROM messages WHERE conversationId = ? AND metadata LIKE '%attachedPaper%' ORDER BY id DESC LIMIT 1`,
+        [currentConvId]
+      );
+      if (prevMsgs.length > 0) {
+        try {
+          const parsed = JSON.parse(prevMsgs[0].metadata);
+          if (parsed.attachedPaper && parsed.attachedPaper.text) {
+            activePaper = parsed.attachedPaper;
+          }
+        } catch {}
+      }
+    }
+
+    // If still no attached paper, but user query mentions "paper" or "manuscript" and project has one:
+    if (!activePaper && selectedProjectId) {
+      const queryLower = userText.toLowerCase();
+      if (
+        queryLower.includes("paper") ||
+        queryLower.includes("manuscript") ||
+        queryLower.includes("document") ||
+        queryLower.includes("summarize") ||
+        queryLower.includes("findings")
+      ) {
+        try {
+          const extraction = await extractManuscriptTextForProject(selectedProjectId);
+          if (extraction.extracted && extraction.fullText.trim()) {
+            activePaper = {
+              fileName: extraction.fileName || "project_manuscript.pdf",
+              fileType: "pdf",
+              text: extraction.fullText,
+              pageCount: extraction.pageCount || 1,
+            };
+          }
+        } catch {}
+      }
+    }
+
+    // 3. Save user message to database
+    const userMetadata: any = { projectId: selectedProjectId };
+    if (activePaper) {
+      userMetadata.attachedPaper = {
+        fileName: activePaper.fileName,
+        pageCount: activePaper.pageCount || 1,
+        text: activePaper.text ? activePaper.text.slice(0, 5000) : "",
+      };
+    }
+
     const [userMsgInsert]: any = await pool.query(
       `INSERT INTO messages (conversationId, sender, content, metadata)
        VALUES (?, 'USER', ?, ?)`,
-      [currentConvId, userText, JSON.stringify({ projectId: selectedProjectId })]
+      [currentConvId, userText, JSON.stringify(userMetadata)]
     );
 
-    // 3. Fetch recent conversation history for multi-turn context
+    // 4. Fetch recent conversation history for multi-turn context
     const [historyRows]: any = await pool.query(
       `SELECT sender, content
        FROM messages
@@ -78,22 +131,28 @@ export async function POST(request: NextRequest) {
       content: h.content,
     }));
 
-    // 4. Retrieve grounded project context across Stages 1–6
+    // 5. Retrieve grounded project context across Stages 1–6
     let projectRecord = null;
     if (selectedProjectId) {
       projectRecord = await retrieveProjectResearchRecord(selectedProjectId, session.id);
     }
 
-    // 5. Execute generation via Together AI
-    const aiResult = await executeResearcherChat(history, userText, projectRecord);
+    // 6. Execute generation via Together AI
+    const aiResult = await executeResearcherChat(history, userText, projectRecord, activePaper);
 
-    // 6. Save assistant message to database
+    // 7. Save assistant message to database
     const metadata = {
       model: aiResult.model,
       sources: aiResult.sources || [],
       projectId: selectedProjectId,
       plantName: projectRecord?.plantName || null,
       generatedAt: new Date().toISOString(),
+      attachedPaper: activePaper
+        ? {
+            fileName: activePaper.fileName,
+            pageCount: activePaper.pageCount || 1,
+          }
+        : undefined,
     };
 
     const [assistantMsgInsert]: any = await pool.query(
@@ -124,5 +183,34 @@ export async function POST(request: NextRequest) {
       { error: error?.message || "An error occurred while generating the response" },
       { status: 500 }
     );
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const session = await getSession();
+    if (!session || session.role !== "RESEARCHER") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const conversationId = searchParams.get("conversationId");
+
+    if (conversationId) {
+      await pool.query(
+        "UPDATE conversations SET isArchived = 1, updatedAt = CURRENT_TIMESTAMP(3) WHERE id = ? AND userId = ?",
+        [parseInt(conversationId, 10), session.id]
+      );
+    } else {
+      await pool.query(
+        "UPDATE conversations SET isArchived = 1, updatedAt = CURRENT_TIMESTAMP(3) WHERE userId = ? AND activeContextType = 'RESEARCH_PROJECT' AND isArchived = 0",
+        [session.id]
+      );
+    }
+
+    return NextResponse.json({ success: true, message: "Chat history cleared successfully." });
+  } catch (error) {
+    console.error("DELETE /api/researcher/assistant/chat error:", error);
+    return NextResponse.json({ error: "Failed to clear chat" }, { status: 500 });
   }
 }

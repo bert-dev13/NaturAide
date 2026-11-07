@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/lib/db";
-import { getSession } from "@/lib/auth";
+import { getSession, createSessionToken, COOKIE_NAME } from "@/lib/auth";
 
 export async function GET() {
   try {
@@ -49,7 +49,7 @@ export async function GET() {
 
 export async function PUT(request: Request) {
   try {
-    const session = await getSession();
+    const session = await getSession(request);
     if (!session || session.role !== "REVIEWER") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -58,6 +58,7 @@ export async function PUT(request: Request) {
     const {
       firstName,
       lastName,
+      name,
       phone,
       specialty,
       professionalTitle,
@@ -67,21 +68,30 @@ export async function PUT(request: Request) {
       bio,
     } = body;
 
-    const fullName = `${(firstName || "").trim()} ${(lastName || "").trim()}`.trim() || session.name;
+    const computedName = `${(firstName || "").trim()} ${(lastName || "").trim()}`.trim();
+    const fullName = (name?.trim() || computedName || session.name).trim();
 
     await pool.query("UPDATE users SET name = ? WHERE id = ?", [fullName, session.id]);
 
     await pool.query(
       `
-      UPDATE user_profiles
-      SET
-        firstName = COALESCE(?, firstName),
-        lastName = COALESCE(?, lastName),
-        phone = COALESCE(?, phone),
+      INSERT INTO user_profiles (
+        userId, firstName, lastName, phone
+      ) VALUES (
+        ?, ?, ?, ?
+      )
+      ON DUPLICATE KEY UPDATE
+        firstName = COALESCE(VALUES(firstName), firstName),
+        lastName = COALESCE(VALUES(lastName), lastName),
+        phone = COALESCE(VALUES(phone), phone),
         updatedAt = CURRENT_TIMESTAMP(3)
-      WHERE userId = ?
       `,
-      [firstName?.trim() || null, lastName?.trim() || null, phone?.trim() || null, session.id]
+      [
+        session.id,
+        firstName?.trim() || (fullName.split(" ")[0] || ""),
+        lastName?.trim() || (fullName.split(" ").slice(1).join(" ") || ""),
+        phone?.trim() || null,
+      ]
     );
 
     await pool.query(
@@ -112,10 +122,31 @@ export async function PUT(request: Request) {
       ]
     );
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       message: "Reviewer professional profile updated successfully.",
+      name: fullName,
     });
+
+    const token = await createSessionToken({
+      id: session.id,
+      email: session.email,
+      role: session.role,
+      name: fullName,
+      screeningResult: (session.screeningResult as any) || "NONE",
+    });
+
+    response.cookies.set({
+      name: COOKIE_NAME,
+      value: token,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7,
+    });
+
+    return response;
   } catch (error) {
     console.error("Reviewer profile PUT error:", error);
     return NextResponse.json({ error: "Failed to update reviewer profile" }, { status: 500 });

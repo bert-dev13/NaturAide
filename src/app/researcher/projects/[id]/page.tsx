@@ -2,10 +2,8 @@ import React from "react";
 import { notFound, redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import pool from "@/lib/db";
-import { WORKFLOW_STAGES } from "@/lib/workflow-stages";
+import { calculateV2ProjectProgress } from "@/lib/v2-progress-service";
 import ResearchWorkspaceClient from "@/components/researcher/workspace/ResearchWorkspaceClient";
-
-export const instant = false;
 
 export default async function ResearchProjectWorkspacePage({
   params,
@@ -13,7 +11,7 @@ export default async function ResearchProjectWorkspacePage({
   params: Promise<{ id: string }>;
 }) {
   const session = await getSession();
-  if (!session || session.role !== "RESEARCHER") {
+  if (!session || (session.role !== "RESEARCHER" && session.role !== "REVIEWER")) {
     redirect("/login");
   }
 
@@ -21,7 +19,7 @@ export default async function ResearchProjectWorkspacePage({
   const projectId = parseInt(id, 10);
   if (isNaN(projectId)) notFound();
 
-  // Query project ensuring researcher ownership
+  // Query project
   const [projectRows]: any = await pool.query(
     `
     SELECT rp.*,
@@ -31,10 +29,10 @@ export default async function ResearchProjectWorkspacePage({
            COALESCE(p.local_image_path, p.imageUrl) as plantImageUrl
     FROM research_projects rp
     LEFT JOIN plants p ON rp.plantId = p.id
-    WHERE rp.id = ? AND rp.researcherId = ?
+    WHERE rp.id = ? ${session.role === "RESEARCHER" ? "AND rp.researcherId = ?" : ""}
     LIMIT 1
     `,
-    [projectId, session.id]
+    session.role === "RESEARCHER" ? [projectId, session.id] : [projectId]
   );
 
   if (projectRows.length === 0) {
@@ -43,34 +41,20 @@ export default async function ResearchProjectWorkspacePage({
 
   const project = projectRows[0];
 
-  // Fetch stages
-  const [stages]: any = await pool.query(
-    `SELECT stageKey, status, completedAt, updatedAt FROM research_project_stages WHERE projectId = ?`,
-    [projectId]
-  );
+  // Calculate V2 Section Progress
+  const v2Progress = await calculateV2ProjectProgress(projectId);
 
-  // Self-heal project.currentStage if it has regressed or is out of sync with completed stages
-  const stageStatusMap: Record<string, string> = {};
-  for (const s of stages) stageStatusMap[s.stageKey] = s.status;
-
-  const currentStageKey = project.currentStage;
-  if (stageStatusMap[currentStageKey] === "COMPLETED") {
-    const activeStage =
-      WORKFLOW_STAGES.find((s) => stageStatusMap[s.key] === "IN_PROGRESS" || stageStatusMap[s.key] === "UNDER_REVIEW") ||
-      WORKFLOW_STAGES.find((s) => stageStatusMap[s.key] !== "COMPLETED") ||
-      WORKFLOW_STAGES[WORKFLOW_STAGES.length - 1];
-
-    if (activeStage && activeStage.key !== currentStageKey) {
-      project.currentStage = activeStage.key;
-      await pool.query(
-        `UPDATE research_projects SET currentStage = ?, updatedAt = CURRENT_TIMESTAMP(3) WHERE id = ?`,
-        [activeStage.key, projectId]
-      );
-    }
+  // Sync DB progressPercent
+  if (project.progressPercent !== v2Progress.overallProgressPercent) {
+    await pool.query(
+      "UPDATE research_projects SET progressPercent = ? WHERE id = ?",
+      [v2Progress.overallProgressPercent, projectId]
+    );
+    project.progressPercent = v2Progress.overallProgressPercent;
   }
 
   const [activities]: any = await pool.query(
-    `SELECT actionType, description, createdAt FROM research_activity_logs WHERE projectId = ? ORDER BY createdAt DESC LIMIT 12`,
+    `SELECT actionType, description, createdAt FROM research_activity_logs WHERE projectId = ? ORDER BY createdAt DESC LIMIT 10`,
     [projectId]
   );
 
@@ -85,13 +69,22 @@ export default async function ResearchProjectWorkspacePage({
   );
   const openRevisionsCount = Number(feedbackRows[0]?.total || 0);
 
+  const [formRows]: any = await pool.query(
+    `SELECT rf.formulationName, rf.dosageFormType, rf.formulationType,
+            (SELECT COUNT(*) FROM formulation_components fc WHERE fc.projectId = rf.projectId) as componentsCount
+     FROM research_formulations rf WHERE rf.projectId = ? ORDER BY rf.id DESC LIMIT 1`,
+    [projectId]
+  );
+  const formulationOverview = formRows[0] || null;
+
   return (
     <ResearchWorkspaceClient
       project={project}
-      stages={stages}
+      v2Progress={v2Progress}
       activities={activities}
-      linkedStudies={Number(studyRows[0]?.total || 0)}
+      linkedStudies={studyRows[0]?.total || 0}
       openRevisionsCount={openRevisionsCount}
+      formulationOverview={formulationOverview}
     />
   );
 }

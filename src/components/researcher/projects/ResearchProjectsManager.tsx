@@ -41,6 +41,9 @@ export interface ProjectItem {
   status: string;
   currentStage: string;
   progressPercent: number;
+  continueRoute?: string;
+  currentSectionNum?: number;
+  currentSectionTitle?: string;
   plantId?: string | null;
   plantCustomName?: string | null;
   plantName: string;
@@ -49,6 +52,8 @@ export interface ProjectItem {
   plantImageUrl?: string | null;
   feedbackCount: number;
   completedStagesCount: number;
+  approvedSpecialtiesCount?: number;
+  statusLabel?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -331,53 +336,86 @@ export default function ResearchProjectsManager() {
     );
   }, [projects, searchQuery]);
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (
+    status: string,
+    statusLabel?: string,
+    approvedCount?: number
+  ) => {
     const norm = (status || "").toUpperCase();
-    switch (norm) {
-      case "IN_PROGRESS":
-      case "ACTIVE":
-      case "DRAFT":
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium bg-emerald-50 text-emerald-800 border border-emerald-200/80">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
-            Active
-          </span>
-        );
-      case "UNDER_REVIEW":
-      case "READY_FOR_REVIEW":
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium bg-amber-50 text-amber-800 border border-amber-200/80">
-            <Clock className="w-3 h-3 text-amber-700" />
-            Under Review
-          </span>
-        );
-      case "REVISION_REQUIRED":
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium bg-rose-50 text-rose-800 border border-rose-200/80">
-            <AlertCircle className="w-3 h-3 text-rose-700" />
-            Revisions Needed
-          </span>
-        );
-      case "COMPLETED":
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider bg-teal-50 text-teal-800 border border-teal-200/80">
-            <CheckCircle2 className="w-3.5 h-3.5 text-teal-700" />
-            COMPLETED
-          </span>
-        );
-      case "ARCHIVED":
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
-            Archived
-          </span>
-        );
-      default:
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
-            {status}
-          </span>
-        );
+    const label = statusLabel || status;
+
+    if (norm === "COMPLETED" || label === "Completed") {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-bold bg-teal-50 text-teal-800 border border-teal-200/80">
+          <CheckCircle2 className="w-3.5 h-3.5 text-teal-700" />
+          <span>Completed</span>
+        </span>
+      );
     }
+
+    if (
+      norm === "APPROVED" ||
+      label === "Fully Approved — Ready to Complete"
+    ) {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200/80">
+          <CheckCircle2 className="w-3 h-3 text-emerald-700" />
+          <span>Fully Approved — Ready to Complete</span>
+        </span>
+      );
+    }
+
+    if (
+      norm === "REVISION_REQUIRED" ||
+      norm === "REVISION_REQUESTED" ||
+      label === "Revisions Required"
+    ) {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-medium bg-rose-50 text-rose-800 border border-rose-200/80">
+          <AlertCircle className="w-3 h-3 text-rose-700" />
+          <span>Revisions Required</span>
+        </span>
+      );
+    }
+
+    if (
+      norm === "UNDER_REVIEW" ||
+      norm === "READY_FOR_REVIEW" ||
+      label.startsWith("Under Professional Review")
+    ) {
+      const displayLabel = label.startsWith("Under Professional Review")
+        ? label
+        : `Under Professional Review — ${approvedCount ?? 0}/3 Approved`;
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-medium bg-indigo-50 text-indigo-800 border border-indigo-200/80">
+          <Clock className="w-3 h-3 text-indigo-700" />
+          <span>{displayLabel}</span>
+        </span>
+      );
+    }
+
+    if (norm === "IN_PROGRESS" || norm === "ACTIVE" || norm === "DRAFT") {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium bg-emerald-50 text-emerald-800 border border-emerald-200/80">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
+          <span>In Progress</span>
+        </span>
+      );
+    }
+
+    if (norm === "ARCHIVED") {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
+          Archived
+        </span>
+      );
+    }
+
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
+        {label}
+      </span>
+    );
   };
 
   return (
@@ -599,6 +637,7 @@ export default function ResearchProjectsManager() {
         <div className="w-full grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5">
           {displayedProjects.map((project) => {
             const activeStageName =
+              project.currentSectionTitle ||
               STAGE_DISPLAY_NAMES[project.currentStage] ||
               project.currentStage.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
             const isDone =
@@ -618,7 +657,11 @@ export default function ResearchProjectsManager() {
                   {/* Header: Status, Timestamp & Actions Menu */}
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
-                      {getStatusBadge(isDone ? "COMPLETED" : project.status)}
+                      {getStatusBadge(
+                        isDone ? "COMPLETED" : project.status,
+                        project.statusLabel,
+                        project.approvedSpecialtiesCount
+                      )}
                       <span className="text-xs text-slate-400 flex items-center gap-1">
                         <Clock className="w-3 h-3 text-slate-400" />
                         <span>{formatRelativeTime(project.updatedAt)}</span>
@@ -782,7 +825,12 @@ export default function ResearchProjectsManager() {
                   </Link>
 
                   <Link
-                    href={isDone ? getStageUrl(project.id, "completion-integration") : getStageUrl(project.id, project.currentStage)}
+                    href={
+                      project.continueRoute ||
+                      (isDone
+                        ? `/researcher/projects/${project.id}/completion`
+                        : getStageUrl(project.id, project.currentStage))
+                    }
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[#0f2c20] hover:bg-[#164533] text-white text-xs font-medium transition-colors"
                   >
                     <span>{isDone ? "View Final Dossier" : "Continue Stage"}</span>

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import pool from "@/lib/db";
 import { getSession } from "@/lib/auth";
+import { calculateV2ProjectProgress } from "@/lib/v2-progress-service";
 
 export async function GET(request: Request) {
   try {
@@ -92,7 +93,134 @@ export async function GET(request: Request) {
       sql += ` ORDER BY ${deprioritizeTests}rp.updatedAt DESC`;
     }
 
-    const [projects]: any = await pool.query(sql, params);
+    const [rawProjects]: any = await pool.query(sql, params);
+
+    const projectIds = (rawProjects || []).map((p: any) => Number(p.id));
+    const latestSubByProj = new Map<number, number>();
+    const approvedBySub = new Map<number, number>();
+    const revBySub = new Map<number, number>();
+
+    if (projectIds.length > 0) {
+      try {
+        const [subRows]: any = await pool.query(
+          `SELECT id, projectId FROM review_submissions WHERE projectId IN (?) ORDER BY reviewRound DESC, id DESC`,
+          [projectIds]
+        );
+        for (const sr of subRows || []) {
+          const pid = Number(sr.projectId);
+          if (!latestSubByProj.has(pid)) {
+            latestSubByProj.set(pid, Number(sr.id));
+          }
+        }
+        const subIds = Array.from(latestSubByProj.values());
+        if (subIds.length > 0) {
+          const [covRows]: any = await pool.query(
+            `SELECT submissionId, status FROM review_area_coverage WHERE submissionId IN (?)`,
+            [subIds]
+          );
+          for (const cr of covRows || []) {
+            const sid = Number(cr.submissionId);
+            const cst = String(cr.status || "").toUpperCase();
+            if (cst === "APPROVED" || cst === "COMPLETED") {
+              approvedBySub.set(sid, (approvedBySub.get(sid) || 0) + 1);
+            } else if (cst === "REVISION_REQUIRED" || cst === "REVISION_REQUESTED") {
+              revBySub.set(sid, (revBySub.get(sid) || 0) + 1);
+            }
+          }
+        }
+      } catch {
+        // Non-fatal
+      }
+    }
+
+    // Resolve V2 section completion status in parallel for sequential stage progression
+    const v2ProgressList = await Promise.all(
+      projectIds.map((pid: number) => calculateV2ProjectProgress(pid).catch(() => null))
+    );
+    const v2ProgressByPid = new Map<number, any>();
+    projectIds.forEach((pid: number, idx: number) => {
+      if (v2ProgressList[idx]) v2ProgressByPid.set(pid, v2ProgressList[idx]);
+    });
+
+    const projects = (rawProjects || []).map((p: any) => {
+      const pid = Number(p.id);
+      const st = String(p.status || "IN_PROGRESS").toUpperCase();
+      const latestSid = latestSubByProj.get(pid);
+      const hasSub = Boolean(latestSid);
+      const approvedCount = latestSid ? approvedBySub.get(latestSid) || 0 : 0;
+      const revCount = latestSid ? revBySub.get(latestSid) || 0 : 0;
+
+      const v2Prog = v2ProgressByPid.get(pid);
+      const isSec1Done = v2Prog ? v2Prog.section1.status === "COMPLETED" : false;
+      const isSec2Done = v2Prog ? v2Prog.section2.status === "COMPLETED" : false;
+      const isSec3Done = v2Prog ? v2Prog.section3.status === "COMPLETED" : false;
+
+      // Sequential progression: Section 1 -> Section 2 -> Section 3 -> Section 4
+      let continueRoute = `/researcher/projects/${pid}/formulation-rd`;
+      let currentSectionNum = 1;
+      let currentSectionTitle = "1. Formulation R&D";
+      let resolvedCurrentStage = "plant-literature";
+
+      if (st === "COMPLETED") {
+        continueRoute = `/researcher/projects/${pid}/completion`;
+        currentSectionNum = 4;
+        currentSectionTitle = "Completed Research";
+        resolvedCurrentStage = "completion";
+      } else if (!isSec1Done) {
+        continueRoute = `/researcher/projects/${pid}/formulation-rd`;
+        currentSectionNum = 1;
+        currentSectionTitle = "1. Formulation R&D";
+        resolvedCurrentStage = "plant-literature";
+      } else if (!isSec2Done) {
+        continueRoute = `/researcher/projects/${pid}/in-silico`;
+        currentSectionNum = 2;
+        currentSectionTitle = "2. In-Silico Analysis";
+        resolvedCurrentStage = "in-silico";
+      } else if (!isSec3Done) {
+        continueRoute = `/researcher/projects/${pid}/submission`;
+        currentSectionNum = 3;
+        currentSectionTitle = "3. Paper Submission";
+        resolvedCurrentStage = "submission";
+      } else {
+        continueRoute = `/researcher/projects/${pid}/completion`;
+        currentSectionNum = 4;
+        currentSectionTitle = "4. Professional Approval";
+        resolvedCurrentStage = "completion";
+      }
+
+      let statusLabel = "In Progress";
+      if (st === "COMPLETED") {
+        statusLabel = "Completed";
+      } else if (st === "REVISION_REQUIRED" || st === "REVISION_REQUESTED" || revCount > 0) {
+        statusLabel = "Revisions Required";
+      } else if (st === "APPROVED" || (hasSub && approvedCount >= 3 && revCount === 0)) {
+        statusLabel = "Fully Approved — Ready to Complete";
+      } else if (st === "UNDER_REVIEW" || st === "READY_FOR_REVIEW" || hasSub) {
+        statusLabel = `Under Professional Review — ${approvedCount}/3 Approved`;
+      } else if (st === "DRAFT") {
+        statusLabel = "Draft";
+      }
+
+      const completedStagesCount =
+        (isSec1Done ? 1 : 0) +
+        (isSec2Done ? 1 : 0) +
+        (isSec3Done ? 1 : 0) +
+        (st === "COMPLETED" ? 1 : 0);
+
+      const computedProgress = v2Prog ? v2Prog.overallProgressPercent : Number(p.progressPercent || 0);
+
+      return {
+        ...p,
+        currentStage: resolvedCurrentStage,
+        continueRoute,
+        currentSectionNum,
+        currentSectionTitle,
+        progressPercent: computedProgress,
+        completedStagesCount,
+        approvedSpecialtiesCount: approvedCount,
+        statusLabel,
+      };
+    });
 
     return NextResponse.json({ success: true, projects, tabCounts });
   } catch (error) {

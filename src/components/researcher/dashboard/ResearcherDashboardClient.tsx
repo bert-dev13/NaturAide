@@ -24,6 +24,9 @@ export interface ProjectData {
   status: string;
   currentStage: string;
   progressPercent: number;
+  continueRoute?: string;
+  currentSectionTitle?: string;
+  currentSectionNum?: number;
   updatedAt: string;
   plantName: string;
   plantScientificName?: string | null;
@@ -154,6 +157,7 @@ export function formatRelativeTime(dateString: string): string {
     return date.toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
+      timeZone: "UTC",
     });
   } catch {
     return "Recently";
@@ -162,44 +166,61 @@ export function formatRelativeTime(dateString: string): string {
 
 export function getStatusBadge(status: string) {
   const norm = (status || "").toUpperCase();
-  switch (norm) {
-    case "IN_PROGRESS":
-    case "DRAFT":
-      return (
-        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium bg-emerald-50 text-emerald-800 border border-emerald-200/80">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
-          Active
-        </span>
-      );
-    case "UNDER_REVIEW":
-    case "READY_FOR_REVIEW":
-      return (
-        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium bg-amber-50 text-amber-800 border border-amber-200/80">
-          <Clock className="w-3 h-3 text-amber-700" />
-          Under Review
-        </span>
-      );
-    case "REVISION_REQUIRED":
-      return (
-        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium bg-rose-50 text-rose-800 border border-rose-200/80">
-          <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-          Needs Revision
-        </span>
-      );
-    case "COMPLETED":
-      return (
-        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium bg-teal-50 text-teal-800 border border-teal-200/80">
-          <CheckCircle2 className="w-3 h-3 text-teal-700" />
-          Completed
-        </span>
-      );
-    default:
-      return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
-          {status}
-        </span>
-      );
+  if (norm === "COMPLETED" || status === "Completed") {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-medium bg-teal-50 text-teal-800 border border-teal-200/80">
+        <CheckCircle2 className="w-3 h-3 text-teal-700" />
+        Completed
+      </span>
+    );
   }
+  if (norm === "APPROVED" || status === "Fully Approved — Ready to Complete") {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200/80">
+        <CheckCircle2 className="w-3 h-3 text-emerald-700" />
+        Fully Approved — Ready to Complete
+      </span>
+    );
+  }
+  if (
+    norm === "REVISION_REQUIRED" ||
+    norm === "REVISION_REQUESTED" ||
+    status === "Revisions Required"
+  ) {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-medium bg-rose-50 text-rose-800 border border-rose-200/80">
+        <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+        Revisions Required
+      </span>
+    );
+  }
+  if (
+    norm === "UNDER_REVIEW" ||
+    norm === "READY_FOR_REVIEW" ||
+    status.startsWith("Under Professional Review")
+  ) {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-medium bg-indigo-50 text-indigo-800 border border-indigo-200/80">
+        <Clock className="w-3 h-3 text-indigo-700" />
+        {status.startsWith("Under Professional Review")
+          ? status
+          : "Under Professional Review"}
+      </span>
+    );
+  }
+  if (norm === "IN_PROGRESS" || norm === "DRAFT") {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium bg-emerald-50 text-emerald-800 border border-emerald-200/80">
+        <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
+        Active
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
+      {status}
+    </span>
+  );
 }
 
 export default function ResearcherDashboardClient({
@@ -364,7 +385,7 @@ export default function ResearcherDashboardClient({
 
                 <div className="flex items-center gap-1.5 text-xs text-slate-400">
                   <Clock className="w-3.5 h-3.5" />
-                  <span>Updated {formatRelativeTime(featuredProject.updatedAt)}</span>
+                  <span suppressHydrationWarning>Updated {formatRelativeTime(featuredProject.updatedAt)}</span>
                 </div>
               </div>
 
@@ -415,7 +436,10 @@ export default function ResearcherDashboardClient({
                   </span>
 
                   <Link
-                    href={getStageUrl(featuredProject.id, featuredProject.currentStage || "plant-literature")}
+                    href={
+                      featuredProject.continueRoute ||
+                      getStageUrl(featuredProject.id, featuredProject.currentStage || "plant-literature")
+                    }
                     className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[#0f2c20] hover:bg-[#164533] text-white text-xs font-medium transition-colors shadow-xs shrink-0"
                   >
                     <span>Continue Research</span>

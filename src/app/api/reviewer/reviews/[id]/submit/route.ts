@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import pool from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { normalizeReviewAreaKey, expertReviewAreaLabel } from "@/lib/expert-review-areas";
-import { evaluateOverallApproval } from "@/lib/expert-review-assignment";
+import {
+  evaluateOverallApproval,
+  assertReviewerPermissionForSpecialty,
+} from "@/lib/expert-review-assignment";
 
 const AREA_STAGE_MAPPING: Record<
   string,
@@ -113,8 +116,23 @@ export async function POST(
       currentStage,
     } = assignRows[0];
 
-    const areaKey = normalizeReviewAreaKey(specialtyNeeded);
+    const areaKey = normalizeReviewAreaKey(body.areaKey || specialtyNeeded);
     const areaLabel = expertReviewAreaLabel(areaKey);
+
+    try {
+      await assertReviewerPermissionForSpecialty({
+        reviewerId: session.id,
+        projectId,
+        submissionId,
+        areaKey,
+        requireUnlocked: true,
+      });
+    } catch (permErr: any) {
+      return NextResponse.json(
+        { error: permErr.message || "Permission denied" },
+        { status: permErr.status || 403 }
+      );
+    }
 
     // Stage route determination
     let stageInfo = AREA_STAGE_MAPPING[areaKey] || {

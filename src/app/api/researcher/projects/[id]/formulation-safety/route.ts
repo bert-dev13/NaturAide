@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import pool from "@/lib/db";
+import { ensureFormulationSchema } from "@/lib/formulation-schema";
 import { getSession } from "@/lib/auth";
 import {
   ensureReviewTables,
@@ -23,6 +24,8 @@ export async function POST(
       return NextResponse.json({ error: "Invalid project ID" }, { status: 400 });
     }
 
+    await ensureFormulationSchema();
+
     // Verify ownership
     const [projectRows]: any = await pool.query(
       "SELECT id, currentStage, progressPercent FROM research_projects WHERE id = ? AND researcherId = ? LIMIT 1",
@@ -39,11 +42,16 @@ export async function POST(
     // HELPER FUNCTION: SAVE FORMULATION DATA
     async function persistFormulationData() {
       const formulationType = (body.formulationType || "Research Extract").trim();
+      const dosageFormType = (body.dosageFormType || formulationType).trim();
       const plantPart = (body.plantPart || "").trim();
       const extractionSolvent = (body.extractionSolvent || "").trim();
       const extractionMethod = (body.extractionMethod || "").trim();
       const purpose = (body.purpose || "").trim();
       const notes = (body.notes || "").trim();
+      const scientificRationale = (body.scientificRationale || body.researcherRationale || "").trim();
+      const compatibilityConsiderations = (body.compatibilityConsiderations || "").trim();
+      const safetyAndLimitations = (body.safetyAndLimitations || "").trim();
+      const aiProposalJson = body.aiProposal ? JSON.stringify(body.aiProposal) : (body.aiProposalJson ? (typeof body.aiProposalJson === 'string' ? body.aiProposalJson : JSON.stringify(body.aiProposalJson)) : null);
       const formulationName = (body.formulationName || `${body.plantName || "Botanical"} Research Extract`).trim();
 
       // 1. Update research_plant_data (partsStudied, extractionSolvent, extractionMethod)
@@ -81,18 +89,21 @@ export async function POST(
           `UPDATE research_formulations
            SET formulationName = ?,
                formulationType = ?,
+               dosageFormType = ?,
                researchPurpose = ?,
+               researcherRationale = COALESCE(?, researcherRationale),
                notes = ?,
+               aiProposalJson = COALESCE(?, aiProposalJson),
                updatedAt = CURRENT_TIMESTAMP(3)
            WHERE id = ?`,
-          [formulationName, formulationType, purpose, notes, formulationId]
+          [formulationName, formulationType, dosageFormType, purpose, scientificRationale || null, notes, aiProposalJson, formulationId]
         );
       } else {
         const [formInsert]: any = await pool.query(
           `INSERT INTO research_formulations (
-             projectId, formulationName, formulationType, researchPurpose, notes, currentVersionNumber, status
-           ) VALUES (?, ?, ?, ?, ?, 'v1.0', 'DRAFT')`,
-          [projectId, formulationName, formulationType, purpose, notes]
+             projectId, formulationName, formulationType, dosageFormType, researchPurpose, researcherRationale, notes, aiProposalJson, currentVersionNumber, status
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'v1.0', 'DRAFT')`,
+          [projectId, formulationName, formulationType, dosageFormType, purpose, scientificRationale || null, notes, aiProposalJson]
         );
         formulationId = formInsert.insertId;
       }
@@ -115,43 +126,88 @@ export async function POST(
         versionId = verInsert.insertId;
       }
 
-      // 4. Save components / composition
-      if (Array.isArray(body.compounds)) {
-        for (const compound of body.compounds) {
-          const compName = (compound.compoundName || compound.name || "").trim();
-          if (!compName) continue;
-          const quantity = (compound.amount || compound.quantity || "").trim();
-          const unit = (compound.unit || "mg/g").trim();
-          const concentration = (compound.concentration || "").trim();
-          const role = (compound.preparationRole || compound.role || "Bioactive Marker Fraction").trim();
-          const compNotes = (compound.notes || "").trim();
+      // 4. Save components / composition (handles full components table or compounds)
+      const inputComponents = Array.isArray(body.components) && body.components.length > 0
+        ? body.components
+        : (Array.isArray(body.compounds) ? body.compounds : []);
 
-          const [existingComp]: any = await pool.query(
-            "SELECT id FROM formulation_components WHERE versionId = ? AND componentName = ? LIMIT 1",
-            [versionId, compName]
-          );
+      if (inputComponents.length > 0) {
+        // When comprehensive components array is passed, replace components for this version
+        if (Array.isArray(body.components) && body.components.length > 0) {
+          await pool.query("DELETE FROM formulation_components WHERE versionId = ?", [versionId]);
+          for (const comp of body.components) {
+            const compName = (comp.componentName || comp.name || "").trim();
+            if (!compName) continue;
+            const role = (comp.roleInFormulation || comp.role || comp.function || "Formulation Excipient").trim();
+            const quantity = (comp.quantity || comp.amount || "").trim();
+            const unit = (comp.unit || "% w/w").trim();
+            const concentration = (comp.proposedConcentration || comp.concentration || "Concentration Requires Experimental Validation").trim();
+            const notes = (comp.scientificRationale || comp.notes || "").trim();
+            const sourceRef = (comp.sourceReference || comp.source || "").trim();
+            const isAi = comp.isAiSuggested ? 1 : 0;
+            const evidenceStatus = comp.evidenceStatus || (concentration.toLowerCase().includes("requires") ? "REQUIRES_EXPERIMENTAL_VALIDATION" : "SUPPORTED");
 
-          if (existingComp.length > 0) {
-            await pool.query(
-              `UPDATE formulation_components
-               SET roleInFormulation = ?,
-                   quantity = ?,
-                   unit = ?,
-                   concentration = ?,
-                   notes = ?
-               WHERE id = ?`,
-              [role, quantity || null, unit || null, concentration || null, compNotes || null, existingComp[0].id]
-            );
-          } else {
             await pool.query(
               `INSERT INTO formulation_components (
                  formulationId, versionId, projectId, componentName, roleInFormulation,
-                 quantity, unit, concentration, notes
-               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-              [formulationId, versionId, projectId, compName, role, quantity || null, unit || null, concentration || null, compNotes || null]
+                 quantity, unit, concentration, notes, sourceReference, isAiSuggested, evidenceStatus
+               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [formulationId, versionId, projectId, compName, role, quantity || null, unit || null, concentration, notes || null, sourceRef || null, isAi, evidenceStatus]
             );
           }
+        } else {
+          // Legacy compounds array update
+          for (const compound of body.compounds) {
+            const compName = (compound.compoundName || compound.name || "").trim();
+            if (!compName) continue;
+            const quantity = (compound.amount || compound.quantity || "").trim();
+            const unit = (compound.unit || "mg/g").trim();
+            const concentration = (compound.concentration || "").trim();
+            const role = (compound.preparationRole || compound.role || "Bioactive Marker Fraction").trim();
+            const compNotes = (compound.notes || "").trim();
+
+            const [existingComp]: any = await pool.query(
+              "SELECT id FROM formulation_components WHERE versionId = ? AND componentName = ? LIMIT 1",
+              [versionId, compName]
+            );
+
+            if (existingComp.length > 0) {
+              await pool.query(
+                `UPDATE formulation_components
+                 SET roleInFormulation = ?,
+                     quantity = ?,
+                     unit = ?,
+                     concentration = ?,
+                     notes = ?
+                 WHERE id = ?`,
+                [role, quantity || null, unit || null, concentration || null, compNotes || null, existingComp[0].id]
+              );
+            } else {
+              await pool.query(
+                `INSERT INTO formulation_components (
+                   formulationId, versionId, projectId, componentName, roleInFormulation,
+                   quantity, unit, concentration, notes
+                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [formulationId, versionId, projectId, compName, role, quantity || null, unit || null, concentration || null, compNotes || null]
+              );
+            }
+          }
         }
+      }
+
+      // 5. Save formulation_rationales if provided
+      if (scientificRationale || compatibilityConsiderations || safetyAndLimitations) {
+        await pool.query(
+          `INSERT INTO formulation_rationales (
+             formulationId, versionId, projectId, componentSelectionRationale, literatureSupport, knownLimitations
+           ) VALUES (?, ?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE
+             componentSelectionRationale = COALESCE(VALUES(componentSelectionRationale), componentSelectionRationale),
+             literatureSupport = COALESCE(VALUES(literatureSupport), literatureSupport),
+             knownLimitations = COALESCE(VALUES(knownLimitations), knownLimitations),
+             updatedAt = CURRENT_TIMESTAMP(3)`,
+          [formulationId, versionId, projectId, scientificRationale || null, compatibilityConsiderations || null, safetyAndLimitations || null]
+        );
       }
 
       // 5. Save SOP steps if provided

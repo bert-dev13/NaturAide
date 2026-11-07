@@ -3,7 +3,7 @@ import path from "path";
 import os from "os";
 import pool from "@/lib/db";
 import { ensureDockingSchema } from "@/lib/docking-schema";
-import { describeStructure, type StructureHit } from "@/lib/docking-rcsb";
+import { describeStructure, cleanTargetProteinName, type StructureHit } from "@/lib/docking-rcsb";
 import {
   detectDockingEngine,
   downloadAndPrepReceptor,
@@ -473,17 +473,12 @@ async function prepareTarget(projectId: number, targetId: number) {
         await writeGrid(projectId, targetId, {
           center: site.center,
           size: site.size,
-          source: `Co-crystallized ligand ${site.resname} ${site.chain}:${site.seq}`,
+          source:
+            site.resname === "CENTER"
+              ? `Protein chain ${site.chain} geometric active region`
+              : `Co-crystallized ligand ${site.resname} ${site.chain}:${site.seq}`,
           ligandLabel: `${site.resname} ${site.chain}:${site.seq}`,
           method: SITE_METHOD,
-        });
-      } else {
-        await writeGrid(projectId, targetId, {
-          center: [0, 0, 0],
-          size: [25.0, 25.0, 25.0],
-          source: "Auto-configured macromolecule center",
-          ligandLabel: "Receptor pocket",
-          method: "Default standard 25 Å bounding search box",
         });
       }
       const [setupRows]: any = await pool.query(`SELECT gridConfigJson FROM docking_setups WHERE projectId = ? LIMIT 1`, [projectId]);
@@ -502,20 +497,37 @@ async function prepareTarget(projectId: number, targetId: number) {
 async function reconcileRuns(projectId: number) {
   const state = queue();
   const live = new Set<number>([...state.runs, ...state.active]);
+  const timeoutSec = parseInt(process.env.DOCKING_TIMEOUT_SECONDS || "180", 10);
+  const stuckThresholdMs = (timeoutSec + 30) * 1000;
+  const nowMs = Date.now();
   const [rows]: any = await pool.query(
-    `SELECT id FROM docking_runs
+    `SELECT id, startedAt FROM docking_runs
      WHERE projectId = ? AND resultProvenance = 'NATUREAIDE_VINA'
        AND jobStatus IN ('QUEUED','PREPARING','DOCKING','PROCESSING')`,
     [projectId]
   );
   for (const row of rows) {
+    const startedMs = row.startedAt ? new Date(row.startedAt).getTime() : 0;
+    const isTimedOut = startedMs > 0 && Number.isFinite(startedMs) && nowMs - startedMs > stuckThresholdMs;
+    if (isTimedOut) {
+      state.active.delete(Number(row.id));
+      state.runs = state.runs.filter((id) => id !== Number(row.id));
+      await pool.query(
+        `UPDATE docking_runs
+         SET jobStatus = 'FAILED', engineStatus = 'TIMED_OUT', bindingAffinity = NULL, posesJson = NULL,
+             errorMessage = ?, completedAt = NOW(3)
+         WHERE id = ?`,
+        [`Docking execution timed out after ${timeoutSec}s. Click Retry to run again.`, row.id]
+      );
+      continue;
+    }
     if (live.has(row.id)) continue;
     await pool.query(
       `UPDATE docking_runs
        SET jobStatus = 'FAILED', engineStatus = 'FAILED', bindingAffinity = NULL, posesJson = NULL,
            errorMessage = ?, completedAt = NOW(3)
        WHERE id = ?`,
-      ["The docking process stopped before AutoDock Vina finished. No affinity was recorded.", row.id]
+      ["The docking process stopped before AutoDock Vina finished. Click Retry to run again.", row.id]
     );
   }
 }
@@ -524,10 +536,11 @@ function getMaxConcurrency(): number {
   const envVal = process.env.MAX_CONCURRENT_DOCKING_JOBS;
   if (envVal) {
     const parsed = parseInt(envVal, 10);
-    if (!isNaN(parsed) && parsed > 0) return Math.min(6, parsed);
+    if (!isNaN(parsed) && parsed > 0) return Math.min(4, parsed);
   }
   const cpus = os.cpus()?.length || 4;
-  return Math.min(3, Math.max(1, Math.floor(cpus / 3)));
+  const available = Math.max(1, cpus - 2);
+  return Math.min(2, Math.max(1, Math.floor(available / 2)));
 }
 
 function enqueueRun(runId: number) {
@@ -611,8 +624,29 @@ async function pairReady(projectId: number, compoundId: number, targetId: number
 
 export async function requestRun(projectId: number, compoundId: number, targetId: number) {
   await ensureDockingSchema();
-  const ready = await pairReady(projectId, compoundId, targetId);
-  if (!ready.ok) throw new DockingRequestError(ready.error);
+  const engine = await detectDockingEngine(false);
+  if (!engine.available) throw new DockingRequestError(engine.error || "Docking engine unavailable");
+
+  const [compounds]: any = await pool.query(
+    `SELECT id, compoundName, smiles, pubchemId FROM research_compounds WHERE id = ? AND projectId = ? LIMIT 1`,
+    [compoundId, projectId]
+  );
+  if (!compounds.length) throw new DockingRequestError("Compound not found in project");
+  const compound = compounds[0];
+  const hasStructure = Boolean(String(compound.smiles || "").trim() || String(compound.pubchemId || "").trim());
+  if (!hasStructure) throw new DockingRequestError("No molecular structure is recorded for this compound.");
+
+  const [targets]: any = await pool.query(
+    `SELECT id, targetName, pdbId, prepStatus, receptorPdbqtPath, gridConfigJson FROM docking_targets WHERE id = ? AND projectId = ? LIMIT 1`,
+    [targetId, projectId]
+  );
+  if (!targets.length) throw new DockingRequestError("Target not found in project");
+  const target = targets[0];
+  if (!target.pdbId) throw new DockingRequestError("Target PDB structure is required.");
+  if (target.prepStatus === "READY" && !readGrid(target.gridConfigJson)) {
+    throw new DockingRequestError("Binding site configuration required");
+  }
+
   const [existing]: any = await pool.query(
     `SELECT id, jobStatus FROM docking_runs
      WHERE projectId = ? AND compoundId = ? AND targetId = ? AND resultProvenance = 'NATUREAIDE_VINA'
@@ -643,7 +677,7 @@ export async function requestRun(projectId: number, compoundId: number, targetId
          projectId, compoundId, targetId, ligandName, targetProtein, pdbId,
          dataSource, engineStatus, jobStatus, resultProvenance, units
        ) VALUES (?, ?, ?, ?, ?, ?, 'VINA', 'QUEUED', 'QUEUED', 'NATUREAIDE_VINA', 'kcal/mol')`,
-      [projectId, compoundId, targetId, ready.ligand.compoundName, ready.target.targetName, ready.target.pdbId]
+      [projectId, compoundId, targetId, compound.compoundName, target.targetName, target.pdbId]
     );
     runId = inserted.insertId;
   }
@@ -652,16 +686,43 @@ export async function requestRun(projectId: number, compoundId: number, targetId
 }
 
 export async function requestRunAll(projectId: number) {
+  await ensureDockingSchema();
+  const [setupRows]: any = await pool.query(`SELECT gridConfigJson FROM docking_setups WHERE projectId = ? LIMIT 1`, [projectId]);
+  if (!readSettings(setupRows[0]?.gridConfigJson)) {
+    await writeSettings(projectId, { exhaustiveness: 8, numModes: 9, seed: 42, energyRange: 3 });
+  }
   const workspace = await loadDockingWorkspace(projectId);
   const started: number[] = [];
   for (const job of workspace.jobs) {
-    if (!job.ready || job.active) continue;
+    if (job.active) continue;
     // Prevent duplicate runs: skip completed jobs that already have valid affinity
     if (job.status === "COMPLETED" && job.affinity != null) continue;
-    const result = await requestRun(projectId, job.compoundId, job.targetId);
-    started.push(result.runId);
+    if (!job.ready) continue;
+    try {
+      const result = await requestRun(projectId, job.compoundId, job.targetId);
+      if (!result.alreadyRunning) started.push(result.runId);
+    } catch {
+      // Skip any combination that cannot be queued
+    }
   }
   return { started };
+}
+
+export async function requestRetryFailed(projectId: number) {
+  await ensureDockingSchema();
+  const workspace = await loadDockingWorkspace(projectId);
+  const retried: number[] = [];
+  for (const job of workspace.jobs) {
+    if (job.active) continue;
+    if (job.status !== "FAILED") continue;
+    try {
+      const result = await requestRun(projectId, job.compoundId, job.targetId);
+      if (!result.alreadyRunning) retried.push(result.runId);
+    } catch {
+      // Skip unqueueable combinations
+    }
+  }
+  return { retried };
 }
 
 async function executeRun(runId: number) {
@@ -670,12 +731,14 @@ async function executeRun(runId: number) {
   if (!run || run.resultProvenance !== "NATUREAIDE_VINA") return;
   const projectId = run.projectId as number;
   const fail = async (message: string, extra: Record<string, unknown> = {}) => {
+    const engineStatus = extra.timedOut ? "TIMED_OUT" : "FAILED";
     await pool.query(
       `UPDATE docking_runs
-       SET jobStatus = 'FAILED', engineStatus = 'FAILED', bindingAffinity = NULL, posesJson = NULL,
+       SET jobStatus = 'FAILED', engineStatus = ?, bindingAffinity = NULL, posesJson = NULL,
            errorMessage = ?, completedAt = NOW(3), exitCode = ?, stdoutText = ?, stderrText = ?, vinaLog = ?
        WHERE id = ?`,
       [
+        engineStatus,
         clip(message, 4000),
         extra.exitCode ?? null,
         extra.stdout ? clip(String(extra.stdout)) : null,
@@ -696,18 +759,43 @@ async function executeRun(runId: number) {
       await fail(engine.error || "Docking engine unavailable. AutoDock Vina could not be found on the server.");
       return;
     }
+
+    // Auto-prepare ligand if not already READY with valid optimized PDBQT
+    let [prepRows]: any = await pool.query(
+      `SELECT * FROM docking_ligand_preps WHERE projectId = ? AND compoundId = ? LIMIT 1`,
+      [projectId, run.compoundId]
+    );
+    let prep = prepRows[0];
+    const initialLigandCheck = prep?.pdbqtPath ? inspectPdbqt(prep.pdbqtPath, "ligand") : { ok: false, atoms: 0 };
+    if (
+      !prep ||
+      prep.status !== "READY" ||
+      !prep.pdbqtPath ||
+      !initialLigandCheck.ok ||
+      initialLigandCheck.hasDummyHydroxylBranches
+    ) {
+      await prepareCompound(projectId, run.compoundId);
+      [prepRows] = await pool.query(
+        `SELECT * FROM docking_ligand_preps WHERE projectId = ? AND compoundId = ? LIMIT 1`,
+        [projectId, run.compoundId]
+      );
+      prep = prepRows[0];
+    }
+
+    // Auto-prepare target receptor if not already READY with valid PDBQT
+    let [targetRows]: any = await pool.query(`SELECT * FROM docking_targets WHERE id = ? LIMIT 1`, [run.targetId]);
+    let target = targetRows[0];
+    if (!target || target.prepStatus !== "READY" || !target.receptorPdbqtPath || !inspectPdbqt(target.receptorPdbqtPath, "receptor").ok) {
+      await prepareTarget(projectId, run.targetId);
+      [targetRows] = await pool.query(`SELECT * FROM docking_targets WHERE id = ? LIMIT 1`, [run.targetId]);
+      target = targetRows[0];
+    }
+
     const ready = await pairReady(projectId, run.compoundId, run.targetId);
     if (!ready.ok) {
       await fail(ready.error);
       return;
     }
-    const [prepRows]: any = await pool.query(
-      `SELECT * FROM docking_ligand_preps WHERE projectId = ? AND compoundId = ? LIMIT 1`,
-      [projectId, run.compoundId]
-    );
-    const [targetRows]: any = await pool.query(`SELECT * FROM docking_targets WHERE id = ? LIMIT 1`, [run.targetId]);
-    const prep = prepRows[0];
-    const target = targetRows[0];
     const ligandFile = inspectPdbqt(prep?.pdbqtPath, "ligand");
     const receptorFile = inspectPdbqt(target?.receptorPdbqtPath, "receptor");
     if (!ligandFile.ok || !receptorFile.ok) {
@@ -776,6 +864,7 @@ async function executeRun(runId: number) {
     const version = executed.version || engine.vinaVersion;
     if (!executed.ok || executed.bestAffinity == null || executed.poses.length === 0) {
       await fail(executed.error || "AutoDock Vina did not produce a binding affinity.", {
+        timedOut: executed.timedOut,
         exitCode: executed.exitCode,
         stdout: executed.rawStdout,
         stderr: executed.rawStderr,
@@ -1265,7 +1354,7 @@ export async function loadDockingWorkspace(projectId: number) {
   const [setupRows]: any = await pool.query(`SELECT * FROM docking_setups WHERE projectId = ? LIMIT 1`, [projectId]);
   const [runsRaw]: any = await pool.query(`SELECT * FROM docking_runs WHERE projectId = ? ORDER BY id DESC`, [projectId]);
   const [synthesisRows]: any = await pool.query(`SELECT * FROM research_docking_syntheses WHERE projectId = ? LIMIT 1`, [projectId]);
-  const settings = readSettings(setupRows[0]?.gridConfigJson);
+  const settings = readSettings(setupRows[0]?.gridConfigJson) || { exhaustiveness: 8, numModes: 9, seed: 42, energyRange: 3 };
 
   // Strictly filter runs and preps to only active selected compounds and targets
   const runs = (runsRaw as any[]).filter(
@@ -1293,15 +1382,23 @@ export async function loadDockingWorkspace(projectId: number) {
 
   const ligands = compounds.map((compound) => {
     const prep = preps.find((row: any) => row.compoundId === compound.id);
-    const file = prep?.status === "READY" ? inspectPdbqt(prep.pdbqtPath, "ligand") : { ok: false, atoms: 0, error: prep?.errorMessage };
+    const file =
+      prep?.status === "READY"
+        ? inspectPdbqt(prep.pdbqtPath, "ligand")
+        : { ok: false, atoms: 0, hasDummyHydroxylBranches: false, error: prep?.errorMessage };
     const hasRecordedStructure = Boolean(String(compound.smiles || "").trim() || prep?.smiles);
-    const preparationReady = prep?.status === "READY" && file.ok;
+    const needsOptimization = Boolean(file.ok && file.hasDummyHydroxylBranches);
+    const preparationReady = prep?.status === "READY" && file.ok && !needsOptimization;
     const preparing = prep?.status === "PREPARING" || queue().ligands.has(compound.id);
+    const canAutoPrepare = (hasRecordedStructure || Boolean(compound.pubchemId)) && prep?.status !== "FAILED";
+    if ((!prep || needsOptimization) && !preparing && canAutoPrepare && engineInfo.available) {
+      scheduleLigand(projectId, compound.id);
+    }
     let issue: string | null = null;
     if (!preparationReady && !preparing) {
       issue = prep?.errorMessage || (!hasRecordedStructure && !compound.pubchemId
         ? "No molecular structure is recorded for this compound."
-        : "Ligand preparation has not completed.");
+        : "Ligand preparation will run automatically.");
     }
     return {
       id: compound.id,
@@ -1312,6 +1409,7 @@ export async function loadDockingWorkspace(projectId: number) {
       pubchemId: prep?.pubchemCid || compound.pubchemId || null,
       structureReady: hasRecordedStructure,
       preparationReady,
+      canAutoPrepare,
       status: preparationReady ? "READY" : preparing ? "PREPARING" : "NOT_READY",
       issue,
       prep: prep
@@ -1337,17 +1435,22 @@ export async function loadDockingWorkspace(projectId: number) {
     const vinaCompatible = receptorPrepared && engineInfo.available;
     const preparing = target.prepStatus === "PREPARING" || queue().receptors.has(target.id);
     const ready = pdbRetrieved && receptorPrepared && vinaCompatible && Boolean(grid && settings && !validateSearchBox(grid, settings!));
+    const canAutoPrepare = Boolean(target.pdbId) && target.prepStatus !== "FAILED" && !(receptorPrepared && !grid);
+    if (!receptorPrepared && !preparing && canAutoPrepare && engineInfo.available) {
+      scheduleReceptor(projectId, target.id);
+    }
     let issue: string | null = null;
     if (!pdbRetrieved) issue = "PDB structure was not retrieved.";
     else if (target.prepStatus === "FAILED") issue = target.prepError || "Receptor preparation failed";
-    else if (!receptorPrepared && !preparing) issue = file.error || "Receptor preparation failed";
+    else if (!receptorPrepared && !preparing) issue = file.error || "Receptor preparation will run automatically.";
     else if (receptorPrepared && !engineInfo.available) issue = engineInfo.error || "Docking engine unavailable. AutoDock Vina could not be found on the server.";
     else if (receptorPrepared && !grid) issue = sites.length > 1
       ? "Binding site configuration required. More than one co-crystallized ligand was found; choose the site to dock."
       : "Binding site configuration required";
+    const cleanedTargetName = cleanTargetProteinName(target.targetName, target.pdbId);
     return {
       id: target.id,
-      targetName: target.targetName,
+      targetName: cleanedTargetName,
       geneOrProtein: target.geneOrProtein,
       organism: target.organism,
       pdbId: target.pdbId,
@@ -1356,13 +1459,14 @@ export async function loadDockingWorkspace(projectId: number) {
       receptorPrepared,
       vinaCompatible,
       gridConfigured: Boolean(grid && settings && !validateSearchBox(grid, settings)),
+      canAutoPrepare,
       status: ready ? "READY" : preparing ? "PREPARING" : "NOT_READY",
       issue,
       grid,
       detectedSites: sites,
       details: {
         title: meta.title || target.structureSource || null,
-        description: meta.description || target.targetName,
+        description: cleanTargetProteinName(meta.description || target.targetName, target.pdbId),
         gene: meta.gene || target.geneOrProtein || null,
         organism: meta.organism || target.organism || null,
         method: meta.method || null,
@@ -1381,18 +1485,51 @@ export async function loadDockingWorkspace(projectId: number) {
   });
 
   const vinaRuns = runs.filter((run: any) => run.resultProvenance === "NATUREAIDE_VINA");
+
+  // Automatic detection of stuck or timed-out jobs
+  const timeoutSec = parseInt(process.env.DOCKING_TIMEOUT_SECONDS || "180", 10);
+  const stuckThresholdMs = (timeoutSec + 30) * 1000;
+  const nowMs = Date.now();
+  for (const run of vinaRuns) {
+    const rawStatus = String(run.jobStatus || "").toUpperCase();
+    if (["QUEUED", "PREPARING", "DOCKING", "PROCESSING", "RUNNING"].includes(rawStatus) && run.startedAt) {
+      const startedMs = new Date(run.startedAt).getTime();
+      if (Number.isFinite(startedMs) && nowMs - startedMs > stuckThresholdMs) {
+        const timeoutMsg = `Docking execution timed out after ${timeoutSec}s. Click Retry to run again.`;
+        await pool.query(
+          `UPDATE docking_runs
+           SET jobStatus = 'FAILED', engineStatus = 'TIMED_OUT', completedAt = NOW(3), errorMessage = ?
+           WHERE id = ?`,
+          [timeoutMsg, run.id]
+        );
+        run.jobStatus = "FAILED";
+        run.engineStatus = "TIMED_OUT";
+        run.completedAt = new Date().toISOString();
+        run.errorMessage = timeoutMsg;
+        queue().active.delete(Number(run.id));
+        queue().runs = queue().runs.filter((id) => id !== Number(run.id));
+      }
+    }
+  }
+
   const jobs = ligands.flatMap((ligand) =>
     targetViews.map((target: any) => {
       const pairRuns = vinaRuns.filter((row: any) => row.compoundId === ligand.id && row.targetId === target.id);
       const run = pairRuns[0]; // latest run since runs are ordered by id DESC
       const status = (run?.jobStatus || "IDLE") as string;
+      const engineStatus = (run?.engineStatus || status) as string;
       const active = ["QUEUED", "PREPARING", "DOCKING", "PROCESSING"].includes(status);
+      if (active && run?.id && !queue().runs.includes(Number(run.id)) && !queue().active.has(Number(run.id))) {
+        enqueueRun(Number(run.id));
+      }
       const affinity = run?.bindingAffinity != null && run.bindingAffinity !== "" ? Number(run.bindingAffinity) : null;
-      const ready = ligand.preparationReady && target.status === "READY" && engineInfo.available;
+      const ligandOk = ligand.preparationReady || ligand.canAutoPrepare;
+      const targetOk = target.status === "READY" || target.canAutoPrepare;
+      const ready = ligandOk && targetOk && engineInfo.available;
       let blocked: string | null = null;
       if (!engineInfo.available) blocked = engineInfo.error || "Docking engine unavailable";
-      else if (!ligand.preparationReady) blocked = ligand.issue || "Ligand preparation failed";
-      else if (target.status !== "READY") blocked = target.issue || "Target is not ready";
+      else if (!ligandOk) blocked = ligand.issue || "Ligand preparation failed";
+      else if (!targetOk) blocked = target.issue || "Target needs setup";
       return {
         compoundId: ligand.id,
         targetId: target.id,
@@ -1401,17 +1538,23 @@ export async function loadDockingWorkspace(projectId: number) {
         pdbId: target.pdbId,
         runId: run?.id ?? null,
         status,
+        engineStatus,
         active,
         ready: ready && !active,
         blockedReason: active ? null : blocked,
         affinity: status === "COMPLETED" && Number.isFinite(affinity) ? affinity : null,
         poseCount: run?.poseCount ?? null,
         error: run?.errorMessage || null,
+        startedAt: iso(run?.startedAt),
+        completedAt: iso(run?.completedAt),
+        vinaVersion: run?.vinaVersion || engineInfo.vinaVersion || null,
+        logOutput: run?.vinaLog || run?.stdoutText || run?.errorMessage || null,
         record: run && status === "COMPLETED" ? serializeRun(run, target) : null,
         history: pairRuns.map((r: any) => ({
           runId: r.id,
           affinity: r.bindingAffinity ? Number(r.bindingAffinity) : null,
           status: r.jobStatus,
+          engineStatus: r.engineStatus || r.jobStatus,
           poseCount: r.poseCount,
           completedAt: iso(r.completedAt),
           startedAt: iso(r.startedAt),
@@ -1422,6 +1565,43 @@ export async function loadDockingWorkspace(projectId: number) {
       };
     })
   );
+
+  // Deduplicate vinaRuns by (compoundId, targetId) keeping latest run first (already ordered by id DESC)
+  const seenRunPairs = new Set<string>();
+  const runItems = vinaRuns
+    .filter((run: any) => {
+      const key = `${run.compoundId || run.ligandName}:${run.targetId || run.pdbId}`;
+      if (seenRunPairs.has(key)) return false;
+      seenRunPairs.add(key);
+      return true;
+    })
+    .map((run: any) => {
+      const affinityVal =
+        run.bindingAffinity != null && run.bindingAffinity !== "" ? Number(run.bindingAffinity) : null;
+      return {
+        id: Number(run.id),
+        compoundId: Number(run.compoundId || 0),
+        targetId: Number(run.targetId || 0),
+        ligandName: String(run.ligandName || "Unknown Ligand"),
+        targetProtein: cleanTargetProteinName(String(run.targetProtein || "Unknown Target"), run.pdbId),
+        pdbId: String(run.pdbId || ""),
+        jobStatus: String(run.jobStatus || "IDLE"),
+        engineStatus: String(run.engineStatus || run.jobStatus || "IDLE"),
+        bindingAffinity:
+          run.jobStatus === "COMPLETED" && affinityVal !== null && Number.isFinite(affinityVal)
+            ? affinityVal
+            : null,
+        poseCount: run.poseCount != null ? Number(run.poseCount) : undefined,
+        exhaustiveness: settings.exhaustiveness,
+        vinaVersion: run.vinaVersion || engineInfo.vinaVersion || undefined,
+        logOutput: run.vinaLog || run.stdoutText || run.errorMessage || "",
+        errorMessage: run.errorMessage || null,
+        poses: json<any[]>(run.posesJson, []),
+        startedAt: iso(run.startedAt) || undefined,
+        createdAt: iso(run.startedAt || run.completedAt) || undefined,
+        completedAt: iso(run.completedAt) || undefined,
+      };
+    });
 
   const externalRuns = runs
     .filter((run: any) => run.resultProvenance !== "NATUREAIDE_VINA" && run.bindingAffinity)
@@ -1531,6 +1711,7 @@ export async function loadDockingWorkspace(projectId: number) {
     settings,
     configuration: { configured: configurationConfigured },
     jobs,
+    runs: runItems,
     externalRuns,
     interpretation: {
       text: completedJobs.length > 0 ? (synthesis?.keyFindings || "") : "",

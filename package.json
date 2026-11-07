@@ -19,7 +19,15 @@
     "discover": "npx tsx scripts/discover-plant-products.ts",
     "test:chat": "npx tsx tests/community-chat-routing.test.ts",
     "test:docking": "npx tsx tests/docking-integration.test.ts",
-    "test:footer": "npx tsx tests/stage-footer-navigation.test.ts"
+    "test:footer": "npx tsx tests/stage-footer-navigation.test.ts",
+    "test:extraction": "npx tsx tests/extraction-solvent-volume.test.ts",
+    "test:materials": "npx tsx tests/materials-ai-import.test.ts",
+    "test:formulation": "npx tsx tests/formulation-ai-builder.test.ts",
+    "test:batch": "npx tsx tests/batch-analysis-calculation.test.ts",
+    "test:batch-ai": "npx tsx tests/batch-ai-analysis.test.ts",
+    "test:targets": "npx tsx tests/target-protein-selection.test.ts",
+    "test:screening": "npx tsx tests/in-silico-screening.test.ts",
+    "test:docking-step4": "npx tsx tests/molecular-docking-step4.test.ts"
   },
   "dependencies": {
     "@types/bcryptjs": "^2.4.6",

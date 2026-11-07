@@ -143,6 +143,68 @@ export async function GET(
       clinical_safety: 5,
     };
 
+    const targetStageNum = ROLE_TO_STAGE_NUM[roleKey] || 1;
+    const existingProjectIds = new Set(assignments.map((a: any) => a.projectId));
+
+    try {
+      const [allProjects]: any = await pool.query(
+        `
+        SELECT rp.id as projectId, rp.title as projectTitle, rp.shortDescription, rp.researchObjective,
+               rp.currentStage, rp.status as projectStatus,
+               COALESCE(p.commonName, rp.plantCustomName, 'Unspecified Plant') as plantName,
+               p.scientificName as plantScientificName,
+               u.id as researcherId, u.name as researcherName
+        FROM research_projects rp
+        JOIN users u ON rp.researcherId = u.id
+        LEFT JOIN plants p ON rp.plantId = p.id
+        ORDER BY rp.updatedAt DESC
+        LIMIT 25
+        `
+      );
+
+      for (const p of allProjects || []) {
+        if (existingProjectIds.has(p.projectId)) continue;
+
+        const stageReview = await getProfessionalReviewStageStatus(p.projectId, targetStageNum);
+        if (stageReview.isReady) {
+          const isDraft = stageReview.status !== "NEEDS_REVIEW" && stageReview.status !== "IN_REVIEW" && stageReview.status !== "APPROVED" && stageReview.status !== "REVISION_REQUIRED" && stageReview.status !== "REVISION_RESUBMITTED";
+          assignments.push({
+            assignmentId: 0,
+            submissionId: 0,
+            projectId: p.projectId,
+            reviewerId: session.id,
+            assignedReviewerName: session.name,
+            assignmentStatus: isDraft
+              ? "DRAFT"
+              : stageReview.status === "APPROVED"
+              ? "APPROVED"
+              : stageReview.status === "REVISION_REQUIRED"
+              ? "REVISION_REQUIRED"
+              : "PENDING",
+            specialtyNeeded: roleKey,
+            reviewRound: 1,
+            projectTitle: p.projectTitle,
+            plantName: p.plantName,
+            plantScientificName: p.plantScientificName,
+            researcherName: p.researcherName,
+            versionTag: "v1.0",
+            reviewArea: roleKey,
+            reviewAreaLabel: areaDef.shortLabel,
+            isReady: true,
+            isDraft,
+            canEdit: !isDraft && stageReview.status !== "APPROVED",
+            notReadyReason: isDraft ? "Researcher draft in progress." : null,
+            assessment: stageReview.assessment || null,
+            reviewComments: stageReview.comments || null,
+            openFindingsCount: 0,
+          });
+          existingProjectIds.add(p.projectId);
+        }
+      }
+    } catch (err) {
+      console.warn("[reviewer/checking] Project discovery failed:", err);
+    }
+
     if (requestedProjectRecord) {
       const stageNum = ROLE_TO_STAGE_NUM[roleKey] || 1;
       const stageStatus = await getProfessionalReviewStageStatus(
@@ -546,11 +608,20 @@ export async function GET(
           );
           steps = sRows;
         }
+        const [ratRows]: any = await pool.query(
+          "SELECT * FROM formulation_rationales WHERE formulationId = ? ORDER BY id DESC LIMIT 1",
+          [rForm[0].id]
+        );
+        const rationales = ratRows[0] || null;
         snapshot.formulation = {
           ...rForm[0],
           version: vRows[0] || null,
           components,
           steps,
+          rationales,
+          scientificRationale: rationales?.componentSelectionRationale || rForm[0].researcherRationale || "",
+          compatibilityConsiderations: rationales?.literatureSupport || "",
+          safetyAndLimitations: rationales?.knownLimitations || "",
         };
         snapshot.formulations = [snapshot.formulation];
       }

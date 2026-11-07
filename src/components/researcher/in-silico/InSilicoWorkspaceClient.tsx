@@ -30,6 +30,9 @@ import ResearchStageFooter from "@/components/researcher/stage/ResearchStageFoot
 import ResearchStageHeader from "@/components/researcher/stage/ResearchStageHeader";
 import ResearcherReviewFeedbackPanel from "@/components/researcher/stage/ResearcherReviewFeedbackPanel";
 import RevisionResubmittedSuccessModal from "@/components/researcher/stage/RevisionResubmittedSuccessModal";
+import PhytochemicalSelectorModal from "./PhytochemicalSelectorModal";
+import { Target, Dna } from "lucide-react";
+import { CURATED_TARGET_PROTEINS, suggestTargetsForProject } from "@/lib/target-protein-catalog";
 
 
 export interface AvailablePlantCompound {
@@ -796,6 +799,8 @@ export default function InSilicoWorkspaceClient({
     router.push(`/researcher/projects/${projectId}/plant-literature`);
   }, [projectId, router]);
 
+  const [showPhytoSelector, setShowPhytoSelector] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [modalSearchTerm, setModalSearchTerm] = useState("");
   const [selectedClassFilter, setSelectedClassFilter] = useState("ALL");
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<
@@ -1177,6 +1182,37 @@ export default function InSilicoWorkspaceClient({
     setStep(3);
     setActiveAnchor("sec-docking");
     document.getElementById("sec-docking")?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  const handleCompoundAddedFromSelector = async (payload: any) => {
+    const res = await fetch(`/api/researcher/projects/${projectId}/in-silico`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "add-compound",
+        ...payload,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Failed to add compound");
+
+    const created: CompoundItem = data.compound || {
+      id: data.insertedId || Date.now(),
+      projectId,
+      compoundName: payload.compoundName,
+      molecularFormula: payload.molecularFormula,
+      molecularWeight: payload.molecularWeight,
+      pubchemId: payload.pubchemId,
+      smiles: payload.smiles,
+      iupacName: payload.iupacName,
+      sourceProvenance: payload.sourceProvenance || "VERIFIED_DATABASE",
+      sourceReference: payload.sourceReference,
+      plantSource: project.plantName,
+      selectedForDocking: payload.selectedForDocking ? 1 : 0,
+      preparationStatus: "UNPREPARED",
+    };
+
+    setCompounds((current) => [...current, created]);
   };
 
   const handleAddSingleCompound = async (compound: AvailablePlantCompound) => {
@@ -1611,12 +1647,12 @@ export default function InSilicoWorkspaceClient({
               type="button"
               onClick={() => {
                 setCustomError(null);
-                setModal({ type: "add" });
+                setShowPhytoSelector(true);
               }}
               className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-300 bg-emerald-700 hover:bg-emerald-800 px-3.5 py-1.5 text-xs font-bold text-white transition-all cursor-pointer shadow-xs"
             >
               <Plus className="h-3.5 w-3.5" />
-              Add Compounds
+              <span>Select Phytochemicals</span>
             </button>
           }
         >

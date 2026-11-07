@@ -28,13 +28,27 @@ export default async function ResearcherAssistantPage() {
     currentStage: string;
     plantName: string;
     plantScientificName?: string | null;
+    hasManuscript?: boolean;
+    manuscriptFileName?: string | null;
   }> = [];
 
   try {
     const [rows] = await pool.execute<RowDataPacket[]>(
       `SELECT rp.id, rp.title, rp.status, rp.currentStage,
               COALESCE(p.commonName, rp.plantCustomName, 'Medicinal Plant') as plantName,
-              p.scientificName as plantScientificName
+              p.scientificName as plantScientificName,
+              (
+                SELECT rm.fileName
+                FROM research_manuscripts rm
+                WHERE rm.projectId = rp.id
+                ORDER BY rm.id DESC
+                LIMIT 1
+              ) as manuscriptFileName,
+              (
+                SELECT COUNT(*)
+                FROM research_manuscripts rm
+                WHERE rm.projectId = rp.id AND (rm.fileName IS NOT NULL OR rm.storagePath IS NOT NULL)
+              ) > 0 as hasManuscript
        FROM research_projects rp
        LEFT JOIN plants p ON rp.plantId = p.id
        WHERE rp.researcherId = ?
@@ -49,6 +63,8 @@ export default async function ResearcherAssistantPage() {
       currentStage: String(r.currentStage || "plant-literature"),
       plantName: String(r.plantName || "Medicinal Plant"),
       plantScientificName: r.plantScientificName ? String(r.plantScientificName) : null,
+      hasManuscript: Boolean(r.hasManuscript),
+      manuscriptFileName: r.manuscriptFileName ? String(r.manuscriptFileName) : null,
     }));
   } catch (err) {
     console.error("[ResearcherAssistantPage] Failed to prefetch projects:", err);

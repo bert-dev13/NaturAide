@@ -7,6 +7,9 @@ const nextConfig: NextConfig = {
   },
   experimental: {
     agentUpgrade: "security",
+    instantInsights: {
+      validationLevel: "manual-warning",
+    },
   },
   // The public test link is an ngrok hostname. Next.js dev rejects that host
   // unless it is listed here. The hostname changes; the patterns do not.
@@ -26,15 +29,6 @@ const nextConfig: NextConfig = {
         as: "*.css",
       },
     },
-  },
-  async redirects() {
-    return [
-      {
-        source: "/researcher/completed",
-        destination: "/researcher/projects",
-        permanent: false,
-      },
-    ];
   },
 };
 

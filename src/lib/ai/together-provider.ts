@@ -4,6 +4,22 @@
  * The key stays on the server and is never returned to the browser.
  */
 
+let envChecked = false;
+function ensureTogetherEnvLoaded() {
+  if (envChecked || process.env.TOGETHER_API_KEY) {
+    envChecked = true;
+    return;
+  }
+  envChecked = true;
+  try {
+    if (typeof process !== "undefined" && typeof (process as any).loadEnvFile === "function") {
+      (process as any).loadEnvFile(".env.local");
+    }
+  } catch {
+    // ignore env read errors
+  }
+}
+
 export interface TogetherMessage {
   role: "system" | "user" | "assistant";
   content: string;
@@ -36,7 +52,46 @@ function cleanOutput(text: string): string {
   if (!text) return "";
   let cleaned = text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
   cleaned = cleaned.replace(/<think>[\s\S]*/gi, "").trim();
-  return cleaned || text.trim();
+
+  // If text starts with internal reasoning phrases, discard reasoning tokens up to the double newline
+  const thoughtPrefixes = [
+    "we need",
+    "need ",
+    "thinking process:",
+    "thought:",
+    "thinking:",
+    "let me think",
+    "let's think",
+  ];
+
+  const lower = cleaned.toLowerCase();
+  const startsWithThought = thoughtPrefixes.some((p) => lower.startsWith(p));
+
+  if (startsWithThought) {
+    const doubleBreak = cleaned.indexOf("\n\n");
+    if (doubleBreak !== -1) {
+      cleaned = cleaned.slice(doubleBreak + 2).trim();
+    } else {
+      // Entire output is an unparsed internal monologue without actual final content
+      return "";
+    }
+  }
+
+  // Secondary guard: If the result still starts with a thought phrase or ends with a hesitant monologue
+  const stillThought =
+    /^(need\s+|we\s+need\s+|thought:\s*|thinking:\s*|hmm\b)/i.test(cleaned) ||
+    /(\bhmm\b|\bwait\b|\bmaybe\s+"[^"]+"\s+maybe\b)/i.test(cleaned.slice(0, 80));
+
+  if (stillThought) {
+    const nextBreak = cleaned.indexOf("\n\n");
+    if (nextBreak !== -1) {
+      cleaned = cleaned.slice(nextBreak + 2).trim();
+    } else {
+      return "";
+    }
+  }
+
+  return cleaned.trim();
 }
 
 function readCompletion(data: {
@@ -57,6 +112,7 @@ function readCompletion(data: {
 }
 
 function togetherModels() {
+  ensureTogetherEnvLoaded();
   return [
     process.env.TOGETHER_MODEL_PRIMARY,
     process.env.TOGETHER_MODEL_FALLBACK,
@@ -67,6 +123,7 @@ function togetherModels() {
 }
 
 export function isTogetherConfigured() {
+  ensureTogetherEnvLoaded();
   return Boolean(process.env.TOGETHER_API_KEY?.trim()) && togetherModels().length > 0;
 }
 

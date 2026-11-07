@@ -36,6 +36,11 @@ import {
 import ResearchStageFooter from "@/components/researcher/stage/ResearchStageFooter";
 import ResearcherReviewFeedbackPanel from "@/components/researcher/stage/ResearcherReviewFeedbackPanel";
 import RevisionResubmittedSuccessModal from "@/components/researcher/stage/RevisionResubmittedSuccessModal";
+import AiFormulationProposalModal from "./AiFormulationProposalModal";
+import AiFormulationAssistantPanel from "./AiFormulationAssistantPanel";
+import FormulationCompositionTable, { type FormulationComponentItem } from "./FormulationCompositionTable";
+import FormulationRationaleSection from "./FormulationRationaleSection";
+import type { FormulationProposal } from "@/lib/formulation-ai-service";
 
 // Reusable Research Section wrapper matching Stages 1-3
 function ResearchSection({
@@ -193,6 +198,8 @@ interface FormulationSafetyClientProps {
   initialFormulation?: any;
   initialComponents?: any[];
   initialSteps?: any[];
+  initialRationale?: any;
+  literature?: any[];
   stageStatus?: string;
   reviewStatus?: string;
   reviewerFeedback?: any[];
@@ -210,6 +217,8 @@ export default function FormulationSafetyClient({
   initialFormulation,
   initialComponents = [],
   initialSteps = [],
+  initialRationale,
+  literature = [],
   stageStatus: initialStageStatus = "IN_PROGRESS",
   reviewStatus: initialReviewStatus = "NOT_SUBMITTED",
   reviewerFeedback = [],
@@ -319,6 +328,136 @@ export default function FormulationSafetyClient({
   const [formulationName, setFormulationName] = useState<string>(
     initialFormulation?.formulationName || `${project.plantName || "Botanical"} Research Extract`
   );
+  const [dosageFormType, setDosageFormType] = useState<string>(
+    initialFormulation?.dosageFormType || initialFormulation?.formulationType || "Topical Hydrogel"
+  );
+  const [scientificRationale, setScientificRationale] = useState<string>(
+    initialRationale?.componentSelectionRationale || initialFormulation?.researcherRationale || ""
+  );
+  const [compatibilityConsiderations, setCompatibilityConsiderations] = useState<string>(
+    initialRationale?.literatureSupport || ""
+  );
+  const [safetyAndLimitations, setSafetyAndLimitations] = useState<string>(
+    initialRationale?.knownLimitations || ""
+  );
+  const [aiProposal, setAiProposal] = useState<FormulationProposal | null>(() => {
+    if (initialFormulation?.aiProposalJson) {
+      try {
+        return typeof initialFormulation.aiProposalJson === "string"
+          ? JSON.parse(initialFormulation.aiProposalJson)
+          : initialFormulation.aiProposalJson;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
+  const [isAiModalOpen, setIsAiModalOpen] = useState(false);
+  const [isGeneratingAi, setIsGeneratingAi] = useState(false);
+  const [generationStep, setGenerationStep] = useState(0);
+  const [aiError, setAiError] = useState<string | null>(null);
+
+  // Comprehensive Formulation Components List
+  const [componentsList, setComponentsList] = useState<FormulationComponentItem[]>(() => {
+    if (Array.isArray(initialComponents) && initialComponents.length > 0) {
+      return initialComponents.map((c: any) => ({
+        id: c.id,
+        componentName: c.componentName,
+        roleInFormulation: c.roleInFormulation || "Active Herbal Ingredient",
+        quantity: c.quantity || "",
+        unit: c.unit || "% w/w",
+        proposedConcentration: c.concentration || "Concentration Requires Experimental Validation",
+        scientificRationale: c.notes || "",
+        sourceReference: c.sourceReference || "",
+        isAiSuggested: Boolean(c.isAiSuggested),
+        evidenceStatus: c.evidenceStatus || (String(c.concentration || "").toLowerCase().includes("requires") ? "REQUIRES_EXPERIMENTAL_VALIDATION" : "SUPPORTED"),
+      }));
+    }
+
+    // Default seed component from plant details
+    return [
+      {
+        componentName: `${project.plantName || "Botanical"} ${plantData?.partsStudied || "Leaf"} Extract (${plantData?.extractionSolvent || "70% Aqueous Ethanol"})`,
+        roleInFormulation: "Active Herbal Ingredient",
+        proposedConcentration: "Concentration Requires Experimental Validation",
+        evidenceStatus: "REQUIRES_EXPERIMENTAL_VALIDATION",
+        scientificRationale: `Standardized extract prepared via ${plantData?.extractionMethod || "Maceration"}. Carries candidate bioactives identified in Stage 2.`,
+        sourceReference: "Stage 1 Plant Specification",
+        isAiSuggested: false,
+      },
+    ];
+  });
+
+  // AI Generation Handler
+  const handleTriggerAiGeneration = async () => {
+    setIsAiModalOpen(true);
+    setIsGeneratingAi(true);
+    setGenerationStep(0);
+    setAiError(null);
+
+    const t1 = setTimeout(() => setGenerationStep(1), 700);
+    const t2 = setTimeout(() => setGenerationStep(2), 1600);
+    const t3 = setTimeout(() => setGenerationStep(3), 2500);
+
+    try {
+      const res = await fetch(`/api/researcher/projects/${projectId}/formulation/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dosageFormType,
+          plantPart,
+          extractionSolvent,
+          extractionMethod,
+          purpose,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to generate formulation proposal.");
+
+      setAiProposal(data.proposal);
+    } catch (err: any) {
+      setAiError(err.message || "Failed to generate formulation proposal.");
+    } finally {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+      setIsGeneratingAi(false);
+    }
+  };
+
+  // Apply AI Proposal Handler
+  const handleApplyProposal = (prop: FormulationProposal) => {
+    if (!prop) return;
+    setFormulationName(prop.formulationName);
+    setDosageFormType(prop.dosageFormType);
+    if (prop.scientificRationale) {
+      setScientificRationale(prop.scientificRationale);
+    }
+    if (prop.compatibilityConsiderations) {
+      setCompatibilityConsiderations(prop.compatibilityConsiderations);
+    }
+    if (prop.safetyAndLimitations) {
+      setSafetyAndLimitations(prop.safetyAndLimitations);
+    }
+    if (Array.isArray(prop.components) && prop.components.length > 0) {
+      setComponentsList(
+        prop.components.map((c, i) => ({
+          id: `ai-${Date.now()}-${i}`,
+          componentName: c.componentName,
+          roleInFormulation: c.roleInFormulation,
+          proposedConcentration: c.proposedConcentration,
+          scientificRationale: c.scientificRationale,
+          sourceReference: c.sourceReference,
+          isAiSuggested: true,
+          evidenceStatus: c.evidenceStatus,
+        }))
+      );
+    }
+    setIsAiModalOpen(false);
+    setSuccessNotice("AI Formulation Proposal applied to composition matrix.");
+    setTimeout(() => setSuccessNotice(null), 4000);
+  };
 
   // Section 02: Candidate compounds carried forward
   const candidateCompounds = useMemo(() => {
@@ -532,14 +671,20 @@ export default function FormulationSafetyClient({
 
     return {
       formulationType,
+      dosageFormType,
       plantPart,
       extractionSolvent,
       extractionMethod,
       purpose,
       formulationName,
+      scientificRationale,
+      compatibilityConsiderations,
+      safetyAndLimitations,
       plantName: project.plantName,
+      components: componentsList,
       compounds: compoundList,
       notes,
+      aiProposal,
       sopSteps: sopSteps.map((s) => ({
         stepNumber: s.stepNumber,
         procedureText: s.text,
@@ -662,14 +807,34 @@ export default function FormulationSafetyClient({
         transition={{ duration: 0.3, ease: "easeOut" }}
         className="space-y-2.5"
       >
-        <div className="flex items-center justify-between px-0.5">
-          <Link
-            href={`/researcher/projects/${projectId}/docking`}
-            className="group inline-flex items-center gap-1.5 text-xs font-bold text-[#52645d] hover:text-[#0f2c20] transition-colors"
-          >
-            <ArrowLeft className="w-3.5 h-3.5 text-emerald-600 transition-transform group-hover:-translate-x-1" />
-            <span>Back to Molecular Docking</span>
-          </Link>
+        <div className="flex flex-wrap items-center justify-between gap-3 px-0.5">
+          <div className="flex items-center gap-2.5 text-xs">
+            <Link
+              href={`/researcher/projects/${projectId}`}
+              className="group inline-flex items-center gap-1.5 font-bold text-[#52645d] hover:text-[#0f2c20] transition-colors"
+            >
+              <ArrowLeft className="w-3.5 h-3.5 text-emerald-600 transition-transform group-hover:-translate-x-1" />
+              <span>Back to Project</span>
+            </Link>
+            <span className="text-slate-300">/</span>
+            <Link
+              href={`/researcher/projects/${projectId}/docking`}
+              className="font-semibold text-[#52645d] hover:text-[#0f2c20] transition-colors"
+            >
+              Stage 3: Molecular Docking
+            </Link>
+          </div>
+
+          {!isReviewLocked && (
+            <button
+              type="button"
+              onClick={handleTriggerAiGeneration}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs shadow-xs transition-all cursor-pointer"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Generate AI Formulation</span>
+            </button>
+          )}
         </div>
 
         <div className="relative overflow-hidden rounded-3xl border border-emerald-700/40 bg-gradient-to-br from-[#072418] via-[#0d3626] to-[#041910] p-6 text-white shadow-xl shadow-emerald-950/20">
@@ -1158,156 +1323,47 @@ export default function FormulationSafetyClient({
       </ResearchSection>
 
       {/* ============================================================== */}
-      {/* SECTION 02: COMPOSITION                                        */}
+      {/* SECTION 02: FORMULATION COMPOSITION & EXCIPIENT MATRIX         */}
       {/* ============================================================== */}
       <ResearchSection
         id="sec-composition"
         number="02"
-        badge={`${candidateCompounds.length} Active Marker${candidateCompounds.length === 1 ? "" : "s"}`}
+        badge={`${componentsList.length} Component${componentsList.length === 1 ? "" : "s"}`}
         icon={Droplets}
-        title="Active Phytochemical Composition"
-        subtitle="Bioactive fractions & marker quantification carried forward from Stage 2 screening and Stage 3 docking"
+        title="Formulation Composition & Excipient Matrix"
+        subtitle="Active botanical extracts, pharmaceutical excipients, binders, and evidence-grounded concentrations"
+        headerAction={
+          !isReviewLocked && (
+            <button
+              type="button"
+              onClick={handleTriggerAiGeneration}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow-xs transition-all cursor-pointer"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>AI Formulation Proposal</span>
+            </button>
+          )
+        }
       >
-        <div className="space-y-4">
-          {candidateCompounds.length === 0 ? (
-            <div className="p-8 rounded-3xl bg-amber-50/70 border border-amber-200/90 text-amber-900 text-center space-y-3 shadow-2xs">
-              <Info className="w-8 h-8 text-amber-600 mx-auto" />
-              <p className="text-sm font-black">No Candidate Phytochemicals Selected Yet</p>
-              <p className="text-xs text-amber-800 max-w-md mx-auto leading-relaxed">
-                Candidate compounds screened in Stage 2 (In-Silico) and simulated in Stage 3 flow automatically into Stage 4 formulation composition.
-              </p>
-              <Link
-                href={`/researcher/projects/${projectId}/in-silico`}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-sm transition-all"
-              >
-                <span>Select Candidate Compounds in Stage 2 →</span>
-              </Link>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {candidateCompounds.map((compound, idx) => {
-                const name = compound.compoundName;
-                const state = compositionData[name] || {
-                  amount: "",
-                  unit: "mg/g",
-                  concentration: "",
-                  preparationRole: "Bioactive Marker Fraction",
-                  notes: "",
-                };
-                const dockingInfo = compoundDockingMap.get(name.toLowerCase());
+        <div className="space-y-6">
+          <FormulationCompositionTable
+            components={componentsList}
+            onChangeComponents={setComponentsList}
+            isReadOnly={isReviewLocked}
+            onOpenAiGenerator={handleTriggerAiGeneration}
+            plantName={project.plantName}
+          />
 
-                return (
-                  <div
-                    key={`formulation-compound-${compound?.id || name || idx}-${idx}`}
-                    className="p-5 sm:p-6 rounded-2xl border border-slate-200 bg-white shadow-2xs hover:border-emerald-400/80 hover:shadow-md transition-all overflow-hidden space-y-4"
-                  >
-                    {/* Compound Title & Badges */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#edf2ee]">
-                      <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center font-bold text-xs shadow-sm shadow-emerald-500/20 shrink-0">
-                          <Pill className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h4 className="font-black text-sm sm:text-base text-[#0f2c20]">{name}</h4>
-                            {compound.molecularFormula && (
-                              <span className="font-mono text-xs font-bold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-lg border border-emerald-200">
-                                {compound.molecularFormula}
-                              </span>
-                            )}
-                          </div>
-                          <span className="text-xs text-[#78997f] font-medium">
-                            Source: Stage 2 Candidate → Stage 3 Molecular Docking
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Docking Affinity Badge */}
-                      {dockingInfo ? (
-                        <div className="flex items-center gap-1.5 self-start sm:self-auto">
-                          <span className="font-mono text-xs font-black text-white bg-gradient-to-r from-emerald-600 to-teal-600 px-3 py-1.5 rounded-xl shadow-xs border border-emerald-500">
-                            AutoDock Vina: {Number(dockingInfo.bindingAffinity).toFixed(2)} kcal/mol
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-1.5 self-start sm:self-auto">
-                          <span className="font-mono text-[11px] font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
-                            Screened in Stage 2
-                          </span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Inputs: Amount/Concentration & Preparation Role */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5 bg-slate-50/70 p-4 rounded-xl border border-slate-100">
-                      {/* Amount */}
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-[#0f2c20] block">
-                          Amount / Quantity
-                        </label>
-                        <div className="flex gap-1.5">
-                          <input
-                            type="text"
-                            value={state.amount}
-                            onChange={(e) => handleCompositionChange(name, "amount", e.target.value)}
-                            disabled={isReviewLocked}
-                            placeholder="e.g. 300"
-                            className="w-2/3 p-2.5 rounded-xl border border-slate-200 bg-white text-xs text-[#0f2c20] focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none font-bold shadow-2xs"
-                          />
-                          <select
-                            value={state.unit}
-                            onChange={(e) => handleCompositionChange(name, "unit", e.target.value)}
-                            disabled={isReviewLocked}
-                            className="w-1/3 p-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-[#0f2c20] focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none shadow-2xs"
-                          >
-                            {COMMON_UNITS.map((u) => (
-                              <option key={u} value={u}>
-                                {u}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-
-                      {/* Concentration / Yield */}
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-[#0f2c20] block">
-                          Target Concentration / Yield
-                        </label>
-                        <input
-                          type="text"
-                          value={state.concentration}
-                          onChange={(e) => handleCompositionChange(name, "concentration", e.target.value)}
-                          disabled={isReviewLocked}
-                          placeholder="e.g. 15.5% w/w or 50 µg/mL"
-                          className="w-full p-2.5 rounded-xl border border-slate-200 bg-white text-xs text-[#0f2c20] focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none font-bold shadow-2xs"
-                        />
-                      </div>
-
-                      {/* Preparation Role */}
-                      <div className="space-y-1.5 sm:col-span-2 md:col-span-1">
-                        <label className="text-xs font-bold text-[#0f2c20] block">
-                          Preparation / Functional Role
-                        </label>
-                        <select
-                          value={state.preparationRole}
-                          onChange={(e) => handleCompositionChange(name, "preparationRole", e.target.value)}
-                          disabled={isReviewLocked}
-                          className="w-full p-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-[#0f2c20] focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none shadow-2xs"
-                        >
-                          {COMMON_ROLES.map((r) => (
-                            <option key={r} value={r}>
-                              {r}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          <FormulationRationaleSection
+            scientificRationale={scientificRationale}
+            onChangeScientificRationale={setScientificRationale}
+            compatibilityConsiderations={compatibilityConsiderations}
+            onChangeCompatibilityConsiderations={setCompatibilityConsiderations}
+            safetyAndLimitations={safetyAndLimitations}
+            onChangeSafetyAndLimitations={setSafetyAndLimitations}
+            literature={literature}
+            isReadOnly={isReviewLocked}
+          />
         </div>
       </ResearchSection>
 
@@ -1519,6 +1575,18 @@ export default function FormulationSafetyClient({
       />
 
       {/* Revision Resubmitted Success Confirmation Modal */}
+      <AiFormulationProposalModal
+        isOpen={isAiModalOpen}
+        onClose={() => setIsAiModalOpen(false)}
+        onApply={handleApplyProposal}
+        isGenerating={isGeneratingAi}
+        generationStep={generationStep}
+        proposal={aiProposal}
+        error={aiError}
+        onRegenerate={handleTriggerAiGeneration}
+        plantName={project.plantName}
+      />
+
       <RevisionResubmittedSuccessModal
         isOpen={showSuccessModal}
         onClose={() => setShowSuccessModal(false)}

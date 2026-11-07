@@ -29,7 +29,7 @@ export default async function ProjectReviewWorkspacePage({ params }: Props) {
         </div>
       }
     >
-      <ProjectReviewWorkspaceClient projectId={projectId} />
+      <ProjectReviewWorkspaceClient projectId={projectId} initialTab="section1" />
     </Suspense>
   );
 }

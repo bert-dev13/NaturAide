@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   User,
   Building2,
@@ -16,6 +17,7 @@ import {
 } from "lucide-react";
 
 export default function ResearcherProfilePage() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [profile, setProfile] = useState<any>(null);
@@ -78,6 +80,32 @@ export default function ResearcherProfilePage() {
       });
 
       if (res.ok) {
+        const data = await res.json();
+        const updatedName = data.name || `${firstName.trim()} ${lastName.trim()}`.trim() || profile?.name;
+        
+        setProfile((prev: any) => ({
+          ...prev,
+          name: updatedName,
+          firstName,
+          lastName,
+          phone,
+          institution,
+          department,
+          researchField,
+          academicInfo,
+          bio,
+        }));
+
+        // Broadcast to sidebar, header, and active tabs immediately
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("natureaide:user-profile-updated", {
+              detail: { name: updatedName, firstName, lastName },
+            })
+          );
+        }
+
+        router.refresh();
         setToastMessage("Academic profile updated successfully.");
         setTimeout(() => setToastMessage(null), 3000);
       } else {

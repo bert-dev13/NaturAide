@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
 :root {
+  --sidebar-width: 0px;
   --background: #faf9f5;
   --foreground: #131b17;
 
@@ -36,6 +37,12 @@
   --charcoal-700: #2f3a35;
   --charcoal-600: #475550;
   --charcoal-500: #6b7c76;
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --sidebar-width: 280px;
+  }
 }
 
 html {

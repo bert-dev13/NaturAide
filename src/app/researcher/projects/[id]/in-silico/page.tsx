@@ -2,25 +2,28 @@ import React from "react";
 import { notFound, redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import pool from "@/lib/db";
-import InSilicoWorkspaceClient from "@/components/researcher/in-silico/InSilicoWorkspaceClient";
+import { loadDockingWorkspace } from "@/lib/docking-jobs";
 import { resolveCanonicalPlantId } from "@/lib/phytochemical-catalog";
-import { getProfessionalReviewStageStatus } from "@/lib/professional-review-status";
-
-export const instant = false;
+import InSilicoRdWorkspaceClient from "@/components/researcher/in-silico/InSilicoRdWorkspaceClient";
 
 export default async function InSilicoStagePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ step?: string }>;
 }) {
   const session = await getSession();
-  if (!session || session.role !== "RESEARCHER") {
+  if (!session || (session.role !== "RESEARCHER" && session.role !== "REVIEWER")) {
     redirect("/login");
   }
 
   const { id } = await params;
   const projectId = parseInt(id, 10);
   if (isNaN(projectId)) notFound();
+
+  const sp = (await searchParams) || {};
+  const initialStep = sp.step ? Math.min(8, Math.max(1, parseInt(sp.step, 10))) : 1;
 
   // Query project verifying ownership
   const [projectRows]: any = await pool.query(
@@ -31,10 +34,10 @@ export default async function InSilicoStagePage({
            p.scientificName as plantScientificName
     FROM research_projects rp
     LEFT JOIN plants p ON rp.plantId = p.id
-    WHERE rp.id = ? AND rp.researcherId = ?
+    WHERE rp.id = ? ${session.role === "RESEARCHER" ? "AND rp.researcherId = ?" : ""}
     LIMIT 1
     `,
-    [projectId, session.id]
+    session.role === "RESEARCHER" ? [projectId, session.id] : [projectId]
   );
 
   if (projectRows.length === 0) {
@@ -43,16 +46,16 @@ export default async function InSilicoStagePage({
 
   const project = projectRows[0];
 
-  // Fetch candidate compounds
+  // 1. Candidate compounds
   const [compounds]: any = await pool.query(
     `SELECT * FROM research_compounds WHERE projectId = ? ORDER BY id ASC`,
     [projectId]
   );
 
-  // Fetch computational results
-  const [results]: any = await pool.query(
+  // 2. Computational screening results (ADMET / Lipinski)
+  const [screenResults]: any = await pool.query(
     `
-    SELECT ir.*, rc.molecularFormula, rc.molecularWeight, rc.smiles as compoundSmiles
+    SELECT ir.*, rc.molecularFormula, rc.molecularWeight, rc.smiles as compoundSmiles, rc.pubchemId
     FROM insilico_results ir
     LEFT JOIN research_compounds rc ON ir.compoundId = rc.id
     WHERE ir.projectId = ?
@@ -61,36 +64,17 @@ export default async function InSilicoStagePage({
     [projectId]
   );
 
-  // Fetch researcher interpretation
+  // 3. Docking targets & runs via loadDockingWorkspace
+  const dockingWorkspace = await loadDockingWorkspace(projectId);
+
+  // 4. In-Silico Synthesis & Interpretation
   const [synthesisRows]: any = await pool.query(
     `SELECT * FROM research_insilico_syntheses WHERE projectId = ? LIMIT 1`,
     [projectId]
   );
+  const synthesis = synthesisRows[0] || null;
 
-  const synthesis = synthesisRows[0] || {
-    projectId,
-    keyFindings: "",
-    potentialLimitations: "",
-    selectionRationale: "",
-    compoundsForDocking: "",
-    engineLimitationNotes: "",
-    additionalNotes: "",
-    status: "IN_PROGRESS",
-  };
-
-  // Fetch supporting literature references
-  const [literature]: any = await pool.query(
-    `
-    SELECT id, title, authors, year, journalSource, doiOrUrl, pubmedId,
-           plantOrCompound, keyFindings, relevanceToCurrentResearch
-    FROM literature_references
-    WHERE projectId = ?
-    ORDER BY id DESC
-    `,
-    [projectId]
-  );
-
-  // Fetch available documented phytochemicals for this project's plant
+  // 5. Available documented phytochemicals for this botanical species
   const canonicalPlantId =
     resolveCanonicalPlantId(project.plantId) ||
     resolveCanonicalPlantId(project.plantScientificName) ||
@@ -162,38 +146,36 @@ export default async function InSilicoStagePage({
     console.warn("Failed to load plant_compounds:", err);
   }
 
-  // Fetch Bioinformatics review feedback / findings
-  const [reviewFeedback]: any = await pool.query(
-    `
-    SELECT rf.*, u.name as reviewerDisplayName
-    FROM review_feedback rf
-    LEFT JOIN users u ON rf.reviewerId = u.id
-    WHERE rf.projectId = ? AND (
-      rf.areaKey = 'bioinformatics'
-      OR rf.affectedStage IN ('Stage 2', 'in-silico', '2')
-    )
-    ORDER BY rf.id ASC
-    `,
-    [projectId]
-  );
-
-  // Fetch canonical professional review status for Stage 2 (Bioinformatics)
-  const stageReview = await getProfessionalReviewStageStatus(projectId, 2);
+  // 6. Scientific literature for this botanical species & docking targets
+  let scientificLiterature: any[] = [];
+  try {
+    const firstCommon = project.plantName.split(" ")[0].replace(/[^a-zA-Z]/g, "");
+    const [refRows]: any = await pool.query(
+      `SELECT id, title, authors, publicationYear, journalOrPublisher, studyType,
+              doi, pubmedId, sourceUrl, shortSummary, plantOrIngredientStudied,
+              isExactProductStudied
+       FROM scientific_references
+       WHERE plantOrIngredientStudied LIKE ? OR plantOrIngredientStudied LIKE ? 
+          OR title LIKE ? OR title LIKE ?
+       ORDER BY publicationYear DESC, isExactProductStudied DESC
+       LIMIT 8`,
+      [`%${firstCommon}%`, `%${project.plantScientificName || ""}%`, `%${firstCommon}%`, `%${project.plantScientificName || ""}%`]
+    );
+    scientificLiterature = refRows;
+  } catch (err) {
+    console.warn("Failed to fetch scientific literature:", err);
+  }
 
   return (
-    <InSilicoWorkspaceClient
-      projectId={projectId}
+    <InSilicoRdWorkspaceClient
       project={project}
-      initialCompounds={compounds}
-      initialResults={results}
-      initialSynthesis={synthesis}
-      initialLiterature={literature}
-      initialAvailableCompounds={availableCompounds}
-      initialReviewFeedback={reviewFeedback || []}
-      overallAssessment={stageReview.comments}
-      reviewStatus={stageReview.status}
-      reviewerName={stageReview.reviewerName}
-      approvedAt={stageReview.approvedAt}
+      initialStep={initialStep}
+      compounds={compounds}
+      screenResults={screenResults}
+      dockingWorkspace={dockingWorkspace}
+      synthesis={synthesis}
+      availableCompounds={availableCompounds}
+      scientificLiterature={scientificLiterature}
     />
   );
 }

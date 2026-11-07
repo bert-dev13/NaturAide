@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import pool from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { normalizeReviewAreaKey } from "@/lib/expert-review-areas";
+import { assertReviewerPermissionForSpecialty } from "@/lib/expert-review-assignment";
 
 export async function POST(
   request: Request,
@@ -43,7 +44,22 @@ export async function POST(
     }
 
     const { assignmentId, submissionId, projectId, specialtyNeeded, reviewRound } = assignRows[0];
-    const areaKey = normalizeReviewAreaKey(specialtyNeeded);
+    const areaKey = normalizeReviewAreaKey(body.areaKey || specialtyNeeded);
+
+    try {
+      await assertReviewerPermissionForSpecialty({
+        reviewerId: session.id,
+        projectId,
+        submissionId,
+        areaKey,
+        requireUnlocked: true,
+      });
+    } catch (permErr: any) {
+      return NextResponse.json(
+        { error: permErr.message || "Permission denied" },
+        { status: permErr.status || 403 }
+      );
+    }
 
     // Save draft in professional_reviews
     await pool.query(

@@ -78,10 +78,26 @@ export async function verifySessionToken(token: string): Promise<SessionPayload 
 /**
  * Retrieves the currently logged-in user from the session cookie in Server Components / Route Handlers.
  */
-export async function getSession(): Promise<SessionUser | null> {
+export async function getSession(reqOrToken?: Request | string): Promise<SessionUser | null> {
   try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get(COOKIE_NAME)?.value;
+    let token: string | undefined;
+    if (typeof reqOrToken === "string") {
+      token = reqOrToken;
+    } else if (reqOrToken && typeof (reqOrToken as Request).headers?.get === "function") {
+      const cookieHeader = (reqOrToken as Request).headers.get("cookie") || "";
+      const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${COOKIE_NAME}=([^;]+)`));
+      if (match) token = match[1];
+    }
+
+    if (!token) {
+      try {
+        const cookieStore = await cookies();
+        token = cookieStore.get(COOKIE_NAME)?.value;
+      } catch {
+        // Outside Next.js request scope (e.g. standalone script or worker)
+      }
+    }
+
     if (!token) return null;
 
     const payload = await verifySessionToken(token);

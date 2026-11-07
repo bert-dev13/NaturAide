@@ -11,6 +11,7 @@ import {
   importExternalResult,
   loadDockingWorkspace,
   removeTarget,
+  requestRetryFailed,
   requestRun,
   requestRunAll,
   saveConfiguration,
@@ -19,14 +20,24 @@ import {
   useDetectedSite,
 } from "@/lib/docking-jobs";
 
-async function authorize(id: string) {
+async function authorize(id: string, isReadOnly = false) {
   const session = await getSession();
-  if (!session || session.role !== "RESEARCHER") {
+  if (!session || (session.role !== "RESEARCHER" && (!isReadOnly || session.role !== "REVIEWER"))) {
     return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
   }
   const projectId = parseInt(id, 10);
   if (isNaN(projectId)) {
     return { error: NextResponse.json({ error: "Invalid project ID" }, { status: 400 }) };
+  }
+  if (session.role === "REVIEWER" && isReadOnly) {
+    const [rows]: any = await pool.query(
+      `SELECT id FROM research_projects WHERE id = ? LIMIT 1`,
+      [projectId]
+    );
+    if (!rows.length) {
+      return { error: NextResponse.json({ error: "Project not found" }, { status: 404 }) };
+    }
+    return { session, projectId };
   }
   const [rows]: any = await pool.query(
     `SELECT id FROM research_projects WHERE id = ? AND researcherId = ? LIMIT 1`,
@@ -41,7 +52,7 @@ async function authorize(id: string) {
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const auth = await authorize(id);
+    const auth = await authorize(id, true);
     if (auth.error) return auth.error;
     const workspace = await loadDockingWorkspace(auth.projectId);
     return NextResponse.json({ success: true, workspace });
@@ -72,6 +83,32 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         const hits = await searchStructures(String(body.query || ""));
         return NextResponse.json({ success: true, hits });
       }
+      case "suggest-targets": {
+        const [projRows]: any = await pool.query(
+          `SELECT rp.title, rp.researchObjective,
+                  COALESCE(p.commonName, rp.plantCustomName, 'Botanical Specimen') as plantName
+           FROM research_projects rp
+           LEFT JOIN plants p ON rp.plantId = p.id
+           WHERE rp.id = ? LIMIT 1`,
+          [projectId]
+        );
+        const proj = projRows[0] || {};
+
+        const [compRows]: any = await pool.query(
+          `SELECT compoundName FROM research_compounds WHERE projectId = ? AND selectedForDocking = 1`,
+          [projectId]
+        );
+        const compoundNames = compRows.map((r: any) => r.compoundName);
+
+        const { suggestTargetsForProject } = await import("@/lib/target-protein-catalog");
+        const ranked = suggestTargetsForProject({
+          researchObjective: proj.researchObjective,
+          plantName: proj.plantName,
+          compoundNames,
+        });
+
+        return NextResponse.json({ success: true, suggestions: ranked });
+      }
       case "add-target": {
         const added = await addVerifiedTarget(projectId, String(body.pdbId || ""));
         return NextResponse.json({ success: true, ...added, workspace: await loadDockingWorkspace(projectId) });
@@ -98,6 +135,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       }
       case "run-all": {
         const result = await requestRunAll(projectId);
+        return NextResponse.json({ success: true, ...result, workspace: await loadDockingWorkspace(projectId) });
+      }
+      case "retry-failed": {
+        const result = await requestRetryFailed(projectId);
         return NextResponse.json({ success: true, ...result, workspace: await loadDockingWorkspace(projectId) });
       }
       case "import-external": {

@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Plus, ChevronLeft, ChevronRight, Database, ArrowRight, LogOut } from "lucide-react";
+import { ChevronLeft, ChevronRight, Database, ArrowRight, LogOut } from "lucide-react";
 import LogoutButton from "@/components/LogoutButton";
 import ResearcherNavSections from "./ResearcherNavSections";
 
@@ -17,7 +17,42 @@ export default function ResearcherSidebar({
     role: string;
   };
 }) {
+  const [userName, setUserName] = useState(user?.name || "");
   const [collapsed, setCollapsed] = useState(false);
+
+  React.useEffect(() => {
+    if (user?.name) {
+      setUserName(user.name);
+    }
+  }, [user?.name]);
+
+  React.useEffect(() => {
+    const handleProfileUpdate = (e: any) => {
+      if (e.detail?.name) {
+        setUserName(e.detail.name);
+      }
+    };
+    window.addEventListener("natureaide:user-profile-updated", handleProfileUpdate);
+    return () => {
+      window.removeEventListener("natureaide:user-profile-updated", handleProfileUpdate);
+    };
+  }, []);
+
+  React.useEffect(() => {
+    const updateSidebarVar = () => {
+      if (window.innerWidth < 1024) {
+        document.documentElement.style.setProperty("--sidebar-width", "0px");
+      } else {
+        document.documentElement.style.setProperty(
+          "--sidebar-width",
+          collapsed ? "80px" : "280px"
+        );
+      }
+    };
+    updateSidebarVar();
+    window.addEventListener("resize", updateSidebarVar);
+    return () => window.removeEventListener("resize", updateSidebarVar);
+  }, [collapsed]);
 
   return (
     <aside
@@ -70,22 +105,6 @@ export default function ResearcherSidebar({
           </button>
         </div>
 
-        {/* PRIMARY ACTION: START NEW RESEARCH CTA */}
-        <div className="mb-4 shrink-0">
-          <Link
-            href="/researcher/projects?new=true"
-            className={`flex items-center justify-center gap-2 rounded-lg font-medium transition-colors shadow-xs ${
-              collapsed
-                ? "w-10 h-10 mx-auto bg-emerald-600 hover:bg-emerald-500 text-white"
-                : "w-full py-2.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white text-xs"
-            }`}
-            title="Start New Research"
-          >
-            <Plus className="w-4 h-4 shrink-0 stroke-[2.5]" />
-            {!collapsed && <span>Start New Research</span>}
-          </Link>
-        </div>
-
         {/* INDEPENDENT SCROLLABLE NAVIGATION LIST */}
         <div className="flex-1 overflow-y-auto pr-1 pb-2 custom-scrollbar">
           <ResearcherNavSections collapsed={collapsed} />
@@ -105,11 +124,11 @@ export default function ResearcherSidebar({
                 className="flex items-center gap-2.5 min-w-0 flex-1 group"
               >
                 <div className="w-8 h-8 rounded-lg bg-emerald-900/80 text-emerald-300 font-semibold text-xs flex items-center justify-center shrink-0 border border-emerald-700/50">
-                  {user.name.charAt(0).toUpperCase()}
+                  {(userName || "R").charAt(0).toUpperCase()}
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-medium text-white truncate group-hover:text-emerald-300 transition-colors">
-                    {user.name}
+                    {userName}
                   </p>
                   <p className="text-[10px] text-emerald-400/70 uppercase tracking-wider truncate">
                     Investigator
@@ -136,9 +155,9 @@ export default function ResearcherSidebar({
             <Link
               href="/researcher/profile"
               className="w-9 h-9 rounded-lg bg-emerald-900/80 text-emerald-300 font-semibold text-xs flex items-center justify-center border border-emerald-700/50 hover:bg-emerald-800 transition-colors"
-              title={`${user.name} (Researcher Profile)`}
+              title={`${userName} (Researcher Profile)`}
             >
-              {user.name.charAt(0).toUpperCase()}
+              {(userName || "R").charAt(0).toUpperCase()}
             </Link>
             <LogoutButton
               iconOnly

@@ -28,11 +28,30 @@ export default function ResearcherHeader({
     role: string;
   };
 }) {
+  const [userName, setUserName] = useState(user?.name || "");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const pathname = usePathname();
+
+  useEffect(() => {
+    if (user?.name) {
+      setUserName(user.name);
+    }
+  }, [user?.name]);
+
+  useEffect(() => {
+    const handleProfileUpdate = (e: any) => {
+      if (e.detail?.name) {
+        setUserName(e.detail.name);
+      }
+    };
+    window.addEventListener("natureaide:user-profile-updated", handleProfileUpdate);
+    return () => {
+      window.removeEventListener("natureaide:user-profile-updated", handleProfileUpdate);
+    };
+  }, []);
 
   useEffect(() => {
     async function fetchNotifs() {
@@ -48,6 +67,22 @@ export default function ResearcherHeader({
       }
     }
     fetchNotifs();
+
+    // Listen to custom cross-window events
+    const handleSync = () => fetchNotifs();
+    window.addEventListener("natureaide:review-updated", handleSync);
+    window.addEventListener("natureaide:revisions-updated", handleSync);
+    window.addEventListener("natureaide:project-updated", handleSync);
+
+    // Periodic polling every 12 seconds for real-time alerts
+    const interval = setInterval(fetchNotifs, 12000);
+
+    return () => {
+      window.removeEventListener("natureaide:review-updated", handleSync);
+      window.removeEventListener("natureaide:revisions-updated", handleSync);
+      window.removeEventListener("natureaide:project-updated", handleSync);
+      clearInterval(interval);
+    };
   }, [pathname]);
 
   const markAllRead = async () => {
@@ -163,7 +198,7 @@ export default function ResearcherHeader({
                     </div>
                   ) : (
                     notifications.map((n, nIdx) => {
-                      const isRev = n.type === "REVISION_REQUESTED";
+                      const isRev = n.type === "REVISION_REQUESTED" || n.type === "REVISION_REQUIRED";
                       const isApp = n.type === "ACCEPTED_FOR_NEXT_STAGE";
 
                       return (
@@ -235,9 +270,9 @@ export default function ResearcherHeader({
               className="flex items-center gap-2 text-xs font-bold text-[#0f2c20] hover:text-emerald-700 transition-colors"
             >
               <div className="w-7 h-7 rounded-full bg-[#edf2ee] text-[#1e5c44] flex items-center justify-center font-bold text-xs border border-[#dde6df]">
-                {user.name.charAt(0)}
+                {(userName || "R").charAt(0).toUpperCase()}
               </div>
-              <span className="hidden md:inline">{user.name}</span>
+              <span className="hidden md:inline">{userName}</span>
             </Link>
           </div>
 
@@ -303,7 +338,7 @@ export default function ResearcherHeader({
             <div className="pt-3 border-t border-emerald-900/50 shrink-0 space-y-2">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-medium text-white truncate">{user.name}</p>
+                  <p className="text-xs font-medium text-white truncate">{userName}</p>
                   <p className="text-[10px] text-emerald-400/70 uppercase tracking-wider">Investigator</p>
                 </div>
                 <Link

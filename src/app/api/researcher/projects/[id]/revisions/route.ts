@@ -19,43 +19,43 @@ interface StageInfo {
 const STAGE_DISCIPLINE_MAP: Record<string, StageInfo> = {
   pharmacognosy: {
     stageNumber: 1,
-    stageKey: "plant-literature",
-    stageTitle: "Stage 01 · Plant & Literature Research",
-    discipline: "Pharmacognosy",
-    route: "plant-literature",
+    stageKey: "formulation-rd",
+    stageTitle: "01 · Formulation Science & Pharmacognosy Review",
+    discipline: "Formulation Science & Pharmacognosy",
+    route: "formulation-rd",
     defaultAnchor: "sec-identity",
   },
   bioinformatics: {
     stageNumber: 2,
     stageKey: "in-silico",
-    stageTitle: "Stage 02 · In-Silico Analysis",
+    stageTitle: "02 · Bioinformatics & Computational Review",
     discipline: "Bioinformatics",
     route: "in-silico",
     defaultAnchor: "sec-compounds",
   },
   pharmacology: {
     stageNumber: 3,
-    stageKey: "docking",
-    stageTitle: "Stage 03 · Molecular Docking",
-    discipline: "Pharmacology",
-    route: "docking",
+    stageKey: "submission",
+    stageTitle: "03 · Clinical Pharmacology & Paper Review",
+    discipline: "Clinical Pharmacology",
+    route: "submission",
     defaultAnchor: "sec-results",
   },
   formulation: {
-    stageNumber: 4,
-    stageKey: "formulation-safety",
-    stageTitle: "Stage 04 · Formulation Development",
-    discipline: "Formulation",
-    route: "formulation-safety",
+    stageNumber: 1,
+    stageKey: "formulation-rd",
+    stageTitle: "01 · Formulation Science Review",
+    discipline: "Formulation Science",
+    route: "formulation-rd",
     defaultAnchor: "sec-formulation",
   },
   clinical_safety: {
-    stageNumber: 5,
-    stageKey: "safety",
-    stageTitle: "Stage 05 · Safety / Clinical",
+    stageNumber: 3,
+    stageKey: "submission",
+    stageTitle: "03 · Clinical Safety Review",
     discipline: "Clinical Safety",
-    route: "safety",
-    defaultAnchor: "sec-evidence",
+    route: "submission",
+    defaultAnchor: "sec-summary",
   },
 };
 
@@ -313,24 +313,54 @@ export async function GET(
         // Field naming: If missing or generic placeholder, treat as section-level recommendation
         const rawField = (f.title || f.fieldName || "").trim();
         const isGenericPlaceholder = !rawField || rawField.toLowerCase() === "field parameter" || rawField.toLowerCase() === sectionDisplay.toLowerCase();
-        const fieldDisplay = isGenericPlaceholder ? null : rawField;
+        let fieldDisplay = isGenericPlaceholder ? null : rawField;
+        if (fieldDisplay && fieldDisplay.includes(":")) {
+          const parts = fieldDisplay.split(":");
+          const afterColon = parts.slice(1).join(":").trim();
+          if (afterColon.toLowerCase() === (f.comment || "").trim().toLowerCase()) {
+            fieldDisplay = parts[0].trim();
+          }
+        }
 
-        const anchor = getTargetAnchor(stageInfo.stageNumber, f.sectionName, f.title);
+        const distinctRec =
+          f.recommendation &&
+          f.recommendation.trim().toLowerCase() !== (f.comment || "").trim().toLowerCase()
+            ? f.recommendation.trim()
+            : null;
+
+        const combinedText = `${f.sectionName || ""} ${f.title || ""}`.toLowerCase();
+        let targetRoute = stageInfo.route === "formulation-research" ? "formulation-rd" : stageInfo.route;
+        let stepNumber = 1;
+
+        if (combinedText.includes("section 1") || combinedText.includes("formulation") || combinedText.includes("batch")) {
+          targetRoute = "formulation-rd";
+        } else if (combinedText.includes("section 2") || combinedText.includes("in-silico") || combinedText.includes("docking")) {
+          targetRoute = "in-silico";
+        } else if (combinedText.includes("section 3") || combinedText.includes("submission") || combinedText.includes("manuscript") || combinedText.includes("paper")) {
+          targetRoute = "submission";
+        }
+
+        const stepMatch = combinedText.match(/step\s*(\d+)/i);
+        if (stepMatch) {
+          stepNumber = parseInt(stepMatch[1], 10);
+        }
+
+        const targetUrl = `/researcher/projects/${projectId}/${targetRoute}?step=${stepNumber}&revId=${f.id}`;
 
         return {
           id: f.id,
           itemNum: String(idx + 1).padStart(2, "0"),
           type: itemType,
           sectionName: sectionDisplay,
-          fieldName: fieldDisplay, // Null if section-level
+          fieldName: fieldDisplay,
           comment: (f.comment || "").trim(),
-          recommendation: f.recommendation?.trim() || null,
-          severity: f.severity ? String(f.severity).toUpperCase() : null, // Do NOT force MAJOR
+          recommendation: distinctRec,
+          severity: f.severity ? String(f.severity).toUpperCase() : null,
           status: f.status || "OPEN",
           researcherReply: f.researcherReply?.trim() || null,
           researcherRepliedAt: f.researcherRepliedAt || null,
-          targetAnchor: anchor,
-          navigateTo: `/researcher/projects/${projectId}/${stageInfo.route}#${anchor}`,
+          targetAnchor: `step-${stepNumber}`,
+          navigateTo: targetUrl,
         };
       });
 
@@ -409,6 +439,27 @@ export async function GET(
       };
     });
 
+    // Fetch Latest Submission & Final Approval Summary
+    const [subRows]: any = await pool.query(
+      `SELECT id, versionTag, reviewRound, status, isLocked, finalApprovalSummary, submittedAt, reviewedAt
+       FROM review_submissions
+       WHERE projectId = ?
+       ORDER BY reviewRound DESC, id DESC`,
+      [projectId]
+    );
+    const latestSubmission = subRows[0] || null;
+    let finalApprovalSummary: any = null;
+    if (latestSubmission?.finalApprovalSummary) {
+      try {
+        finalApprovalSummary =
+          typeof latestSubmission.finalApprovalSummary === "string"
+            ? JSON.parse(latestSubmission.finalApprovalSummary)
+            : latestSubmission.finalApprovalSummary;
+      } catch {
+        finalApprovalSummary = null;
+      }
+    }
+
     return NextResponse.json({
       success: true,
       project: {
@@ -418,8 +469,29 @@ export async function GET(
         plantScientificName: project.plantScientificName,
         status: project.status,
       },
+      latestSubmission: latestSubmission
+        ? {
+            id: latestSubmission.id,
+            versionTag: latestSubmission.versionTag,
+            reviewRound: latestSubmission.reviewRound,
+            status: latestSubmission.status,
+            isLocked: Boolean(latestSubmission.isLocked),
+            submittedAt: latestSubmission.submittedAt,
+            reviewedAt: latestSubmission.reviewedAt,
+          }
+        : null,
+      submissionVersions: (subRows || []).map((s: any) => ({
+        id: s.id,
+        versionTag: s.versionTag,
+        reviewRound: s.reviewRound,
+        status: s.status,
+        isLocked: Boolean(s.isLocked),
+        submittedAt: s.submittedAt,
+        reviewedAt: s.reviewedAt,
+      })),
+      finalApprovalSummary,
       openRecommendationsCount: totalOpenCount,
-      stagesRequiringRevisionCount: activeStages.filter((s: any) => s.status === "REVISION_REQUIRED" && s.openCount > 0).length,
+      stagesRequiringRevisionCount: activeStages.filter((s: any) => s.status === "REVISION_REQUIRED" && (s.openCount > 0 || s.overallAssessment)).length,
       addressedRecommendationsCount: totalAddressedCount,
       activeStages,
       reviewHistory,

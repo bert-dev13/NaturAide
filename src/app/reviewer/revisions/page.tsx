@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   RotateCcw,
   Check,
@@ -10,270 +11,566 @@ import {
   ArrowRight,
   ExternalLink,
   Loader2,
-  Leaf,
+  Sprout,
   Calendar,
   User,
   MessageSquare,
   FileText,
   Clock,
+  Filter,
+  Search,
+  CheckCheck,
+  ChevronDown,
+  Layers,
+  ArrowUpRight,
+  Sparkles,
+  RefreshCw,
+  X,
+  FileCheck2,
+  Cpu,
+  FlaskConical,
 } from "lucide-react";
 
-export default function ProfessionalRevisionsPage() {
+interface RevisionFinding {
+  findingId: number;
+  projectId: number;
+  submissionId: number | null;
+  reviewRound: number;
+  sectionName: string;
+  stepNumber: number;
+  originalFinding: string;
+  requiredAction?: string | null;
+  findingTitle: string;
+  severity: "CRITICAL" | "MAJOR" | "MINOR" | "INFORMATIONAL" | string;
+  findingStatus: "OPEN" | "ADDRESSED" | "RESOLVED" | string;
+  researcherResponse?: string | null;
+  researcherRepliedAt?: string | null;
+  resolvedAt?: string | null;
+  areaKey: string;
+  areaLabel: string;
+  projectTitle: string;
+  plantName: string;
+  plantScientificName?: string;
+  researcherName: string;
+  versionTag: string;
+  targetUrl: string;
+}
+
+interface ProjectSummary {
+  id: number;
+  title: string;
+  plantName: string;
+  researcherName: string;
+  addressedCount: number;
+  openCount: number;
+  resolvedCount: number;
+}
+
+export default function ReviewerRevisionsPage() {
+  const searchParams = useSearchParams();
+  const initialProjectId = searchParams.get("projectId")
+    ? parseInt(searchParams.get("projectId")!, 10)
+    : null;
+
   const [loading, setLoading] = useState(true);
-  const [revisions, setRevisions] = useState<any[]>([]);
-  const [resolvingId, setResolvingId] = useState<number | null>(null);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [revisions, setRevisions] = useState<RevisionFinding[]>([]);
+  const [projects, setProjects] = useState<ProjectSummary[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(initialProjectId);
+  const [statusFilter, setStatusFilter] = useState<"ALL" | "ADDRESSED" | "OPEN" | "RESOLVED">("ALL");
+  const [severityFilter, setSeverityFilter] = useState<string>("ALL");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [toastMessage, setToastMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  useEffect(() => {
-    loadRevisions();
-  }, []);
-
-  async function loadRevisions() {
+  const loadRevisions = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch("/api/reviewer/revisions");
+      const url = selectedProjectId
+        ? `/api/reviewer/revisions?projectId=${selectedProjectId}`
+        : "/api/reviewer/revisions";
+      const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
-        setRevisions(data.revisions || []);
+        const rawList: RevisionFinding[] = data.revisions || [];
+        const seen = new Set<number>();
+        const unique = rawList.filter((item) => {
+          if (seen.has(item.findingId)) return false;
+          seen.add(item.findingId);
+          return true;
+        });
+        setRevisions(unique);
+        if (data.projects) setProjects(data.projects);
       }
     } catch (err) {
-      console.error(err);
+      console.error("Error loading revisions:", err);
     } finally {
       setLoading(false);
     }
-  }
+  }, [selectedProjectId]);
 
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
+  useEffect(() => {
+    loadRevisions();
+
+    const handleSync = () => loadRevisions();
+    window.addEventListener("natureaide:revisions-updated", handleSync);
+    window.addEventListener("natureaide:review-updated", handleSync);
+    return () => {
+      window.removeEventListener("natureaide:revisions-updated", handleSync);
+      window.removeEventListener("natureaide:review-updated", handleSync);
+    };
+  }, [loadRevisions]);
+
+  const showToast = (text: string, type: "success" | "error" = "success") => {
+    setToastMessage({ text, type });
+    setTimeout(() => setToastMessage(null), 4000);
   };
 
-  const handleResolve = async (findingId: number) => {
-    try {
-      setResolvingId(findingId);
-      const res = await fetch(`/api/reviewer/revisions/${findingId}/resolve`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "RESOLVE" }),
-      });
-      if (res.ok) {
-        showToast("Finding marked as Resolved ✓");
-        setRevisions((prev) =>
-          prev.map((r) => (r.findingId === findingId ? { ...r, findingStatus: "RESOLVED" } : r))
-        );
+  // Filtered Revisions List
+  const filteredRevisions = useMemo(() => {
+    return revisions.filter((r) => {
+      // Status Filter
+      if (statusFilter !== "ALL" && r.findingStatus !== statusFilter) {
+        return false;
       }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setResolvingId(null);
-    }
-  };
-
-  const handleNeedsFurtherRevision = async (findingId: number) => {
-    const note = prompt("Please provide additional instructions for the researcher:");
-    if (!note) return;
-
-    try {
-      setResolvingId(findingId);
-      const res = await fetch(`/api/reviewer/revisions/${findingId}/resolve`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "NEEDS_FURTHER_REVISION", notes: note }),
-      });
-      if (res.ok) {
-        showToast("Finding flagged for further revision.");
-        setRevisions((prev) =>
-          prev.map((r) => (r.findingId === findingId ? { ...r, findingStatus: "OPEN" } : r))
-        );
+      // Severity Filter
+      if (severityFilter !== "ALL" && r.severity !== severityFilter) {
+        return false;
       }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setResolvingId(null);
-    }
-  };
+      // Project Filter
+      if (selectedProjectId && r.projectId !== selectedProjectId) {
+        return false;
+      }
+      // Search Query
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchesText =
+          (r.projectTitle || "").toLowerCase().includes(q) ||
+          (r.plantName || "").toLowerCase().includes(q) ||
+          (r.sectionName || "").toLowerCase().includes(q) ||
+          (r.findingTitle || "").toLowerCase().includes(q) ||
+          (r.originalFinding || "").toLowerCase().includes(q) ||
+          (r.researcherResponse || "").toLowerCase().includes(q);
+        if (!matchesText) return false;
+      }
+      return true;
+    });
+  }, [revisions, statusFilter, severityFilter, selectedProjectId, searchQuery]);
+
+  // Counts
+  const totalCount = revisions.length;
+  const addressedCount = revisions.filter((r) => r.findingStatus === "ADDRESSED").length;
+  const openCount = revisions.filter((r) => r.findingStatus === "OPEN").length;
+  const resolvedCount = revisions.filter((r) => r.findingStatus === "RESOLVED").length;
 
   return (
-    <div className="space-y-6">
+    <div className="w-full max-w-[1440px] mx-auto space-y-6 pb-28">
       {/* TOAST ALERT */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 px-4 py-3 rounded-xl bg-slate-900 text-white text-xs font-bold shadow-xl border border-slate-700 flex items-center gap-2 animate-in fade-in">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-          <span>{toastMessage}</span>
+        <div
+          className={`fixed bottom-6 right-6 z-50 px-4 py-3 rounded-2xl text-xs font-bold shadow-xl border flex items-center gap-2 animate-in fade-in duration-200 ${
+            toastMessage.type === "success"
+              ? "bg-slate-900 text-white border-slate-700"
+              : "bg-rose-900 text-white border-rose-700"
+          }`}
+        >
+          {toastMessage.type === "success" ? (
+            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+          ) : (
+            <AlertTriangle className="w-4 h-4 text-rose-400" />
+          )}
+          <span>{toastMessage.text}</span>
         </div>
       )}
 
-      {/* COMPACT SCIENTIFIC HEADER */}
-      <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-1">
-        <div className="flex items-center gap-2">
-          <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-extrabold uppercase tracking-wider">
-            Revision Queue
-          </span>
-          <span className="text-xs text-slate-500">
-            {revisions.filter((r) => r.findingStatus !== "RESOLVED").length} Pending Verification
-          </span>
+      {/* =================================================================== */}
+      {/* 1. COMPREHENSIVE HEADER BANNER (Consistent Scientific Header)       */}
+      {/* =================================================================== */}
+      <div className="bg-gradient-to-r from-[#0b2b4c] via-[#103a64] to-[#071e35] text-white rounded-3xl border border-blue-400/25 p-6 sm:p-7 shadow-xl shadow-blue-950/20 relative overflow-hidden space-y-4">
+        {/* Ambient Glows */}
+        <div className="absolute top-0 right-0 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
+        <div className="absolute bottom-0 left-1/3 w-60 h-60 bg-cyan-500/10 rounded-full blur-2xl pointer-events-none" />
+
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-1.5 max-w-2xl">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="px-2.5 py-0.5 rounded-full bg-cyan-400/15 text-cyan-200 border border-cyan-400/30 font-mono text-[10.5px] font-bold uppercase tracking-wider flex items-center gap-1">
+                <RotateCcw className="w-3 h-3 text-cyan-300" />
+                <span>Review Verification Hub</span>
+              </span>
+
+              {addressedCount > 0 && (
+                <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-400/30 text-[10.5px] font-bold flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                  <span>{addressedCount} Awaiting Verification</span>
+                </span>
+              )}
+            </div>
+
+            <h1 className="text-2xl sm:text-3xl font-heading font-extrabold text-white tracking-tight">
+              Revisions &amp; Findings Queue
+            </h1>
+            <p className="text-xs sm:text-sm text-blue-100/80 leading-relaxed">
+              Verify updated parameters and researcher implementation responses without rereading the whole dossier. Sign off on verified fixes or request further refinement.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+            <button
+              type="button"
+              onClick={loadRevisions}
+              disabled={loading}
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 border border-white/20 text-white text-xs font-bold transition-all shadow-sm cursor-pointer disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin text-cyan-300" : ""}`} />
+              <span>Refresh Queue</span>
+            </button>
+          </div>
         </div>
-        <h1 className="text-xl sm:text-2xl font-heading font-extrabold text-slate-900 tracking-tight">
-          Revisions
-        </h1>
-        <p className="text-xs sm:text-sm text-slate-500 leading-relaxed">
-          Compare researcher responses and updated dossier content against your review findings without rereading the entire dossier.
-        </p>
       </div>
 
-      {/* REVISIONS LIST */}
-      {loading ? (
-        <div className="p-12 text-center rounded-2xl bg-white border border-slate-200">
-          <Loader2 className="w-6 h-6 text-blue-600 animate-spin mx-auto mb-2" />
-          <p className="text-xs text-slate-500">Loading revisions queue...</p>
+      {/* =================================================================== */}
+      {/* 2. STATS CARDS (Awaiting Verification, Open, Resolved)             */}
+      {/* =================================================================== */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Total Findings */}
+        <div
+          onClick={() => setStatusFilter("ALL")}
+          className={`p-4 sm:p-5 rounded-2xl border transition-all cursor-pointer ${
+            statusFilter === "ALL"
+              ? "bg-white border-blue-500 shadow-md ring-2 ring-blue-500/20"
+              : "bg-white border-slate-200/90 hover:border-slate-300 shadow-2xs"
+          }`}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+              Total Findings
+            </span>
+            <FileText className="w-4 h-4 text-blue-600" />
+          </div>
+          <div className="text-2xl font-extrabold text-slate-900 font-mono">{totalCount}</div>
+          <p className="text-[11px] text-slate-400 mt-1">Across evaluated projects</p>
         </div>
-      ) : revisions.length === 0 ? (
-        <div className="p-12 text-center rounded-2xl bg-white border border-slate-200 space-y-3">
-          <RotateCcw className="w-10 h-10 text-slate-300 mx-auto" />
-          <h3 className="text-sm font-bold text-slate-800">No revisions waiting</h3>
-          <p className="text-xs text-slate-500 max-w-sm mx-auto">
-            When researchers address your feedback and resubmit their dossiers, they will appear here for comparison and resolution.
-          </p>
-          <div className="pt-2">
-            <Link
-              href="/reviewer"
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition-colors"
+
+        {/* Action Required / Addressed */}
+        <div
+          onClick={() => setStatusFilter("ADDRESSED")}
+          className={`p-4 sm:p-5 rounded-2xl border transition-all cursor-pointer ${
+            statusFilter === "ADDRESSED"
+              ? "bg-amber-50/50 border-amber-500 shadow-md ring-2 ring-amber-500/20"
+              : "bg-white border-slate-200/90 hover:border-amber-300 shadow-2xs"
+          }`}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-amber-800 flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+              Awaiting Verification
+            </span>
+            <Clock className="w-4 h-4 text-amber-600" />
+          </div>
+          <div className="text-2xl font-extrabold text-amber-950 font-mono">{addressedCount}</div>
+          <p className="text-[11px] text-amber-700 mt-1">Researcher replied • Reviewer action required</p>
+        </div>
+
+        {/* Open Findings */}
+        <div
+          onClick={() => setStatusFilter("OPEN")}
+          className={`p-4 sm:p-5 rounded-2xl border transition-all cursor-pointer ${
+            statusFilter === "OPEN"
+              ? "bg-blue-50/50 border-blue-500 shadow-md ring-2 ring-blue-500/20"
+              : "bg-white border-slate-200/90 hover:border-blue-300 shadow-2xs"
+          }`}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
+              Pending Researcher
+            </span>
+            <AlertTriangle className="w-4 h-4 text-blue-600" />
+          </div>
+          <div className="text-2xl font-extrabold text-slate-900 font-mono">{openCount}</div>
+          <p className="text-[11px] text-slate-500 mt-1">Waiting for researcher edits</p>
+        </div>
+
+        {/* Resolved Findings */}
+        <div
+          onClick={() => setStatusFilter("RESOLVED")}
+          className={`p-4 sm:p-5 rounded-2xl border transition-all cursor-pointer ${
+            statusFilter === "RESOLVED"
+              ? "bg-emerald-50/50 border-emerald-500 shadow-md ring-2 ring-emerald-500/20"
+              : "bg-white border-slate-200/90 hover:border-emerald-300 shadow-2xs"
+          }`}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">
+              Resolved &amp; Closed
+            </span>
+            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+          </div>
+          <div className="text-2xl font-extrabold text-emerald-950 font-mono">{resolvedCount}</div>
+          <p className="text-[11px] text-emerald-700 mt-1">Verified scientific fixes</p>
+        </div>
+      </div>
+
+      {/* =================================================================== */}
+      {/* 3. FILTER CONTROLS BAR (Project, Search, Severity)                  */}
+      {/* =================================================================== */}
+      <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2.5 flex-1 min-w-0">
+          {/* Project Selector Dropdown */}
+          <div className="relative min-w-[220px]">
+            <select
+              value={selectedProjectId || ""}
+              onChange={(e) => {
+                const val = e.target.value ? parseInt(e.target.value, 10) : null;
+                setSelectedProjectId(val);
+              }}
+              className="w-full px-3 py-2 pr-8 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer appearance-none"
             >
-              <span>View Dashboard</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
+              <option value="">All Research Projects ({projects.length})</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.title} ({p.plantName})
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2.5 top-2.5 pointer-events-none" />
+          </div>
+
+          {/* Severity Filter */}
+          <div className="relative">
+            <select
+              value={severityFilter}
+              onChange={(e) => setSeverityFilter(e.target.value)}
+              className="px-3 py-2 pr-8 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer appearance-none"
+            >
+              <option value="ALL">All Severities</option>
+              <option value="CRITICAL">🔴 Critical</option>
+              <option value="MAJOR">🟠 Major</option>
+              <option value="MINOR">🟡 Minor</option>
+              <option value="INFORMATIONAL">🔵 Informational</option>
+            </select>
+            <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2.5 top-2.5 pointer-events-none" />
+          </div>
+
+          {/* Search Box */}
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5 pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Search findings, botanical, or responses..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            />
+          </div>
+        </div>
+
+        {/* Clear Filters Button if any active */}
+        {(selectedProjectId || statusFilter !== "ALL" || severityFilter !== "ALL" || searchQuery) && (
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedProjectId(null);
+              setStatusFilter("ALL");
+              setSeverityFilter("ALL");
+              setSearchQuery("");
+            }}
+            className="text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors self-start md:self-auto cursor-pointer"
+          >
+            Reset Filters
+          </button>
+        )}
+      </div>
+
+      {/* =================================================================== */}
+      {/* 4. REVISIONS LIST                                                   */}
+      {/* =================================================================== */}
+      {loading ? (
+        <div className="p-16 text-center rounded-3xl bg-white border border-slate-200 shadow-2xs space-y-3">
+          <Loader2 className="w-8 h-8 text-blue-600 animate-spin mx-auto" />
+          <p className="text-xs font-semibold text-slate-600">Loading revisions queue...</p>
+        </div>
+      ) : filteredRevisions.length === 0 ? (
+        <div className="p-16 text-center rounded-3xl bg-white border border-slate-200 shadow-2xs space-y-4">
+          <div className="w-14 h-14 rounded-2xl bg-slate-50 text-slate-400 flex items-center justify-center mx-auto border border-slate-200">
+            <RotateCcw className="w-7 h-7" />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-base font-bold text-slate-800">No revisions match your filter</h3>
+            <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
+              {revisions.length === 0
+                ? "No revision findings have been submitted for your assigned projects yet."
+                : "Try adjusting your status, severity, or search filters above."}
+            </p>
           </div>
         </div>
       ) : (
         <div className="space-y-4">
-          {revisions.map((rev) => {
+          {filteredRevisions.map((rev, index) => {
             const isResolved = rev.findingStatus === "RESOLVED";
+            const isAddressed = rev.findingStatus === "ADDRESSED";
+
+            // Clean title if it contains duplicate comment
+            let cleanTitle = rev.findingTitle || "Review Finding";
+            if (cleanTitle.includes(":")) {
+              const parts = cleanTitle.split(":");
+              const rest = parts.slice(1).join(":").trim();
+              if (rest.toLowerCase() === (rev.originalFinding || "").trim().toLowerCase()) {
+                cleanTitle = parts[0].trim();
+              }
+            }
+
+            // Severity color pill
+            const severityStyle =
+              rev.severity === "CRITICAL"
+                ? "bg-rose-50 text-rose-700 border-rose-200"
+                : rev.severity === "MAJOR"
+                ? "bg-amber-50 text-amber-800 border-amber-200"
+                : rev.severity === "MINOR"
+                ? "bg-yellow-50 text-yellow-800 border-yellow-200"
+                : "bg-blue-50 text-blue-700 border-blue-200";
 
             return (
               <div
-                key={rev.findingId}
-                className={`p-6 rounded-2xl bg-white border transition-all shadow-xs ${
-                  isResolved ? "border-emerald-200 bg-emerald-50/20" : "border-slate-200 hover:border-blue-300"
+                key={`rev-${rev.findingId}-${index}`}
+                className={`p-6 rounded-3xl bg-white border transition-all shadow-2xs space-y-4 ${
+                  isAddressed
+                    ? "border-amber-300 ring-2 ring-amber-400/15"
+                    : isResolved
+                    ? "border-emerald-200 bg-emerald-50/15"
+                    : "border-slate-200/90 hover:border-slate-300"
                 }`}
               >
-                <div className="space-y-4">
-                  {/* Top Metadata */}
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
-                    <div className="flex items-center gap-2">
-                      <span className="font-heading font-extrabold text-base text-slate-900">
-                        {rev.plantName} · {rev.areaLabel}
+                {/* Header Row: Subject, Botanical, Section & Status Badges */}
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-slate-100 pb-3.5">
+                  <div className="space-y-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-heading font-extrabold text-base text-slate-900 tracking-tight">
+                        {rev.projectTitle}
                       </span>
-                      <span className="text-xs text-slate-500">({rev.projectTitle})</span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-slate-400">
-                        Section: <span className="font-semibold text-slate-700">{rev.sectionName}</span>
+                      <span className="text-slate-300">•</span>
+                      <span className="inline-flex items-center gap-1 text-xs text-slate-600 font-medium">
+                        <Sprout className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>{rev.plantName}</span>
                       </span>
-                      {isResolved ? (
-                        <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold text-[10px] flex items-center gap-1">
-                          <Check className="w-3 h-3" />
-                          <span>Resolved</span>
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-bold text-[10px]">
-                          Pending Verification
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* 1. ORIGINAL FINDING */}
-                  <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1 text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-slate-700 uppercase tracking-wider text-[10px]">
-                        Original Finding
-                      </span>
-                      <span className="text-[10px] font-semibold text-amber-700">
-                        Severity: {rev.severity || "MINOR"}
+                      <span className="text-slate-300">•</span>
+                      <span className="font-mono text-xs text-slate-500">
+                        {rev.versionTag || "v1.0"}
                       </span>
                     </div>
-                    <p className="text-slate-900 font-medium leading-relaxed">
-                      &quot;{rev.originalFinding}&quot;
-                    </p>
-                  </div>
 
-                  {/* DOWN ARROW */}
-                  <div className="flex justify-center text-slate-400">
-                    <span className="text-xs font-bold">↓</span>
-                  </div>
-
-                  {/* 2. RESEARCHER RESPONSE */}
-                  <div className="p-3.5 rounded-xl bg-blue-50/60 border border-blue-200 space-y-1 text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-blue-900 uppercase tracking-wider text-[10px] flex items-center gap-1">
-                        <User className="w-3 h-3" />
-                        <span>Researcher Response ({rev.researcherName})</span>
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                      <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-semibold border border-slate-200 text-[11px]">
+                        {rev.sectionName}
                       </span>
-                      {rev.researcherRepliedAt && (
-                        <span className="text-[10px] text-blue-700">
-                          {new Date(rev.researcherRepliedAt).toLocaleDateString()}
-                        </span>
-                      )}
+                      <span className="text-slate-300">•</span>
+                      <span>
+                        Researcher: <strong className="text-slate-700">{rev.researcherName}</strong>
+                      </span>
                     </div>
-                    <p className="text-slate-800 leading-relaxed italic">
-                      {rev.researcherResponse || "No written response submitted yet."}
-                    </p>
                   </div>
 
-                  {/* DOWN ARROW */}
-                  <div className="flex justify-center text-slate-400">
-                    <span className="text-xs font-bold">↓</span>
-                  </div>
-
-                  {/* 3. UPDATED CONTENT CONTEXT */}
-                  <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1 text-xs">
-                    <span className="font-bold text-slate-700 uppercase tracking-wider text-[10px]">
-                      Updated Content ({rev.sectionName})
+                  {/* Status Pills */}
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10.5px] font-bold border ${severityStyle}`}>
+                      {rev.severity || "MAJOR"}
                     </span>
-                    <p className="text-slate-700 text-[11px] leading-relaxed">
-                      Targeted modifications recorded in dossier {rev.versionTag}. Inspect full updated simulation parameters and literature alignment.
-                    </p>
-                  </div>
 
-                  {/* ACTIONS */}
-                  <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100">
-                    <div className="flex items-center gap-2">
-                      {!isResolved && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => handleResolve(rev.findingId)}
-                            disabled={resolvingId === rev.findingId}
-                            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors cursor-pointer"
-                          >
-                            <Check className="w-3.5 h-3.5" />
-                            <span>Resolved ✓</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => handleNeedsFurtherRevision(rev.findingId)}
-                            disabled={resolvingId === rev.findingId}
-                            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
-                          >
-                            <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
-                            <span>Needs Further Revision</span>
-                          </button>
-                        </>
-                      )}
-                    </div>
-
-                    {rev.assignmentId && (
-                      <Link
-                        href={`/reviewer/reviews/${rev.assignmentId}`}
-                        className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-700"
-                      >
-                        <span>View Full Updated Dossier</span>
-                        <ArrowRight className="w-3 h-3" />
-                      </Link>
+                    {isResolved ? (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-300">
+                        <Check className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Resolved ✓</span>
+                      </span>
+                    ) : isAddressed ? (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-900 border border-amber-300 shadow-2xs">
+                        <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                        <span>Action Required · Addressed by Researcher</span>
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                        <Clock className="w-3.5 h-3.5 text-slate-400" />
+                        <span>Pending Researcher Action</span>
+                      </span>
                     )}
                   </div>
+                </div>
+
+                {/* Body 1: Reviewer Original Finding & Required Action */}
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-700 uppercase tracking-wider text-[10.5px]">
+                      Finding / Reviewer Note
+                    </span>
+                    <span className="text-[11px] font-semibold text-slate-500">
+                      {cleanTitle}
+                    </span>
+                  </div>
+                  <p className="text-slate-900 text-xs sm:text-sm font-medium leading-relaxed">
+                    &ldquo;{rev.originalFinding}&rdquo;
+                  </p>
+                  {rev.requiredAction && rev.requiredAction !== rev.originalFinding && (
+                    <div className="pt-2 border-t border-slate-200/60 text-slate-600 text-xs">
+                      <strong className="text-slate-700">Required Action:</strong> {rev.requiredAction}
+                    </div>
+                  )}
+                </div>
+
+                {/* Body 2: Researcher Implementation & Response Box */}
+                {rev.researcherResponse ? (
+                  <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-50/70 to-cyan-50/50 border border-blue-200 space-y-2 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-blue-900 uppercase tracking-wider text-[10.5px] flex items-center gap-1.5">
+                        <User className="w-3.5 h-3.5 text-blue-700" />
+                        <span>Researcher Implementation Note ({rev.researcherName})</span>
+                      </span>
+                      {rev.researcherRepliedAt && (
+                        <span suppressHydrationWarning className="text-[11px] font-mono text-blue-700">
+                          {new Date(rev.researcherRepliedAt).toLocaleString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                            hour: "numeric",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-slate-900 text-xs sm:text-sm font-medium leading-relaxed">
+                      {rev.researcherResponse}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="p-3.5 rounded-2xl bg-slate-50/60 border border-dashed border-slate-200 text-xs text-slate-400 italic">
+                    The researcher has not submitted a response note yet.
+                  </div>
+                )}
+
+                {/* Footer Action Bar: 1 Single Button to Inspect in Step Workspace */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-slate-100">
+                  <div className="flex items-center gap-2">
+                    {isResolved ? (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                        <CheckCheck className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Resolved</span>
+                      </span>
+                    ) : isAddressed ? (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-900 border border-amber-300">
+                        <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                        <span>Resubmission Ready to Inspect</span>
+                      </span>
+                    ) : (
+                      <span className="text-xs text-slate-500 font-medium flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5 text-slate-400" />
+                        <span>Pending Researcher Action</span>
+                      </span>
+                    )}
+                  </div>
+
+                  <Link
+                    href={rev.targetUrl}
+                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs hover:shadow-sm cursor-pointer active:scale-95"
+                  >
+                    <span>Open Revision in Step Workspace</span>
+                    <ArrowRight className="w-4 h-4 text-emerald-100" />
+                  </Link>
                 </div>
               </div>
             );

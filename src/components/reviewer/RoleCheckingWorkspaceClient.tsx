@@ -215,7 +215,7 @@ export default function RoleCheckingWorkspaceClient({
       }
 
       // Initialize AI review assistance suggestions based on role
-      if (roleKey === "pharmacognosy") {
+      if (roleKey === "formulation") {
         setAiSuggestions([
           {
             id: "ai-fam-1",
@@ -638,8 +638,8 @@ export default function RoleCheckingWorkspaceClient({
       {/* 4. SCROLLABLE STAGE CONTENT (READ-ONLY RESEARCHER DATA)         */}
       {/* ============================================================== */}
       <div className="space-y-6">
-        {/* STAGE 1: PHARMACOGNOSY VIEW */}
-        {roleKey === "pharmacognosy" && (
+        {/* STAGE 1: FORMULATION & BOTANICAL VIEW */}
+        {roleKey === "formulation" && (
           <div className="space-y-6">
             {/* Section 01: Plant Identity */}
             <section
@@ -1080,8 +1080,170 @@ export default function RoleCheckingWorkspaceClient({
           </div>
         )}
 
-        {/* STAGES 4, 5, 6: FALLBACK / READ-ONLY VIEW */}
-        {(roleKey === "formulation" || roleKey === "clinical_safety") && (
+        {/* STAGE 4: FORMULATION SUBMISSION REVIEW */}
+        {roleKey === "formulation" && (
+          <div className="space-y-6">
+            {/* Overview Card */}
+            <section className="bg-white rounded-2xl border border-slate-200/90 p-6 shadow-xs space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-[10px] font-black uppercase tracking-wider text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                      Stage 04 Submission
+                    </span>
+                    <span className="text-xs font-bold text-slate-600">
+                      Target Delivery: {snapshot?.formulation?.dosageFormType || snapshot?.formulation?.formulationType || "Topical Hydrogel"}
+                    </span>
+                  </div>
+                  <h2 className="text-base font-bold text-slate-900 font-heading mt-1">
+                    {snapshot?.formulation?.formulationName || "Formulation Development Prototype"}
+                  </h2>
+                </div>
+                {!isApproved && (
+                  <button
+                    type="button"
+                    onClick={() => handleAddInlineComment("Formulation Design", "Formulation Architecture")}
+                    className="text-xs font-semibold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer self-start sm:self-auto"
+                  >
+                    + Add Comment
+                  </button>
+                )}
+              </div>
+
+              {snapshot?.formulation?.researchPurpose && (
+                <div className="text-xs text-slate-600 leading-relaxed bg-slate-50/70 p-3.5 rounded-xl border border-slate-100">
+                  <strong className="text-slate-900">Research Purpose:</strong> {snapshot.formulation.researchPurpose}
+                </div>
+              )}
+            </section>
+
+            {/* Formulation Composition Matrix */}
+            <section className="bg-white rounded-2xl border border-slate-200/90 p-6 shadow-xs space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">
+                    Proposed Formulation Composition Matrix
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Active botanical extracts, excipients, binders, and evidence-grounded concentrations
+                  </p>
+                </div>
+                {!isApproved && (
+                  <button
+                    type="button"
+                    onClick={() => handleAddInlineComment("Formulation Composition", "Component Excipients")}
+                    className="text-xs font-semibold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                  >
+                    + Add Comment
+                  </button>
+                )}
+              </div>
+
+              {snapshot?.formulation?.components && snapshot.formulation.components.length > 0 ? (
+                <div className="overflow-x-auto rounded-xl border border-slate-200">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200">
+                        <th className="py-2.5 px-3">Component</th>
+                        <th className="py-2.5 px-3">Role in Formulation</th>
+                        <th className="py-2.5 px-3">Proposed Concentration</th>
+                        <th className="py-2.5 px-3">Scientific Rationale</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {snapshot.formulation.components.map((c: any, i: number) => {
+                        const isRequires = String(c.concentration || "").toLowerCase().includes("requires");
+                        return (
+                          <tr key={c.id || i} className="hover:bg-slate-50/60">
+                            <td className="py-2.5 px-3 font-semibold text-slate-900">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span>{c.componentName}</span>
+                                {c.isAiSuggested ? (
+                                  <span className="px-1.5 py-0.2 rounded bg-teal-50 border border-teal-200 text-teal-800 text-[9px] font-bold">
+                                    AI Suggested
+                                  </span>
+                                ) : null}
+                              </div>
+                            </td>
+                            <td className="py-2.5 px-3 text-slate-600 font-medium">
+                              {c.roleInFormulation || "Component"}
+                            </td>
+                            <td className="py-2.5 px-3">
+                              {isRequires ? (
+                                <span className="inline-block px-2 py-0.5 rounded bg-amber-50 border border-amber-300 text-amber-900 text-[10px] font-bold">
+                                  Requires Experimental Validation
+                                </span>
+                              ) : (
+                                <span className="font-mono text-xs font-bold text-emerald-900">
+                                  {c.concentration || c.quantity || "N/A"}
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-3 text-slate-500 text-[11px] max-w-xs">
+                              {c.notes || c.sourceReference || "Standard formulation excipient."}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="text-xs text-slate-500 italic py-4 text-center">
+                  No composition components documented yet.
+                </p>
+              )}
+            </section>
+
+            {/* Scientific Rationale & Compounding Protocol */}
+            {(snapshot?.formulation?.researcherRationale || (snapshot?.formulation?.steps && snapshot.formulation.steps.length > 0)) && (
+              <section className="bg-white rounded-2xl border border-slate-200/90 p-6 shadow-xs space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                  <h3 className="text-sm font-bold text-slate-900">
+                    Scientific Rationale & Compounding Protocol
+                  </h3>
+                  {!isApproved && (
+                    <button
+                      type="button"
+                      onClick={() => handleAddInlineComment("Scientific Rationale", "SOP Protocol")}
+                      className="text-xs font-semibold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                    >
+                      + Add Comment
+                    </button>
+                  )}
+                </div>
+
+                {snapshot?.formulation?.researcherRationale && (
+                  <div className="space-y-1">
+                    <h4 className="text-xs font-bold text-slate-800">Formulation Rationale:</h4>
+                    <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3 rounded-xl">
+                      {snapshot.formulation.researcherRationale}
+                    </p>
+                  </div>
+                )}
+
+                {snapshot?.formulation?.steps && snapshot.formulation.steps.length > 0 && (
+                  <div className="space-y-2 pt-2">
+                    <h4 className="text-xs font-bold text-slate-800">Compounding SOP Steps:</h4>
+                    <div className="space-y-1.5">
+                      {snapshot.formulation.steps.map((st: any) => (
+                        <div key={st.stepNumber || st.id} className="flex items-start gap-2.5 text-xs text-slate-700 bg-slate-50 p-2.5 rounded-xl">
+                          <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center text-[10px] shrink-0 mt-0.5">
+                            {st.stepNumber}
+                          </span>
+                          <span className="leading-relaxed">{st.procedureText || st.text}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </section>
+            )}
+          </div>
+        )}
+
+        {/* SECTION 3: CLINICAL SAFETY & PAPER SUBMISSION REVIEW */}
+        {roleKey === "pharmacology" && (
           <div className="space-y-6">
             <section className="bg-white rounded-2xl border border-slate-200/90 p-6 shadow-xs space-y-4">
               <div className="flex items-center justify-between pb-3 border-b border-slate-100">
@@ -1091,7 +1253,7 @@ export default function RoleCheckingWorkspaceClient({
                 {!isApproved && (
                   <button
                     type="button"
-                    onClick={() => handleAddInlineComment(stageConfig.stageTitle, "Experimental Protocol")}
+                    onClick={() => handleAddInlineComment(stageConfig.stageTitle, "Clinical Safety Protocol")}
                     className="text-xs font-semibold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
                   >
                     + Add Comment
@@ -1099,7 +1261,7 @@ export default function RoleCheckingWorkspaceClient({
                 )}
               </div>
               <p className="text-xs text-slate-600">
-                Verified research dossier records submitted by {researcherName}. Review the full scientific methodology below.
+                Verified research dossier records submitted by {researcherName}. Review the clinical safety assessment below.
               </p>
             </section>
           </div>

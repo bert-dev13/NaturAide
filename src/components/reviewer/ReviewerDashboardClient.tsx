@@ -2,643 +2,636 @@
 
 import React, { useState, useMemo } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
-  ClipboardList,
-  Clock,
   FileCheck2,
-  RotateCcw,
-  CheckCircle2,
-  ArrowRight,
-  ChevronRight,
-  Leaf,
-  ShieldCheck,
+  Clock3,
   AlertTriangle,
-  History,
-  Activity,
+  CheckCircle2,
   Search,
-  Filter,
+  ArrowRight,
+  SlidersHorizontal,
+  ShieldCheck,
+  Sprout,
   UserCheck,
-  AlertCircle,
-  FileText,
-  Library,
-  Stethoscope,
-  Microscope,
-  Building2,
-  Calendar,
-  Lock,
+  X,
+  Check,
+  Loader2,
 } from "lucide-react";
+import { EXPERT_REVIEW_AREAS, type ExpertReviewAreaKey } from "@/lib/expert-review-areas";
+import { useReviewerProject } from "@/context/ReviewerProjectContext";
 
-export interface ReviewAssignmentItem {
-  assignmentId: number;
-  submissionId: number;
+interface SpecialtyBadge {
+  areaKey: ExpertReviewAreaKey;
+  label: string;
+  status?: "Pending" | "In Review" | "Revision Required" | "Approved";
+}
+
+interface ResearchRow {
   projectId: number;
-  status: "PENDING" | "IN_REVIEW" | "REVISION_REQUIRED" | "RESUBMITTED" | "COMPLETED";
-  specialtyNeeded: string;
-  reviewRound: number;
-  assignedAt: string;
-  startedAt: string | null;
-  completedAt: string | null;
-  projectTitle: string;
+  submissionId: number;
+  title: string;
   plantName: string;
-  plantScientificName: string | null;
+  plantScientificName: string;
   researcherName: string;
-  researcherEmail: string;
   versionTag: string;
-  submittedAt: string;
-  messageToReviewers: string | null;
-  highPriorityConcernsCount: number;
-  snapshotData?: any;
+  reviewRound: number;
+  assignedSpecialties: SpecialtyBadge[];
+  allSpecialties: Array<{
+    areaKey: ExpertReviewAreaKey;
+    order: number;
+    label: string;
+    shortLabel: string;
+    status: "Pending" | "In Review" | "Revision Required" | "Approved";
+    rawStatus: string;
+    isAssignedToMe: boolean;
+    assignmentId: number | null;
+  }>;
+  reviewStatus: "Pending" | "In Review" | "Revision Required" | "Approved";
+  lastUpdated: string;
+  isLocked: boolean;
 }
 
-export interface ReviewerProfile {
-  specialty: string;
-  verificationStatus: "VERIFIED" | "PENDING_VERIFICATION" | "SUSPENDED";
-  professionalTitle: string;
-  institution: string;
-  licenseNumber?: string;
-  areasOfExpertise?: string;
-}
-
-export interface ReviewerDashboardProps {
-  reviewerName: string;
-  reviewerProfile: ReviewerProfile;
-  stats: {
-    assignedCount: number;
-    newSubmissionsCount: number;
-    inReviewCount: number;
-    needsRevisionCount: number;
-    completedCount: number;
+interface Props {
+  user: {
+    id: number;
+    name: string;
+    email: string;
   };
-  assignments: ReviewAssignmentItem[];
-  recentActivities: {
-    actionType: string;
-    description: string;
-    createdAt: string;
-  }[];
+  profile: any;
+  initialAssignedSpecialties: SpecialtyBadge[];
+  metrics: {
+    assignedResearch: number;
+    pendingReviews: number;
+    revisionsRequested: number;
+    completedReviews: number;
+  };
+  initialResearchList: ResearchRow[];
+}
+
+function getReviewStatusBadge(status: "Pending" | "In Review" | "Revision Required" | "Approved") {
+  switch (status) {
+    case "Approved":
+      return {
+        label: "Approved",
+        className: "bg-emerald-50 text-emerald-700 border-emerald-200",
+        dotColor: "bg-emerald-500",
+      };
+    case "Revision Required":
+      return {
+        label: "Revision Required",
+        className: "bg-amber-50 text-amber-800 border-amber-200",
+        dotColor: "bg-amber-500",
+      };
+    case "In Review":
+      return {
+        label: "In Review",
+        className: "bg-sky-50 text-sky-700 border-sky-200",
+        dotColor: "bg-sky-500",
+      };
+    case "Pending":
+    default:
+      return {
+        label: "Pending",
+        className: "bg-slate-100 text-slate-700 border-slate-200",
+        dotColor: "bg-slate-400",
+      };
+  }
+}
+
+function formatShortDate(dateStr?: string) {
+  if (!dateStr) return "—";
+  try {
+    return new Date(dateStr).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      timeZone: "UTC",
+    });
+  } catch {
+    return "—";
+  }
 }
 
 export default function ReviewerDashboardClient({
-  reviewerName,
-  reviewerProfile,
-  stats,
-  assignments,
-  recentActivities,
-}: ReviewerDashboardProps) {
-  // Tab state: ALL | NEW | IN_REVIEW | REVISION_RETURNED | COMPLETED
-  const [activeTab, setActiveTab] = useState<"ALL" | "NEW" | "IN_REVIEW" | "REVISION_RETURNED" | "COMPLETED">("ALL");
+  user,
+  profile,
+  initialAssignedSpecialties,
+  metrics: initialMetrics,
+  initialResearchList,
+}: Props) {
+  const router = useRouter();
+  const { setActiveProject } = useReviewerProject();
 
-  // Search & Filter state
+  const [assignedSpecialties, setAssignedSpecialties] = useState<SpecialtyBadge[]>(
+    initialAssignedSpecialties
+  );
+  const [researchList, setResearchList] = useState<ResearchRow[]>(initialResearchList);
+  const [metrics, setMetrics] = useState(initialMetrics);
   const [searchQuery, setSearchQuery] = useState("");
-  const [specialtyFilter, setSpecialtyFilter] = useState("ALL");
-  const [sortOrder, setSortOrder] = useState<"NEWEST" | "OLDEST">("NEWEST");
-  const [safetyFilter, setSafetyFilter] = useState<"ALL" | "HAS_CONCERNS" | "STANDARD">("ALL");
+  const [statusFilter, setStatusFilter] = useState<string>("ALL");
 
-  const isVerified = reviewerProfile.verificationStatus === "VERIFIED";
-  const isPending = reviewerProfile.verificationStatus === "PENDING_VERIFICATION";
-  const isSuspended = reviewerProfile.verificationStatus === "SUSPENDED";
+  // Specialty assignment modal state
+  const [showSpecialtyModal, setShowSpecialtyModal] = useState(false);
+  const [selectedAreaKeys, setSelectedAreaKeys] = useState<ExpertReviewAreaKey[]>(
+    initialAssignedSpecialties.map((s) => s.areaKey)
+  );
+  const [isSavingSpecialties, setIsSavingSpecialties] = useState(false);
+  const [specialtyMessage, setSpecialtyMessage] = useState<string | null>(null);
 
-  // Filter & Search logic
-  const filteredAssignments = useMemo(() => {
-    return assignments.filter((item) => {
-      // Tab filter
-      if (activeTab === "NEW") {
-        if (item.status !== "PENDING") return false;
-      } else if (activeTab === "IN_REVIEW") {
-        if (item.status !== "IN_REVIEW") return false;
-      } else if (activeTab === "REVISION_RETURNED") {
-        if (item.status !== "REVISION_REQUIRED" && item.status !== "RESUBMITTED") return false;
-      } else if (activeTab === "COMPLETED") {
-        if (item.status !== "COMPLETED") return false;
+  const filteredList = useMemo(() => {
+    return researchList.filter((item) => {
+      if (statusFilter === "PENDING" && item.reviewStatus !== "Pending" && item.reviewStatus !== "In Review") {
+        return false;
+      }
+      if (statusFilter === "REVISION_REQUIRED" && item.reviewStatus !== "Revision Required") {
+        return false;
+      }
+      if (statusFilter === "APPROVED" && item.reviewStatus !== "Approved") {
+        return false;
       }
 
-      // Search query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
-        const matchesProject = item.projectTitle?.toLowerCase().includes(q);
+        const matchesTitle = item.title?.toLowerCase().includes(q);
         const matchesPlant =
           item.plantName?.toLowerCase().includes(q) ||
           item.plantScientificName?.toLowerCase().includes(q);
         const matchesResearcher = item.researcherName?.toLowerCase().includes(q);
-        if (!matchesProject && !matchesPlant && !matchesResearcher) return false;
-      }
-
-      // Specialty relevance
-      if (specialtyFilter === "MY_SPECIALTY") {
-        if (item.specialtyNeeded !== reviewerProfile.specialty) return false;
-      }
-
-      // Safety concern filter
-      if (safetyFilter === "HAS_CONCERNS") {
-        if (item.highPriorityConcernsCount === 0) return false;
-      } else if (safetyFilter === "STANDARD") {
-        if (item.highPriorityConcernsCount > 0) return false;
+        const matchesSpecialty = item.assignedSpecialties.some((s) =>
+          s.label.toLowerCase().includes(q)
+        );
+        return matchesTitle || matchesPlant || matchesResearcher || matchesSpecialty;
       }
 
       return true;
-    }).sort((a, b) => {
-      const timeA = new Date(a.assignedAt || a.submittedAt).getTime();
-      const timeB = new Date(b.assignedAt || b.submittedAt).getTime();
-      return sortOrder === "NEWEST" ? timeB - timeA : timeA - timeB;
     });
-  }, [assignments, activeTab, searchQuery, specialtyFilter, sortOrder, safetyFilter, reviewerProfile.specialty]);
+  }, [researchList, statusFilter, searchQuery]);
+
+  const handleToggleSpecialty = (key: ExpertReviewAreaKey) => {
+    setSelectedAreaKeys((prev) => {
+      if (prev.includes(key)) {
+        if (prev.length <= 1) return prev; // keep at least 1 specialty
+        return prev.filter((k) => k !== key);
+      }
+      return [...prev, key];
+    });
+  };
+
+  const handleSaveSpecialties = async () => {
+    setIsSavingSpecialties(true);
+    setSpecialtyMessage(null);
+    try {
+      const res = await fetch("/api/reviewer/specialties", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ specialties: selectedAreaKeys }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update specialties");
+
+      // Refresh dashboard data
+      const dashRes = await fetch("/api/reviewer/dashboard");
+      const dashData = await dashRes.json();
+      if (dashRes.ok && dashData.success) {
+        setAssignedSpecialties(dashData.assignedSpecialties);
+        setResearchList(dashData.researchList);
+        setMetrics(dashData.metrics);
+      }
+      setShowSpecialtyModal(false);
+      router.refresh();
+    } catch (err: any) {
+      setSpecialtyMessage(err.message || "Error saving specialties");
+    } finally {
+      setIsSavingSpecialties(false);
+    }
+  };
+
+  const handleOpenReview = (row: ResearchRow, preferredSpecialty?: string) => {
+    setActiveProject({
+      id: row.projectId,
+      title: row.title,
+      plantName: row.plantName,
+      plantScientificName: row.plantScientificName,
+      stages: row.allSpecialties.map((s) => ({
+        stageNumber: s.order,
+        stageKey: s.areaKey,
+        status: s.rawStatus,
+        statusLabel: s.status,
+      })),
+    });
+
+    const firstSpecialty =
+      preferredSpecialty || row.assignedSpecialties[0]?.areaKey || "pharmacognosy";
+    router.push(`/reviewer/projects/${row.projectId}?tab=section1&specialty=${firstSpecialty}`);
+  };
 
   return (
-    <div className="space-y-8">
-      {/* VERIFICATION NOTICE BANNER */}
-      {isPending && (
-        <div className="p-4 rounded-2xl bg-amber-50 border border-amber-300 text-amber-950 text-xs flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
-          <div className="space-y-1">
-            <span className="font-bold block text-amber-900">
-              Reviewer Credentials Pending Verification
-            </span>
-            <p className="text-[11px] text-amber-900/90 leading-relaxed">
-              Your professional reviewer profile is currently pending verification by the NaturAide Medical Oversight Board. You may inspect assigned research dossiers, but official review decisions remain locked until verification is confirmed.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {isSuspended && (
-        <div className="p-4 rounded-2xl bg-rose-50 border border-rose-300 text-rose-950 text-xs flex items-start gap-3">
-          <AlertTriangle className="w-5 h-5 text-rose-700 shrink-0 mt-0.5" />
-          <div className="space-y-1">
-            <span className="font-bold block text-rose-900">
-              Review Privileges Suspended
-            </span>
-            <p className="text-[11px] text-rose-900/90 leading-relaxed">
-              Your professional reviewer privileges have been suspended. Please contact the NaturAide Scientific Support team for assistance.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* HEADER BANNER */}
-      <div className="p-6 sm:p-8 rounded-3xl bg-gradient-to-br from-[#092218] to-[#123e2d] text-white space-y-4 shadow-sm relative overflow-hidden">
-        <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-teal-400/10 to-transparent pointer-events-none" />
-
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
-          <div className="space-y-2 max-w-2xl">
+    <div className="w-full max-w-[1440px] mx-auto space-y-6 pb-12">
+      {/* 1. COMPACT DASHBOARD HEADER */}
+      <div className="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-xs">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="space-y-1.5">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="px-3 py-1 rounded-full bg-teal-400/20 text-teal-200 border border-teal-400/30 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
-                <ShieldCheck className="w-3.5 h-3.5 text-teal-300" />
-                <span>Specialty: {reviewerProfile.specialty.replace(/_/g, " ")}</span>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200">
+                <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />
+                Professional Reviewer Platform
               </span>
-
-              <span
-                className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
-                  isVerified
-                    ? "bg-emerald-400/20 text-emerald-300 border border-emerald-400/30"
-                    : "bg-amber-400/20 text-amber-200 border border-amber-400/30"
-                }`}
-              >
-                {reviewerProfile.verificationStatus.replace(/_/g, " ")}
-              </span>
-
-              <span className="text-xs text-teal-200/80 font-medium">
-                {reviewerProfile.institution}
-              </span>
+              {profile?.professionalTitle && (
+                <span className="text-xs font-medium text-slate-500">
+                  {profile.professionalTitle}
+                </span>
+              )}
             </div>
-
-            <h1 className="text-2xl sm:text-3xl font-heading font-extrabold tracking-tight text-white">
-              Professional Review Workspace
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+              Reviewer Dashboard
             </h1>
-            <p className="text-xs sm:text-sm text-teal-100/90 leading-relaxed">
-              Welcome to the Professional Review Workspace. Conduct independent clinical and pharmacological evaluations of locked research dossiers, document risk reviews, and ensure scientific integrity.
+            <p className="text-xs sm:text-sm text-slate-600">
+              Signed in as <span className="font-semibold text-slate-800">{user.name}</span> — Reviewing assigned multidisciplinary research submissions.
             </p>
           </div>
 
-          <div className="shrink-0 flex items-center gap-3">
-            <Link
-              href="/reviewer/profile"
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-teal-400 text-[#092218] hover:bg-teal-300 text-xs font-extrabold shadow-sm transition-all cursor-pointer"
-            >
-              <UserCheck className="w-4 h-4" />
-              <span>Reviewer Profile</span>
-            </Link>
+          {/* Assigned Specialties Display & Admin/Role Assignment Trigger */}
+          <div className="flex flex-col sm:items-end gap-2">
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                Assigned Specialties ({assignedSpecialties.length})
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedAreaKeys(assignedSpecialties.map((s) => s.areaKey));
+                  setSpecialtyMessage(null);
+                  setShowSpecialtyModal(true);
+                }}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/80 transition-colors cursor-pointer"
+              >
+                <SlidersHorizontal className="w-3 h-3" />
+                Assign Specialties
+              </button>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {EXPERT_REVIEW_AREAS.map((area) => {
+                const isAssigned = assignedSpecialties.some((s) => s.areaKey === area.key);
+                if (!isAssigned) return null;
+                return (
+                  <span
+                    key={area.key}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-900 text-white shadow-2xs"
+                  >
+                    <span className="text-[10px] font-mono text-indigo-300 font-bold">
+                      0{area.order}
+                    </span>
+                    <span>{area.label}</span>
+                  </span>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* DASHBOARD KPIS (5 REAL COUNTS) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
-        {/* Total Assigned */}
+      {/* 2. FOUR COMPACT METRICS */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
         <button
           type="button"
-          onClick={() => setActiveTab("ALL")}
-          className={`p-4 rounded-2xl border text-left transition-all ${
-            activeTab === "ALL"
-              ? "bg-[#0f2c20] text-white border-[#0f2c20] shadow-sm"
-              : "bg-white border-[#dde6df] hover:border-teal-500 text-[#0f2c20]"
+          onClick={() => setStatusFilter("ALL")}
+          className={`text-left p-4 sm:p-5 rounded-xl border transition-all cursor-pointer ${
+            statusFilter === "ALL"
+              ? "bg-white border-indigo-500 ring-2 ring-indigo-500/10 shadow-xs"
+              : "bg-white border-slate-200/90 hover:border-slate-300 shadow-2xs"
           }`}
         >
-          <div className="flex items-center justify-between pb-1">
-            <span className={`text-xs font-bold ${activeTab === "ALL" ? "text-teal-200" : "text-[#78997f]"}`}>
-              Assigned Reviews
-            </span>
-            <ClipboardList className={`w-4 h-4 ${activeTab === "ALL" ? "text-teal-300" : "text-teal-700"}`} />
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-500">Assigned Research</span>
+            <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+              <FileCheck2 className="w-4 h-4" />
+            </div>
           </div>
-          <div className="text-2xl font-heading font-extrabold">{stats.assignedCount}</div>
-          <p className={`text-[10px] mt-0.5 ${activeTab === "ALL" ? "text-teal-200/70" : "text-[#78997f]"}`}>
-            Total active roster
+          <p className="mt-2 text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
+            {metrics.assignedResearch}
           </p>
+          <p className="mt-0.5 text-[11px] text-slate-500">Total active research dossiers</p>
         </button>
 
-        {/* New Submissions */}
         <button
           type="button"
-          onClick={() => setActiveTab("NEW")}
-          className={`p-4 rounded-2xl border text-left transition-all ${
-            activeTab === "NEW"
-              ? "bg-amber-600 text-white border-amber-600 shadow-sm"
-              : "bg-white border-[#dde6df] hover:border-amber-500 text-[#0f2c20]"
+          onClick={() => setStatusFilter("PENDING")}
+          className={`text-left p-4 sm:p-5 rounded-xl border transition-all cursor-pointer ${
+            statusFilter === "PENDING"
+              ? "bg-white border-sky-500 ring-2 ring-sky-500/10 shadow-xs"
+              : "bg-white border-slate-200/90 hover:border-slate-300 shadow-2xs"
           }`}
         >
-          <div className="flex items-center justify-between pb-1">
-            <span className={`text-xs font-bold ${activeTab === "NEW" ? "text-amber-100" : "text-[#78997f]"}`}>
-              New Submissions
-            </span>
-            <Clock className={`w-4 h-4 ${activeTab === "NEW" ? "text-amber-200" : "text-amber-600"}`} />
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-500">Pending Reviews</span>
+            <div className="w-8 h-8 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center">
+              <Clock3 className="w-4 h-4" />
+            </div>
           </div>
-          <div className="text-2xl font-heading font-extrabold">{stats.newSubmissionsCount}</div>
-          <p className={`text-[10px] mt-0.5 ${activeTab === "NEW" ? "text-amber-100/80" : "text-[#78997f]"}`}>
-            Awaiting first review
+          <p className="mt-2 text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
+            {metrics.pendingReviews}
           </p>
+          <p className="mt-0.5 text-[11px] text-slate-500">Awaiting review or in progress</p>
         </button>
 
-        {/* In Review */}
         <button
           type="button"
-          onClick={() => setActiveTab("IN_REVIEW")}
-          className={`p-4 rounded-2xl border text-left transition-all ${
-            activeTab === "IN_REVIEW"
-              ? "bg-teal-700 text-white border-teal-700 shadow-sm"
-              : "bg-white border-[#dde6df] hover:border-teal-500 text-[#0f2c20]"
+          onClick={() => setStatusFilter("REVISION_REQUIRED")}
+          className={`text-left p-4 sm:p-5 rounded-xl border transition-all cursor-pointer ${
+            statusFilter === "REVISION_REQUIRED"
+              ? "bg-white border-amber-500 ring-2 ring-amber-500/10 shadow-xs"
+              : "bg-white border-slate-200/90 hover:border-slate-300 shadow-2xs"
           }`}
         >
-          <div className="flex items-center justify-between pb-1">
-            <span className={`text-xs font-bold ${activeTab === "IN_REVIEW" ? "text-teal-100" : "text-[#78997f]"}`}>
-              In Review
-            </span>
-            <FileCheck2 className={`w-4 h-4 ${activeTab === "IN_REVIEW" ? "text-teal-200" : "text-teal-700"}`} />
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-500">Revisions Requested</span>
+            <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+              <AlertTriangle className="w-4 h-4" />
+            </div>
           </div>
-          <div className="text-2xl font-heading font-extrabold">{stats.inReviewCount}</div>
-          <p className={`text-[10px] mt-0.5 ${activeTab === "IN_REVIEW" ? "text-teal-100/80" : "text-[#78997f]"}`}>
-            Under active evaluation
+          <p className="mt-2 text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
+            {metrics.revisionsRequested}
           </p>
+          <p className="mt-0.5 text-[11px] text-slate-500">Returned for researcher revision</p>
         </button>
 
-        {/* Needs Revision */}
         <button
           type="button"
-          onClick={() => setActiveTab("REVISION_RETURNED")}
-          className={`p-4 rounded-2xl border text-left transition-all ${
-            activeTab === "REVISION_RETURNED"
-              ? "bg-blue-600 text-white border-blue-600 shadow-sm"
-              : "bg-white border-[#dde6df] hover:border-blue-500 text-[#0f2c20]"
+          onClick={() => setStatusFilter("APPROVED")}
+          className={`text-left p-4 sm:p-5 rounded-xl border transition-all cursor-pointer ${
+            statusFilter === "APPROVED"
+              ? "bg-white border-emerald-500 ring-2 ring-emerald-500/10 shadow-xs"
+              : "bg-white border-slate-200/90 hover:border-slate-300 shadow-2xs"
           }`}
         >
-          <div className="flex items-center justify-between pb-1">
-            <span className={`text-xs font-bold ${activeTab === "REVISION_RETURNED" ? "text-blue-100" : "text-[#78997f]"}`}>
-              Needs Revision
-            </span>
-            <RotateCcw className={`w-4 h-4 ${activeTab === "REVISION_RETURNED" ? "text-blue-200" : "text-blue-600"}`} />
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-500">Completed Reviews</span>
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <CheckCircle2 className="w-4 h-4" />
+            </div>
           </div>
-          <div className="text-2xl font-heading font-extrabold">{stats.needsRevisionCount}</div>
-          <p className={`text-[10px] mt-0.5 ${activeTab === "REVISION_RETURNED" ? "text-blue-100/80" : "text-[#78997f]"}`}>
-            Returned / resubmitted
+          <p className="mt-2 text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
+            {metrics.completedReviews}
           </p>
-        </button>
-
-        {/* Completed */}
-        <button
-          type="button"
-          onClick={() => setActiveTab("COMPLETED")}
-          className={`p-4 rounded-2xl border text-left transition-all ${
-            activeTab === "COMPLETED"
-              ? "bg-emerald-700 text-white border-emerald-700 shadow-sm"
-              : "bg-white border-[#dde6df] hover:border-emerald-500 text-[#0f2c20]"
-          }`}
-        >
-          <div className="flex items-center justify-between pb-1">
-            <span className={`text-xs font-bold ${activeTab === "COMPLETED" ? "text-emerald-100" : "text-[#78997f]"}`}>
-              Completed
-            </span>
-            <CheckCircle2 className={`w-4 h-4 ${activeTab === "COMPLETED" ? "text-emerald-200" : "text-emerald-600"}`} />
-          </div>
-          <div className="text-2xl font-heading font-extrabold">{stats.completedCount}</div>
-          <p className={`text-[10px] mt-0.5 ${activeTab === "COMPLETED" ? "text-emerald-100/80" : "text-[#78997f]"}`}>
-            Accepted for next stage
-          </p>
+          <p className="mt-0.5 text-[11px] text-slate-500">Approved across assigned areas</p>
         </button>
       </div>
 
-      {/* PRIMARY SECTION: ASSIGNED REVIEWS */}
-      <div className="p-6 rounded-3xl bg-white border border-[#dde6df] space-y-6 shadow-sm">
-        {/* TABS & SEARCH/FILTERS */}
-        <div className="space-y-4">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-[#edf2ee]">
-            <div>
-              <h2 className="text-base font-heading font-extrabold text-[#0f2c20] flex items-center gap-2">
-                <ClipboardList className="w-5 h-5 text-teal-700" />
-                <span>Assigned Research Reviews</span>
-              </h2>
-              <p className="text-xs text-[#78997f]">
-                Independent peer evaluations assigned to your clinical / pharmacological portfolio.
-              </p>
-            </div>
-
-            {/* Interactive Tabs */}
-            <div className="flex flex-wrap items-center gap-1.5 p-1 rounded-2xl bg-[#faf9f5] border border-[#dde6df] text-xs font-bold">
-              {[
-                { id: "ALL", label: "All" },
-                { id: "NEW", label: "New" },
-                { id: "IN_REVIEW", label: "In Review" },
-                { id: "REVISION_RETURNED", label: "Revision Returned" },
-                { id: "COMPLETED", label: "Completed" },
-              ].map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setActiveTab(tab.id as any)}
-                  className={`px-3 py-1.5 rounded-xl transition-colors cursor-pointer ${
-                    activeTab === tab.id
-                      ? "bg-[#0f2c20] text-white shadow-2xs"
-                      : "text-[#475550] hover:text-[#0f2c20] hover:bg-white"
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
+      {/* 3. COMPACT RESEARCH LIST */}
+      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h2 className="text-base font-bold text-slate-900">Assigned Research Submissions</h2>
+            <p className="text-xs text-slate-500">
+              Select a research project to open the multidisciplinary Review Workspace.
+            </p>
           </div>
 
-          {/* Search bar & 3 Filter Dropdowns */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {/* Search */}
-            <div className="relative">
-              <Search className="w-4 h-4 text-[#78997f] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <div className="flex items-center gap-2.5">
+            <div className="relative w-full sm:w-64">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Search project, plant, researcher..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 rounded-xl border border-[#dde6df] bg-[#faf9f5] text-xs text-[#0f2c20] outline-none placeholder:text-[#78997f]"
+                placeholder="Search title, plant, researcher..."
+                className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 focus:bg-white text-slate-800"
               />
             </div>
-
-            {/* Specialty Relevance */}
-            <select
-              value={specialtyFilter}
-              onChange={(e) => setSpecialtyFilter(e.target.value)}
-              className="p-2 rounded-xl border border-[#dde6df] bg-[#faf9f5] text-xs font-medium text-[#0f2c20] outline-none"
-            >
-              <option value="ALL">All Specialties</option>
-              <option value="MY_SPECIALTY">Matching My Specialty ({reviewerProfile.specialty})</option>
-            </select>
-
-            {/* Safety Concern Level */}
-            <select
-              value={safetyFilter}
-              onChange={(e) => setSafetyFilter(e.target.value as any)}
-              className="p-2 rounded-xl border border-[#dde6df] bg-[#faf9f5] text-xs font-medium text-[#0f2c20] outline-none"
-            >
-              <option value="ALL">All Safety Levels</option>
-              <option value="HAS_CONCERNS">⚠ High-Priority Concerns Only</option>
-              <option value="STANDARD">Standard Safety Profile</option>
-            </select>
-
-            {/* Submission Date Sort */}
-            <select
-              value={sortOrder}
-              onChange={(e) => setSortOrder(e.target.value as any)}
-              className="p-2 rounded-xl border border-[#dde6df] bg-[#faf9f5] text-xs font-medium text-[#0f2c20] outline-none"
-            >
-              <option value="NEWEST">Date: Newest First</option>
-              <option value="OLDEST">Date: Oldest First</option>
-            </select>
+            {statusFilter !== "ALL" && (
+              <button
+                type="button"
+                onClick={() => setStatusFilter("ALL")}
+                className="px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer shrink-0"
+              >
+                Reset Filter
+              </button>
+            )}
           </div>
         </div>
 
-        {/* REVIEW CARDS LIST */}
-        {filteredAssignments.length === 0 ? (
-          <div className="p-12 text-center text-xs text-[#78997f] space-y-2 border-2 border-dashed border-[#edf2ee] rounded-2xl">
-            <FileCheck2 className="w-8 h-8 text-[#b4c8b9] mx-auto" />
-            <p className="font-bold text-[#0f2c20]">No assigned reviews match your criteria</p>
-            <p className="text-[11px]">
-              When a researcher submits a project dossier, it will appear here automatically.
+        {filteredList.length === 0 ? (
+          <div className="p-10 text-center space-y-2">
+            <p className="text-sm font-semibold text-slate-700">No matching research submissions found</p>
+            <p className="text-xs text-slate-500">
+              Submitted research projects from the Researcher Workspace will appear here automatically.
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {filteredAssignments.map((item) => {
-              const isMatch = item.specialtyNeeded === reviewerProfile.specialty;
-
-              return (
-                <div
-                  key={item.assignmentId}
-                  className="p-5 rounded-2xl bg-[#faf9f5] border border-[#dde6df] hover:border-teal-500 hover:bg-white hover:shadow-xs transition-all space-y-3 flex flex-col justify-between group"
-                >
-                  <div className="space-y-2.5">
-                    {/* Header tags: Plant, Status, Version */}
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-900 border border-emerald-200 text-[10px] font-bold flex items-center gap-1">
-                          <Leaf className="w-3 h-3 text-emerald-600" />
-                          <span>{item.plantName}</span>
-                          {item.plantScientificName && (
-                            <span className="italic font-normal">({item.plantScientificName})</span>
-                          )}
-                        </span>
-
-                        <span className="px-2 py-0.5 rounded-md bg-[#092218] text-teal-300 text-[10px] font-bold uppercase tracking-wider">
-                          Dossier {item.versionTag}
-                        </span>
-                      </div>
-
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${
-                          item.status === "COMPLETED"
-                            ? "bg-emerald-100 text-emerald-950"
-                            : item.status === "IN_REVIEW"
-                            ? "bg-teal-100 text-teal-950"
-                            : item.status === "REVISION_REQUIRED" || item.status === "RESUBMITTED"
-                            ? "bg-blue-100 text-blue-950"
-                            : "bg-amber-100 text-amber-950"
-                        }`}
-                      >
-                        {item.status.replace(/_/g, " ")}
-                      </span>
-                    </div>
-
-                    {/* Project Title */}
-                    <h3 className="font-heading font-extrabold text-sm text-[#0f2c20] group-hover:text-teal-900 transition-colors line-clamp-2">
-                      {item.projectTitle}
-                    </h3>
-
-                    {/* Researcher & Specialty metadata */}
-                    <div className="text-xs text-[#78997f] space-y-1">
-                      <p>
-                        Researcher: <strong className="text-[#0f2c20]">{item.researcherName}</strong>
-                      </p>
-                      {item.specialtyNeeded && (
-                        <p className="text-[11px] flex items-center gap-1">
-                          <span>Requested Panel:</span>
-                          <span className="font-semibold text-[#0f2c20]">
-                            {item.specialtyNeeded.replace(/_/g, " ")}
-                          </span>
-                          {isMatch && (
-                            <span className="px-1.5 py-0.2 rounded bg-teal-100 text-teal-900 font-bold text-[9px]">
-                              Direct Match
-                            </span>
-                          )}
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Message to reviewers if provided */}
-                    {item.messageToReviewers && (
-                      <p className="text-[11px] text-[#475550] italic line-clamp-2 bg-white/80 p-2 rounded-xl border border-[#edf2ee]">
-                        &quot;{item.messageToReviewers}&quot;
-                      </p>
-                    )}
-
-                    {/* Real Safety Attention Flag (ONLY if actual concerns exist!) */}
-                    {item.highPriorityConcernsCount > 0 && (
-                      <div className="p-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-950 text-[11px] font-bold flex items-center gap-1.5">
-                        <AlertTriangle className="w-3.5 h-3.5 text-amber-700 shrink-0" />
-                        <span>
-                          ⚠ {item.highPriorityConcernsCount} High-Priority Safety Concern
-                          {item.highPriorityConcernsCount > 1 ? "s" : ""} Flagged
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Footer & Action */}
-                  <div className="pt-3 border-t border-[#edf2ee] flex items-center justify-between gap-2">
-                    <span className="text-[10px] text-[#78997f] flex items-center gap-1">
-                      <Calendar className="w-3 h-3 text-[#16a34a]" />
-                      <span>Submitted {new Date(item.submittedAt).toLocaleDateString()}</span>
-                    </span>
-
-                    <Link
-                      href={`/reviewer/reviews/${item.submissionId}`}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#0f2c20] hover:bg-[#1a4a37] text-white text-xs font-bold transition-all shadow-2xs group-hover:bg-teal-700 cursor-pointer"
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-slate-200/80 bg-slate-50/70 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                  <th className="py-3 px-5">Research Title</th>
+                  <th className="py-3 px-4">Plant Name</th>
+                  <th className="py-3 px-4">Researcher</th>
+                  <th className="py-3 px-4">Assigned Specialty</th>
+                  <th className="py-3 px-4">Review Status</th>
+                  <th className="py-3 px-4">Last Updated</th>
+                  <th className="py-3 px-5 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200/70 text-xs">
+                {filteredList.map((row) => {
+                  const statusBadge = getReviewStatusBadge(row.reviewStatus);
+                  return (
+                    <tr
+                      key={row.submissionId}
+                      className="hover:bg-slate-50/80 transition-colors group"
                     >
-                      <span>Review Dossier</span>
-                      <ArrowRight className="w-3.5 h-3.5 text-teal-300" />
-                    </Link>
-                  </div>
-                </div>
-              );
-            })}
+                      {/* Research Title */}
+                      <td className="py-3.5 px-5 max-w-[280px]">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-900 leading-snug">
+                            {row.title}
+                          </span>
+                          <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-indigo-50 text-indigo-700 border border-indigo-200/70">
+                            {row.versionTag}
+                          </span>
+                        </div>
+                      </td>
+
+                      {/* Plant Name */}
+                      <td className="py-3.5 px-4">
+                        <div className="flex items-center gap-1.5">
+                          <Sprout className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          <div>
+                            <p className="font-semibold text-slate-800">{row.plantName}</p>
+                            {row.plantScientificName && (
+                              <p className="text-[11px] italic font-serif text-slate-500">
+                                {row.plantScientificName}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Researcher */}
+                      <td className="py-3.5 px-4">
+                        <span className="font-medium text-slate-700">{row.researcherName}</span>
+                      </td>
+
+                      {/* Assigned Specialty */}
+                      <td className="py-3.5 px-4">
+                        <div className="flex flex-wrap gap-1 max-w-[290px]">
+                          {row.assignedSpecialties.map((spec) => {
+                            const specBadge = getReviewStatusBadge(spec.status || "Pending");
+                            return (
+                              <button
+                                key={spec.areaKey}
+                                type="button"
+                                onClick={() => handleOpenReview(row, spec.areaKey)}
+                                className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-slate-100 hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 border border-slate-200/90 hover:border-indigo-200 transition-colors cursor-pointer"
+                                title={`Open ${spec.label} Review (${spec.status || "Pending"})`}
+                              >
+                                <span className={`w-1.5 h-1.5 rounded-full ${specBadge.dotColor}`} />
+                                <span>{spec.label}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </td>
+
+                      {/* Review Status */}
+                      <td className="py-3.5 px-4">
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border ${statusBadge.className}`}
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full ${statusBadge.dotColor}`} />
+                          {statusBadge.label}
+                        </span>
+                      </td>
+
+                      {/* Last Updated */}
+                      <td suppressHydrationWarning className="py-3.5 px-4 text-slate-500 whitespace-nowrap">
+                        {formatShortDate(row.lastUpdated)}
+                      </td>
+
+                      {/* Open Review Action */}
+                      <td className="py-3.5 px-5 text-right whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenReview(row)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-2xs transition-colors cursor-pointer"
+                        >
+                          <span>Open Review</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
 
-      {/* 2 COLUMNS: RECENT ACTIVITY (REAL LOGS) & REVIEWER QUICK ACTIONS */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Recent Review Activity (2 Cols) */}
-        <div className="lg:col-span-2 p-6 rounded-3xl bg-white border border-[#dde6df] space-y-4 shadow-sm">
-          <div className="flex items-center justify-between pb-3 border-b border-[#edf2ee]">
-            <h2 className="font-heading font-extrabold text-base text-[#0f2c20] flex items-center gap-2">
-              <Activity className="w-4 h-4 text-teal-700" />
-              <span>Recent Review Activity</span>
-            </h2>
-            <span className="text-xs text-[#78997f]">Real audit log</span>
-          </div>
-
-          {recentActivities.length === 0 ? (
-            <p className="text-xs text-[#78997f] py-6 text-center">No review activity recorded yet.</p>
-          ) : (
-            <div className="space-y-2 text-xs">
-              {recentActivities.slice(0, 5).map((a, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-center justify-between p-3 rounded-xl bg-[#faf9f5] border border-[#edf2ee]"
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <span className="w-2 h-2 rounded-full bg-teal-600 shrink-0" />
-                    <span className="font-bold text-[#0f2c20] shrink-0">{a.actionType.replace(/_/g, " ")}:</span>
-                    <span className="text-[#475550] truncate">{a.description}</span>
-                  </div>
-                  <span className="text-[10px] text-[#78997f] shrink-0 ml-2">
-                    {new Date(a.createdAt).toLocaleDateString()}
-                  </span>
-                </div>
-              ))}
+      {/* 4. SPECIALTY ASSIGNMENT MODAL (Single or Multiple Specialties per Reviewer Account) */}
+      {showSpecialtyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-lg w-full overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <UserCheck className="w-4 h-4 text-indigo-600" />
+                <h3 className="text-sm font-bold text-slate-900">
+                  Assign Reviewer Specialties ({user.name})
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSpecialtyModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
-          )}
-        </div>
 
-        {/* Quick Actions (1 Col) */}
-        <div className="p-6 rounded-3xl bg-[#faf9f5] border border-[#dde6df] space-y-3 h-fit">
-          <div className="flex items-center gap-2 pb-2 border-b border-[#dde6df]">
-            <Building2 className="w-4 h-4 text-[#16a34a]" />
-            <h3 className="font-heading font-extrabold text-xs text-[#0f2c20] uppercase tracking-wider">
-              Reviewer Quick Actions
-            </h3>
+            <div className="p-5 space-y-3">
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Assign one or multiple professional review specialties to this qualified reviewer account. All assigned specialties appear within the same account without separate logins.
+              </p>
+
+              <div className="space-y-2">
+                {EXPERT_REVIEW_AREAS.map((area) => {
+                  const isSelected = selectedAreaKeys.includes(area.key);
+                  return (
+                    <button
+                      key={area.key}
+                      type="button"
+                      onClick={() => handleToggleSpecialty(area.key)}
+                      className={`w-full text-left p-3 rounded-xl border transition-all flex items-start justify-between gap-3 cursor-pointer ${
+                        isSelected
+                          ? "bg-indigo-50/60 border-indigo-500 text-slate-900"
+                          : "bg-white border-slate-200 hover:border-slate-300 text-slate-700"
+                      }`}
+                    >
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs font-bold text-indigo-600">
+                            0{area.order}
+                          </span>
+                          <span className="text-xs font-bold text-slate-900">
+                            {area.label}
+                          </span>
+                          <span className="text-[11px] text-slate-500">
+                            — {area.professionTitle}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 pl-6">{area.detail}</p>
+                      </div>
+                      <div
+                        className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 mt-0.5 border ${
+                          isSelected
+                            ? "bg-indigo-600 border-indigo-600 text-white"
+                            : "border-slate-300 bg-white"
+                        }`}
+                      >
+                        {isSelected && <Check className="w-3.5 h-3.5" />}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {specialtyMessage && (
+                <p className="text-xs font-medium text-rose-600">{specialtyMessage}</p>
+              )}
+            </div>
+
+            <div className="px-5 py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() =>
+                  setSelectedAreaKeys(EXPERT_REVIEW_AREAS.map((a) => a.key))
+                }
+                className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 cursor-pointer"
+              >
+                Select All 3 Roles
+              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowSpecialtyModal(false)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-200 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={isSavingSpecialties}
+                  onClick={handleSaveSpecialties}
+                  className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50 transition-colors cursor-pointer"
+                >
+                  {isSavingSpecialties && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  <span>Save Specialties</span>
+                </button>
+              </div>
+            </div>
           </div>
-
-          <div className="space-y-2 pt-1">
-            <Link
-              href="/reviewer/reviews"
-              className="flex items-center justify-between p-3 rounded-xl bg-white border border-[#dde6df] hover:border-teal-500 hover:bg-[#faf9f5] text-xs font-bold text-[#0f2c20] transition-colors"
-            >
-              <div className="flex items-center gap-2">
-                <ClipboardList className="w-4 h-4 text-teal-700" />
-                <span>Assigned Reviews</span>
-              </div>
-              <ChevronRight className="w-3.5 h-3.5 text-[#78997f]" />
-            </Link>
-
-            <Link
-              href="/reviewer/evidence"
-              className="flex items-center justify-between p-3 rounded-xl bg-white border border-[#dde6df] hover:border-teal-500 hover:bg-[#faf9f5] text-xs font-bold text-[#0f2c20] transition-colors"
-            >
-              <div className="flex items-center gap-2">
-                <Library className="w-4 h-4 text-teal-700" />
-                <span>Evidence Library</span>
-              </div>
-              <ChevronRight className="w-3.5 h-3.5 text-[#78997f]" />
-            </Link>
-
-            <Link
-              href="/reviewer/revisions"
-              className="flex items-center justify-between p-3 rounded-xl bg-white border border-[#dde6df] hover:border-teal-500 hover:bg-[#faf9f5] text-xs font-bold text-[#0f2c20] transition-colors"
-            >
-              <div className="flex items-center gap-2">
-                <RotateCcw className="w-4 h-4 text-teal-700" />
-                <span>Revision Requests</span>
-              </div>
-              <ChevronRight className="w-3.5 h-3.5 text-[#78997f]" />
-            </Link>
-
-            <Link
-              href="/reviewer/completed"
-              className="flex items-center justify-between p-3 rounded-xl bg-white border border-[#dde6df] hover:border-teal-500 hover:bg-[#faf9f5] text-xs font-bold text-[#0f2c20] transition-colors"
-            >
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-teal-700" />
-                <span>Completed Reviews</span>
-              </div>
-              <ChevronRight className="w-3.5 h-3.5 text-[#78997f]" />
-            </Link>
-
-            <Link
-              href="/reviewer/profile"
-              className="flex items-center justify-between p-3 rounded-xl bg-white border border-[#dde6df] hover:border-teal-500 hover:bg-[#faf9f5] text-xs font-bold text-[#0f2c20] transition-colors"
-            >
-              <div className="flex items-center gap-2">
-                <UserCheck className="w-4 h-4 text-teal-700" />
-                <span>Reviewer Profile</span>
-              </div>
-              <ChevronRight className="w-3.5 h-3.5 text-[#78997f]" />
-            </Link>
-          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

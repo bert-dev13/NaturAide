@@ -180,19 +180,15 @@ if (-not $mysqlPortOpen) {
 } else {
     Write-Success "MySQL server is running and reachable on localhost:3306."
     
-    # Read-only database check if mysql CLI is available
+    # Auto-ensure database exists if mysql CLI is available
     if ($mysqlBin) {
         try {
-            $dbCheck = & $mysqlBin -u root -N -e "SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'natureaide_db';" 2>$null
-            if ($dbCheck -and $dbCheck.Trim() -eq "natureaide_db") {
-                $countCheck = & $mysqlBin -u root natureaide_db -N -e "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'natureaide_db';" 2>$null
-                $numTables = [int]($countCheck.Trim())
-                Write-Success "Database 'natureaide_db' exists in MySQL ($numTables tables found)."
-            } else {
-                Write-Info "Database 'natureaide_db' not detected yet. Remember to create/import it via phpMyAdmin."
-            }
+            & $mysqlBin -u root -e "CREATE DATABASE IF NOT EXISTS natureaide_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>$null
+            $countCheck = & $mysqlBin -u root natureaide_db -N -e "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'natureaide_db';" 2>$null
+            $numTables = [int]($countCheck.Trim())
+            Write-Success "Database 'natureaide_db' ready in MySQL ($numTables tables found)."
         } catch {
-            Write-Info "Could not query MySQL schema names (authentication or access restriction). Connectivity verified."
+            Write-Info "Could not execute mysql CLI directly. Connectivity verified on port 3306."
         }
     }
 }
@@ -230,41 +226,61 @@ if ($needsNpmInstall) {
 }
 
 # ==============================================================================
-# STEP 4: Synchronize Database Migrations (Community, Researcher, Reviewer, Shared)
+# STEP 4: Synchronize Database Migrations & Initial Seed Data
 # ==============================================================================
-Write-Step -StepNum "4/7" -Title "Synchronizing Database Migrations"
+Write-Step -StepNum "4/7" -Title "Synchronizing Database Migrations & Seed Data"
 
 if ($mysqlPortOpen) {
-    $canMigrate = $false
+    $npmCmd = if ($npmBin) { $npmBin } else { "npm" }
+
+    # 1. Automatically ensure database exists if mysql CLI is present
     if ($mysqlBin) {
         try {
-            $dbCheck = & $mysqlBin -u root -N -e "SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'natureaide_db';" 2>$null
-            if ($dbCheck -and $dbCheck.Trim() -eq "natureaide_db") {
-                $canMigrate = $true
-            }
+            & $mysqlBin -u root -e "CREATE DATABASE IF NOT EXISTS natureaide_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>$null
         } catch {}
-    } else {
-        $canMigrate = $true
     }
 
-    if ($canMigrate) {
-        Write-Info "Executing pending migrations across Community, Researcher, Reviewer, and Shared..."
-        Write-Host ""
+    # 2. Check if baseline tables exist (e.g. users table)
+    $hasUsers = $false
+    if ($mysqlBin) {
         try {
-            $npmCmd = if ($npmBin) { $npmBin } else { "npm" }
-            $migProcess = Start-Process -FilePath $npmCmd -ArgumentList "run db:migrate" -WorkingDirectory $ScriptDir -Wait -PassThru -NoNewWindow
-            if ($migProcess.ExitCode -ne 0) {
-                Write-WarningMsg "Some database migrations could not be automatically applied."
-                Write-Info "Run 'npm run db:migrate' to review details."
+            $tableCountCheck = & $mysqlBin -u root natureaide_db -N -e "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'natureaide_db' AND table_name = 'users';" 2>$null
+            if ($tableCountCheck -and [int]($tableCountCheck.Trim()) -gt 0) {
+                $hasUsers = $true
+            }
+        } catch {}
+    }
+
+    # 3. Seed baseline users & verified medicinal plant catalog if database is fresh
+    if (-not $hasUsers) {
+        Write-Info "Fresh database detected. Initializing tables, default users, and verified medicinal plant catalog..."
+        try {
+            $initProcess = Start-Process -FilePath $npmCmd -ArgumentList "exec -- tsx scripts/init-db.ts" -WorkingDirectory $ScriptDir -Wait -PassThru -NoNewWindow
+            if ($initProcess.ExitCode -eq 0) {
+                Write-Success "Baseline seed data successfully populated."
+            } else {
+                Write-WarningMsg "init-db reported non-zero exit code ($($initProcess.ExitCode)). Migrations will proceed."
             }
         } catch {
-            Write-WarningMsg "Could not run migrations automatically: $_"
+            Write-WarningMsg "Could not run init-db script: $_"
         }
-        Write-Host ""
-    } else {
-        Write-Info "Database 'natureaide_db' is not initialized yet. Skipping automatic migrations."
-        Write-Info "After creating/importing 'natureaide_db' in phpMyAdmin, run 'npm run db:migrate' to apply pending migrations."
     }
+
+    # 4. Synchronize pending migrations across Community, Researcher, Reviewer, and Shared
+    Write-Info "Executing pending migrations across Community, Researcher, Reviewer, and Shared..."
+    Write-Host ""
+    try {
+        $migProcess = Start-Process -FilePath $npmCmd -ArgumentList "run db:migrate" -WorkingDirectory $ScriptDir -Wait -PassThru -NoNewWindow
+        if ($migProcess.ExitCode -ne 0) {
+            Write-WarningMsg "Some database migrations could not be automatically applied."
+            Write-Info "Run 'npm run db:migrate' to review details."
+        } else {
+            Write-Success "All database migrations successfully synchronized."
+        }
+    } catch {
+        Write-WarningMsg "Could not run migrations automatically: $_"
+    }
+    Write-Host ""
 } else {
     Write-Info "MySQL server is not running on port 3306. Skipping migrations for now."
     Write-Info "Start MySQL in XAMPP and run 'npm run db:migrate' when ready."

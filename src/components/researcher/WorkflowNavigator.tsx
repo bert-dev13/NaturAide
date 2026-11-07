@@ -3,23 +3,10 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  FileText,
-  Leaf,
-  Library,
-  Cpu,
-  Dna,
-  FlaskConical,
-  ShieldAlert,
-  ClipboardCheck,
-  RotateCcw,
-  Microscope,
-  CheckCircle2,
-  Share2,
-  Check,
-} from "lucide-react";
+import { Check } from "lucide-react";
 
 import { WORKFLOW_STAGES, type WorkflowStage, getStageUrl } from "@/lib/workflow-stages";
+import { StageIcon } from "./workflow-stage-icons";
 export { WORKFLOW_STAGES, type WorkflowStage, getStageUrl };
 
 export default function WorkflowNavigator({
@@ -47,7 +34,6 @@ export default function WorkflowNavigator({
       {/* Horizontal step bar with icons & completion indicators */}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
         {WORKFLOW_STAGES.map((stage) => {
-          const Icon = stage.icon;
           const status = stagesStatus[stage.key] || "NOT_STARTED";
           const isCompleted = status === "COMPLETED";
           const isCurrent =
@@ -78,7 +64,7 @@ export default function WorkflowNavigator({
                 {isCompleted ? <Check className="w-2.5 h-2.5 stroke-[3]" /> : stage.number}
               </div>
 
-              <Icon className="w-3.5 h-3.5 shrink-0" />
+              <StageIcon stageKey={stage.key} className="w-3.5 h-3.5 shrink-0" />
               <span>{stage.shortLabel}</span>
             </Link>
           );

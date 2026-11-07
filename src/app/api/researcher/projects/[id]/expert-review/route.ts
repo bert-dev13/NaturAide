@@ -304,7 +304,7 @@ export async function POST(
 
       return NextResponse.json({
         success: true,
-        message: "Dossier submitted for Professional Review across all 5 areas.",
+        message: "Dossier submitted for Professional Review across all 3 roles.",
         submissionId: opened.submissionId,
         reviewRound: opened.reviewRound,
       });

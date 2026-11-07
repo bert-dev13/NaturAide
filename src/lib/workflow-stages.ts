@@ -1,14 +1,3 @@
-import React from "react";
-import {
-  Leaf,
-  Cpu,
-  Dna,
-  FlaskConical,
-  ClipboardCheck,
-  CheckCircle2,
-  ShieldCheck,
-} from "lucide-react";
-
 export interface WorkflowStage {
   key: string;
   number: number;
@@ -16,7 +5,7 @@ export interface WorkflowStage {
   shortLabel: string;
   path: string;
   description: string;
-  icon: React.ElementType;
+  iconName?: string;
 }
 
 export const WORKFLOW_STAGES: WorkflowStage[] = [
@@ -27,7 +16,7 @@ export const WORKFLOW_STAGES: WorkflowStage[] = [
     shortLabel: "Plant & Lit",
     path: "plant-literature",
     description: "Investigate botanical classification, specimen authentication, and auto-curated scientific evidence.",
-    icon: Leaf,
+    iconName: "Leaf",
   },
   {
     key: "in-silico",
@@ -36,7 +25,7 @@ export const WORKFLOW_STAGES: WorkflowStage[] = [
     shortLabel: "In-Silico",
     path: "in-silico",
     description: "Perform computational screening and evaluate pharmacokinetics & drug-likeness (ADMET).",
-    icon: Cpu,
+    iconName: "Cpu",
   },
   {
     key: "docking",
@@ -45,7 +34,7 @@ export const WORKFLOW_STAGES: WorkflowStage[] = [
     shortLabel: "Docking",
     path: "docking",
     description: "Model binding interactions and molecular affinities with biological target proteins.",
-    icon: Dna,
+    iconName: "Dna",
   },
   {
     key: "formulation-safety",
@@ -54,7 +43,7 @@ export const WORKFLOW_STAGES: WorkflowStage[] = [
     shortLabel: "Formulation",
     path: "formulation-safety",
     description: "Develop, optimize, and document the research formulation and phytochemical composition.",
-    icon: FlaskConical,
+    iconName: "FlaskConical",
   },
   {
     key: "safety",
@@ -63,7 +52,7 @@ export const WORKFLOW_STAGES: WorkflowStage[] = [
     shortLabel: "Safety",
     path: "safety",
     description: "Evaluate preclinical and clinical safety evidence, toxicity boundaries, contraindications, and interactions.",
-    icon: ShieldCheck,
+    iconName: "ShieldCheck",
   },
   {
     key: "knowledge-integration",
@@ -72,7 +61,7 @@ export const WORKFLOW_STAGES: WorkflowStage[] = [
     shortLabel: "Integration",
     path: "knowledge-integration",
     description: "Synthesize multi-stage scientific findings, alignment, limitations, and final research dossier.",
-    icon: CheckCircle2,
+    iconName: "CheckCircle2",
   },
 ];
 
@@ -121,7 +110,32 @@ export function getStageByKey(key: string): WorkflowStage | undefined {
 }
 
 export function getStageUrl(projectId: number | string, stageKeyOrPath: string): string {
-  const stage = getStageByKey(stageKeyOrPath);
-  const path = stage ? stage.path : stageKeyOrPath;
-  return `/researcher/projects/${projectId}/${path}`;
+  if (!stageKeyOrPath) return `/researcher/projects/${projectId}/formulation-rd`;
+  const key = stageKeyOrPath.toLowerCase().trim();
+  if (key.includes("revis")) return `/researcher/projects/${projectId}/revisions`;
+  if (key.includes("completion") || key.includes("completed")) {
+    return `/researcher/projects/${projectId}/completion`;
+  }
+  if (
+    key.includes("submi") ||
+    key.includes("manuscript") ||
+    key.includes("knowledge") ||
+    key.includes("expert-review") ||
+    key.includes("review")
+  ) {
+    return `/researcher/projects/${projectId}/submission`;
+  }
+  if (key.includes("silico") || key.includes("docking")) {
+    return `/researcher/projects/${projectId}/in-silico`;
+  }
+  if (
+    key.includes("formulation") ||
+    key.includes("plant") ||
+    key.includes("evidence") ||
+    key.includes("batch") ||
+    key.includes("safety")
+  ) {
+    return `/researcher/projects/${projectId}/formulation-rd`;
+  }
+  return `/researcher/projects/${projectId}/formulation-rd`;
 }

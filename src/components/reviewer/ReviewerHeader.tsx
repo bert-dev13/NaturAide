@@ -26,12 +26,31 @@ export default function ReviewerHeader({
     role: string;
   };
 }) {
+  const [userName, setUserName] = useState(user?.name || "Professional Reviewer");
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const pathname = usePathname();
+
+  useEffect(() => {
+    if (user?.name) {
+      setUserName(user.name);
+    }
+  }, [user?.name]);
+
+  useEffect(() => {
+    const handleProfileUpdate = (e: any) => {
+      if (e.detail?.name) {
+        setUserName(e.detail.name);
+      }
+    };
+    window.addEventListener("natureaide:user-profile-updated", handleProfileUpdate);
+    return () => {
+      window.removeEventListener("natureaide:user-profile-updated", handleProfileUpdate);
+    };
+  }, []);
 
   useEffect(() => {
     async function fetchNotifs() {
@@ -184,15 +203,15 @@ export default function ReviewerHeader({
               title="Professional Reviewer Menu"
               aria-label="Professional Reviewer Menu"
             >
-              <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-700 flex items-center justify-center border border-blue-200 shadow-2xs">
-                <ShieldCheck className="w-4 h-4 text-blue-600" />
+              <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-700 flex items-center justify-center border border-blue-200 shadow-2xs font-bold text-xs">
+                {(userName || "P").charAt(0).toUpperCase()}
               </div>
               <div className="hidden sm:flex flex-col">
                 <span className="text-xs font-bold text-slate-800 leading-tight">
-                  Professional Reviewer
+                  {userName}
                 </span>
                 <span className="text-[10px] font-medium text-slate-500 leading-tight">
-                  Scientific Review Platform
+                  Professional Reviewer
                 </span>
               </div>
             </button>
@@ -200,8 +219,8 @@ export default function ReviewerHeader({
             {userMenuOpen && (
               <div className="absolute right-0 mt-2 w-56 rounded-2xl bg-white border border-slate-200 shadow-2xl py-2 z-50 text-slate-900 animate-in fade-in slide-in-from-top-2">
                 <div className="px-4 py-2.5 border-b border-slate-100">
-                  <p className="text-xs font-bold text-slate-900">Professional Reviewer</p>
-                  <p className="text-[10px] text-slate-500">Scientific Review Platform</p>
+                  <p className="text-xs font-bold text-slate-900">{userName}</p>
+                  <p className="text-[10px] text-slate-500">Professional Reviewer</p>
                 </div>
                 <div className="py-1 text-xs">
                   <Link

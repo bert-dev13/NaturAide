@@ -346,7 +346,7 @@ export default function AllProjectsDirectoryClient() {
                         <td className="py-4 px-5 max-w-xs xl:max-w-sm">
                           <div className="flex flex-col min-w-0">
                             <Link
-                              href={`/reviewer/projects/${project.projectId}`}
+                              href={`/reviewer/projects/${project.projectId}?tab=section1`}
                               onClick={() => handleSelectProject(project)}
                               className="font-heading font-bold text-sm text-slate-900 group-hover:text-blue-600 transition-colors line-clamp-1"
                               title={project.title}
@@ -502,7 +502,7 @@ export default function AllProjectsDirectoryClient() {
                         {/* Action */}
                         <td className="py-4 px-5 whitespace-nowrap text-right">
                           <Link
-                            href={`/reviewer/projects/${project.projectId}`}
+                            href={`/reviewer/projects/${project.projectId}?tab=section1`}
                             onClick={() => handleSelectProject(project)}
                             className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs ${
                               project.displayStatus === "Completed"
@@ -527,7 +527,7 @@ export default function AllProjectsDirectoryClient() {
                   <div>
                     <div className="flex items-center justify-between gap-2 mb-1">
                       <Link
-                        href={`/reviewer/projects/${project.projectId}`}
+                        href={`/reviewer/projects/${project.projectId}?tab=section1`}
                         onClick={() => handleSelectProject(project)}
                         className="font-heading font-bold text-base text-slate-900 hover:text-blue-600"
                       >
@@ -566,7 +566,7 @@ export default function AllProjectsDirectoryClient() {
 
                   <div className="pt-2">
                     <Link
-                      href={`/reviewer/projects/${project.projectId}`}
+                      href={`/reviewer/projects/${project.projectId}?tab=section1`}
                       onClick={() => handleSelectProject(project)}
                       className="w-full inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-colors"
                     >

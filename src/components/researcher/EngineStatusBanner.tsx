@@ -1,5 +1,7 @@
+"use client";
+
 import React from "react";
-import { AlertTriangle, Info, ShieldCheck } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 
 export default function EngineStatusBanner({
   engineName,

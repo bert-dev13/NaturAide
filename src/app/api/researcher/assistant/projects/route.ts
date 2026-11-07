@@ -13,7 +13,19 @@ export async function GET() {
     const [rows]: any = await pool.query(
       `SELECT rp.id, rp.title, rp.status, rp.currentStage,
               COALESCE(p.commonName, rp.plantCustomName, 'Unspecified Plant') as plantName,
-              p.scientificName as plantScientificName
+              p.scientificName as plantScientificName,
+              (
+                SELECT rm.fileName
+                FROM research_manuscripts rm
+                WHERE rm.projectId = rp.id
+                ORDER BY rm.id DESC
+                LIMIT 1
+              ) as manuscriptFileName,
+              (
+                SELECT COUNT(*)
+                FROM research_manuscripts rm
+                WHERE rm.projectId = rp.id AND (rm.fileName IS NOT NULL OR rm.storagePath IS NOT NULL)
+              ) > 0 as hasManuscript
        FROM research_projects rp
        LEFT JOIN plants p ON rp.plantId = p.id
        WHERE rp.researcherId = ?

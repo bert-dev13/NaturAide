@@ -4,12 +4,13 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { usePathname, useSearchParams } from "next/navigation";
 
 export interface ReviewFlowStage {
-  number: string;
+  number?: string;
   stageNumber: number;
-  stageName: string;
-  professionalExpert: string;
-  expertise: string;
-  areaKey: string;
+  stageName?: string;
+  professionalExpert?: string;
+  expertise?: string;
+  areaKey?: string;
+  stageKey?: string;
   status:
     | "APPROVED"
     | "IN_REVIEW"
@@ -19,9 +20,12 @@ export interface ReviewFlowStage {
     | "NOT_SUBMITTED"
     | string;
   statusLabel: string;
-  actionUrl: string;
+  actionUrl?: string;
   reviewerName?: string | null;
   approvedAt?: string | null;
+  approvedStepCount?: number;
+  totalStepCount?: number;
+  approvedPercent?: number;
 }
 
 export interface ActiveProjectInfo {
@@ -50,22 +54,21 @@ const ReviewerProjectContext = createContext<ReviewerProjectContextType>({
 const STORAGE_KEY = "natureaide_active_review_project";
 
 export function ReviewerProjectProvider({ children }: { children: React.ReactNode }) {
-  const [activeProject, setActiveProjectState] = useState<ActiveProjectInfo | null>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (parsed && typeof parsed.id === "number") {
-            return parsed;
-          }
+  const [activeProject, setActiveProjectState] = useState<ActiveProjectInfo | null>(null);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed.id === "number") {
+          setActiveProjectState((prev) => prev || parsed);
         }
-      } catch (e) {
-        console.error("Failed to read active project from localStorage:", e);
       }
+    } catch (e) {
+      console.error("Failed to read active project from localStorage:", e);
     }
-    return null;
-  });
+  }, []);
 
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -99,8 +102,31 @@ export function ReviewerProjectProvider({ children }: { children: React.ReactNod
             title: data.project.title,
             plantName: data.project.plantName,
             plantScientificName: data.project.plantScientificName || null,
-            status: data.project.overallStatus || data.project.projectStatus || "Under Review",
-            stages: data.project.stages || [],
+            status:
+              data.project.overallReviewStatus ||
+              data.project.overallStatus ||
+              data.project.projectStatus ||
+              "Under Review",
+            stages:
+              data.project?.stages ||
+              (data.specialties || []).map((s: any) => {
+                const total = s.totalStepCount || (s.order === 1 ? 6 : s.order === 2 ? 8 : 2);
+                const count = s.approvedStepCount ?? (s.approvedSteps?.length || 0);
+                const percent =
+                  s.approvedPercent ??
+                  (s.status === "Approved" ? 100 : Math.round((count / total) * 100));
+                return {
+                  stageNumber: s.order,
+                  stageKey: s.areaKey,
+                  areaKey: s.areaKey,
+                  status: s.rawStatus || s.status,
+                  statusLabel: s.status,
+                  reviewerName: s.reviewerName,
+                  approvedStepCount: count,
+                  totalStepCount: total,
+                  approvedPercent: percent,
+                };
+              }),
           });
         }
       })
@@ -149,10 +175,10 @@ export function ReviewerProjectProvider({ children }: { children: React.ReactNod
       }
     }
 
-    if (projectIdFromUrl && (!activeProject || activeProject.id !== projectIdFromUrl || !activeProject.stages)) {
+    if (projectIdFromUrl) {
       fetchProjectDetails(projectIdFromUrl);
     }
-  }, [pathname, searchParams, activeProject, fetchProjectDetails]);
+  }, [pathname, searchParams, fetchProjectDetails]);
 
   return (
     <ReviewerProjectContext.Provider

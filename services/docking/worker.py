@@ -98,7 +98,14 @@ def prep_ligand(a):
         method += " (no force-field optimisation)"
 
     try:
-        setups = MoleculePreparation().prepare(mol)
+        # Rigidify terminal -OH / -SH hydrogen rotors: in AutoDock Vina's heavy-atom scoring function,
+        # polar hydrogens (HD) have zero steric/direct pairwise energy (their presence only types parent OA/SA as donor),
+        # so rotating C-O-H only spins H around the C-O axis with zero energy gradient while inflating TORSDOF and BFGS steps.
+        prep = MoleculePreparation(
+            rigidify_bonds_smarts=["[*]-[OX2H1,SX2H1]"],
+            rigidify_bonds_indices=[(0, 1)],
+        )
+        setups = prep.prepare(mol)
         pdbqt, ok, err = PDBQTWriterLegacy.write_string(setups[0])
     except Exception as e:  # noqa: BLE001
         fail(f"Meeko could not prepare the ligand: {e}")
@@ -239,6 +246,48 @@ def sites(a):
     emit({"ok": True, "chain": protein_chain, "candidates": list(found.values())})
 
 
+def calc_props(a):
+    try:
+        from rdkit import Chem
+        from rdkit.Chem import rdMolDescriptors
+    except Exception as e:
+        fail(f"RDKit calculation libraries unavailable: {e}")
+
+    smiles = a.smiles.strip()
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        fail(f"SMILES could not be parsed by RDKit: {smiles}")
+
+    crippen_logp, _ = rdMolDescriptors.CalcCrippenDescriptors(mol)
+    mw = round(rdMolDescriptors._CalcMolWt(mol), 2)
+    exact_mw = round(rdMolDescriptors.CalcExactMolWt(mol), 4)
+    formula = rdMolDescriptors.CalcMolFormula(mol)
+    logp = round(crippen_logp, 2)
+    tpsa = round(rdMolDescriptors.CalcTPSA(mol), 2)
+    hbd = rdMolDescriptors.CalcNumHBD(mol)
+    hba = rdMolDescriptors.CalcNumHBA(mol)
+    rot_bonds = rdMolDescriptors.CalcNumRotatableBonds(mol)
+    aromatic_rings = rdMolDescriptors.CalcNumAromaticRings(mol)
+    heavy_atoms = mol.GetNumHeavyAtoms()
+    fraction_csp3 = round(rdMolDescriptors.CalcFractionCSP3(mol), 3)
+
+    emit({
+        "ok": True,
+        "molecularWeight": mw,
+        "exactMolecularWeight": exact_mw,
+        "molecularFormula": formula,
+        "logP": logp,
+        "tpsa": tpsa,
+        "hBondDonors": hbd,
+        "hBondAcceptors": hba,
+        "rotatableBonds": rot_bonds,
+        "aromaticRings": aromatic_rings,
+        "heavyAtoms": heavy_atoms,
+        "fractionCsp3": fraction_csp3,
+        "rdkitVersion": getattr(Chem, "__version__", "installed"),
+    })
+
+
 def main():
     p = argparse.ArgumentParser()
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -246,8 +295,10 @@ def main():
     s = sub.add_parser("prep-ligand"); s.add_argument("--smiles", required=True); s.add_argument("--out", required=True)
     s = sub.add_parser("prep-receptor"); s.add_argument("--pdb", required=True); s.add_argument("--out", required=True)
     s = sub.add_parser("sites"); s.add_argument("--pdb", required=True)
+    s = sub.add_parser("calc-props"); s.add_argument("--smiles", required=True)
     a = p.parse_args()
-    {"tools": tools, "prep-ligand": prep_ligand, "prep-receptor": prep_receptor, "sites": sites}[a.cmd](a)
+    {"tools": tools, "prep-ligand": prep_ligand, "prep-receptor": prep_receptor, "sites": sites, "calc-props": calc_props}[a.cmd](a)
+
 
 
 if __name__ == "__main__":
