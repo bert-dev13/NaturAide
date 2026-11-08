@@ -8,6 +8,7 @@ import {
   getManuscriptRecord,
   getSection3CompiledContext,
 } from "@/lib/manuscript-upload-service";
+import { isIncompleteResearchSummary } from "@/lib/research-summary-utils";
 import { getProjectProfessionalApprovalState } from "@/lib/research-approval-completion-service";
 import ResearchPaperSubmissionClient from "@/components/researcher/submission/ResearchPaperSubmissionClient";
 
@@ -59,7 +60,15 @@ export default async function ResearchPaperSubmissionPage({
   );
   let dossier = dossierRows[0] || null;
 
-  if (!dossier || !dossier.executiveSummary || !String(dossier.executiveSummary).trim()) {
+  // Seed or upgrade stub/placeholder summaries with the full Sections 1–2 compiled dossier
+  const needsCompiledSeed =
+    !dossier ||
+    isIncompleteResearchSummary(
+      dossier?.executiveSummary,
+      compiledOverview.compiledSummaryText
+    );
+
+  if (needsCompiledSeed && compiledOverview.compiledSummaryText?.trim()) {
     const autoCompiled = compiledOverview.compiledSummaryText;
     if (dossier) {
       await pool.query(

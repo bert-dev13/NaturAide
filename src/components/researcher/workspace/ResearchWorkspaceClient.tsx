@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import Link from "next/link";
+import { motion } from "framer-motion";
 import {
-  FlaskConical,
   Layers,
   Cpu,
   FileCheck2,
@@ -11,18 +11,11 @@ import {
   AlertTriangle,
   Clock,
   ArrowRight,
-  ExternalLink,
-  Sparkles,
-  BookOpen,
-  Send,
-  ShieldCheck,
-  ChevronRight,
-  Info,
-  Beaker,
   FolderKanban,
-  FileText,
   Award,
   Leaf,
+  ShieldCheck,
+  Info,
 } from "lucide-react";
 import { V2SectionProgress } from "@/lib/v2-progress-service";
 
@@ -62,17 +55,50 @@ interface Props {
   formulationOverview?: FormulationOverview | null;
 }
 
+const easeOut = [0.22, 1, 0.36, 1] as const;
+
+type SectionTone = {
+  accent: string;
+  bar: string;
+  iconWrap: string;
+  badge: string;
+  stepDone: string;
+  cta: string;
+};
+
+const SECTION_TONES: Record<string, SectionTone> = {
+  emerald: {
+    accent: "text-emerald-800",
+    bar: "from-emerald-600 via-emerald-400 to-teal-300",
+    iconWrap: "bg-gradient-to-br from-emerald-500 to-teal-600 text-white",
+    badge: "text-emerald-800",
+    stepDone: "bg-emerald-50/80 border-emerald-200/80",
+    cta: "bg-[#0f2c20] hover:bg-[#164533] text-white",
+  },
+  teal: {
+    accent: "text-teal-800",
+    bar: "from-teal-600 via-teal-400 to-cyan-300",
+    iconWrap: "bg-gradient-to-br from-teal-500 to-cyan-600 text-white",
+    badge: "text-teal-800",
+    stepDone: "bg-teal-50/80 border-teal-200/80",
+    cta: "bg-teal-700 hover:bg-teal-600 text-white",
+  },
+  slate: {
+    accent: "text-[#0f2c20]",
+    bar: "from-[#0f2c20] via-emerald-500 to-teal-300",
+    iconWrap: "bg-[#0f2c20] text-emerald-200",
+    badge: "text-[#0f2c20]",
+    stepDone: "bg-[#edf5f0] border-[#d7e4dc]",
+    cta: "bg-[#0f2c20] hover:bg-[#164533] text-white",
+  },
+};
+
 export default function ResearchWorkspaceClient({
   project,
   v2Progress,
   activities,
-  linkedStudies,
   openRevisionsCount = 0,
-  formulationOverview,
 }: Props) {
-  const [activeTab, setActiveTab] = useState<"sections" | "activity" | "details">("sections");
-
-  // Determine earliest incomplete section / step for "Continue Research"
   const continueRoute = useMemo(() => {
     if (v2Progress.section1.status !== "COMPLETED") {
       return `/researcher/projects/${project.id}/formulation-rd`;
@@ -87,488 +113,457 @@ export default function ResearchWorkspaceClient({
     project.status === "COMPLETED" ||
     (v2Progress?.overallStatus && v2Progress.overallStatus.toLowerCase() === "completed");
 
+  const section4Status =
+    v2Progress.section4?.status ||
+    (v2Progress.overallStatus === "Completed"
+      ? "COMPLETED"
+      : v2Progress.section3.status === "COMPLETED"
+        ? "IN_PROGRESS"
+        : "NOT_STARTED");
+
   const renderSectionStatusBadge = (status: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED") => {
     switch (status) {
       case "COMPLETED":
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+          <span className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-900">
+            <CheckCircle2 className="h-3 w-3 text-emerald-700" />
             Completed
           </span>
         );
       case "IN_PROGRESS":
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-            <Clock className="w-3.5 h-3.5 text-amber-500" />
+          <span className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-900">
+            <Clock className="h-3 w-3 text-amber-600" />
             In Progress
           </span>
         );
       default:
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
+          <span className="inline-flex items-center gap-1 rounded-md border border-[#d7e4dc] bg-white px-2 py-0.5 text-[10px] font-bold text-[#6d7f76]">
             Not Started
           </span>
         );
     }
   };
 
-  return (
-    <div className="min-h-screen bg-slate-50/60 pb-20">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-5 space-y-6">
-        {/* 1. TOP HEADER WORKSPACE BANNER (Compact Forest Emerald Theme with Icons & Badges) */}
-        <div className="w-full bg-gradient-to-r from-[#0b261b] via-[#0f3424] to-[#071c13] text-white rounded-2xl border border-emerald-800/60 p-4 sm:p-5 shadow-lg shadow-emerald-950/25 relative overflow-hidden transition-all duration-300 space-y-3.5">
-          {/* Ambient decorative glowing backdrops */}
-          <div className="absolute top-0 right-0 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
-          <div className="absolute bottom-0 left-1/3 w-60 h-60 bg-teal-500/10 rounded-full blur-2xl pointer-events-none" />
+  const sections = [
+    {
+      key: "s1",
+      num: "Section 1",
+      title: "Formulation Research & Development",
+      desc: "Specimen authentication, dosage format, extraction, excipient matrix, and batch QC.",
+      href: `/researcher/projects/${project.id}/formulation-rd`,
+      cta: "Open Section",
+      icon: Layers,
+      tone: SECTION_TONES.emerald,
+      status: v2Progress.section1.status,
+      done: v2Progress.section1.completedSteps,
+      total: v2Progress.section1.totalSteps,
+      steps: v2Progress.section1.steps,
+      stepHref: null as string | null,
+      progressLabel: "Steps completed",
+      cols: "sm:grid-cols-2 xl:grid-cols-3",
+    },
+    {
+      key: "s2",
+      num: "Section 2",
+      title: "In-Silico Analysis",
+      desc: "Phytochemical library, target selection, ADMET, docking, and interaction visualization.",
+      href: `/researcher/projects/${project.id}/in-silico`,
+      cta: "Open Section",
+      icon: Cpu,
+      tone: SECTION_TONES.teal,
+      status: v2Progress.section2.status,
+      done: v2Progress.section2.completedSteps,
+      total: v2Progress.section2.totalSteps,
+      steps: v2Progress.section2.steps,
+      stepHref: null as string | null,
+      progressLabel: "Steps completed",
+      cols: "sm:grid-cols-2 xl:grid-cols-4",
+    },
+    {
+      key: "s3",
+      num: "Section 3",
+      title: "Research Paper Submission",
+      desc: "Multi-stage summary, manuscript upload, and dossier submission for expert review.",
+      href: `/researcher/projects/${project.id}/submission`,
+      cta: "Open Section",
+      icon: FileCheck2,
+      tone: SECTION_TONES.slate,
+      status: v2Progress.section3.status,
+      done: v2Progress.section3.completedSteps,
+      total: v2Progress.section3.totalSteps,
+      steps: v2Progress.section3.steps,
+      stepHref: `/researcher/projects/${project.id}/submission`,
+      progressLabel: "Steps completed",
+      cols: "sm:grid-cols-2 xl:grid-cols-3",
+    },
+    {
+      key: "s4",
+      num: "Section 4",
+      title: "Professional Approval & Research Completion",
+      desc: "Panel review across Formulation, Bioinformatics, and Clinical Pharmacology.",
+      href: `/researcher/projects/${project.id}/completion`,
+      cta: "Track Approval",
+      icon: Award,
+      tone: SECTION_TONES.emerald,
+      status: section4Status as "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED",
+      done: v2Progress.approvedSpecialtiesCount ?? v2Progress.section4?.completedSteps ?? 0,
+      total: 3,
+      steps:
+        v2Progress.section4?.steps ||
+        [
+          {
+            stepKey: "formulation-review",
+            title: "Formulation Science & Pharmacognosy",
+            completed: (v2Progress.approvedSpecialtiesCount ?? 0) >= 1,
+            detail: "Section 1 formulation & pharmacognosy approval",
+          },
+          {
+            stepKey: "insilico-review",
+            title: "Bioinformatics & In-Silico Modeling",
+            completed: (v2Progress.approvedSpecialtiesCount ?? 0) >= 2,
+            detail: "Section 2 molecular docking & target approval",
+          },
+          {
+            stepKey: "clinical-review",
+            title: "Clinical Pharmacology & Paper Review",
+            completed: (v2Progress.approvedSpecialtiesCount ?? 0) >= 3,
+            detail: "Section 3 clinical review & manuscript verification",
+          },
+        ],
+      stepHref: `/researcher/projects/${project.id}/completion`,
+      progressLabel: "Panel Approvals",
+      cols: "sm:grid-cols-2 xl:grid-cols-3",
+    },
+  ];
 
-          {/* Row 1: Breadcrumb + Tag + Actions */}
-          <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
-            <div className="flex items-center gap-2 text-xs font-medium text-emerald-300/80">
+  return (
+    <div className="w-full max-w-none space-y-6 pb-12 text-slate-800">
+      {/* 1. Compact project header */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="relative w-full overflow-hidden rounded-2xl border border-[#0f2c20]/15 bg-[linear-gradient(120deg,#0f2c20_0%,#134032_48%,#0b271b_100%)] px-4 py-3.5 text-white shadow-[0_12px_28px_-18px_rgba(15,44,32,0.55)] sm:px-5"
+      >
+        <div className="pointer-events-none absolute -right-10 -top-12 h-36 w-36 rounded-full bg-emerald-400/15 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-16 left-1/3 h-28 w-28 rounded-full bg-teal-300/10 blur-3xl" />
+
+        <div className="relative space-y-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 flex-wrap items-center gap-2 text-[11px] font-medium text-emerald-200/80">
               <Link
                 href="/researcher/projects"
-                className="hover:text-white flex items-center gap-1.5 transition-colors"
+                className="inline-flex items-center gap-1.5 transition hover:text-white"
               >
-                <FolderKanban className="w-3.5 h-3.5 text-emerald-400" />
-                <span>My Research</span>
+                <FolderKanban className="h-3.5 w-3.5 text-emerald-300" />
+                My Research
               </Link>
               <span className="text-emerald-700">/</span>
-              <span className="text-white font-semibold truncate max-w-xs">{project.title}</span>
-              <span className="px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 font-mono text-[10.5px] font-bold">
+              <span className="truncate font-semibold text-white">{project.title}</span>
+              <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 font-mono text-[10px] font-bold text-emerald-200">
                 #{project.id}
               </span>
             </div>
 
-            <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
               {openRevisionsCount > 0 && (
                 <Link
                   href={`/researcher/projects/${project.id}/revisions`}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 text-xs font-bold border border-amber-400/50 transition-all shadow-xs"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-amber-400/40 bg-amber-500/15 px-3 py-2 text-xs font-semibold text-amber-100 transition hover:bg-amber-500/25"
                 >
-                  <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
-                  <span>{openRevisionsCount} Revision{openRevisionsCount > 1 ? "s" : ""} Required</span>
+                  <AlertTriangle className="h-3.5 w-3.5 text-amber-300" />
+                  {openRevisionsCount} Revision{openRevisionsCount > 1 ? "s" : ""}
                 </Link>
               )}
-
               {isProjectCompleted ? (
                 <Link
                   href={`/researcher/completed/${project.id}`}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold shadow-md hover:shadow-lg transition-all"
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-400 px-3.5 py-2 text-xs font-semibold text-[#091a13] shadow-sm transition hover:bg-emerald-300"
                 >
-                  <Award className="w-3.5 h-3.5" />
-                  <span>View Completed Dossier</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
+                  <Award className="h-3.5 w-3.5" />
+                  View Completed Dossier
+                  <ArrowRight className="h-3.5 w-3.5" />
                 </Link>
               ) : (
                 <Link
                   href={continueRoute}
-                  className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold shadow-md hover:shadow-lg transition-all"
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-400 px-3.5 py-2 text-xs font-semibold text-[#091a13] shadow-sm transition hover:bg-emerald-300"
                 >
-                  <span>Continue Research</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
+                  Continue Research
+                  <ArrowRight className="h-3.5 w-3.5" />
                 </Link>
               )}
             </div>
           </div>
 
-          {/* Row 2: Title + Botanical Info + Last Updated + Compact Completion Progress Bar */}
-          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="space-y-1.5 min-w-0">
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight flex items-center gap-2">
-                  <span>{project.title}</span>
-                  {isProjectCompleted && (
-                    <Sparkles className="w-4 h-4 text-emerald-400 animate-pulse" />
-                  )}
+          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-lg font-semibold tracking-tight text-white sm:text-xl">
+                  {project.title}
                 </h1>
                 <span
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                  className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-bold ${
                     isProjectCompleted
-                      ? "bg-emerald-500/25 text-emerald-200 border border-emerald-400/50"
-                      : "bg-emerald-950/80 text-emerald-300 border border-emerald-600/40"
+                      ? "border-emerald-400/40 bg-emerald-500/20 text-emerald-100"
+                      : "border-white/15 bg-white/5 text-emerald-100/90"
                   }`}
                 >
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>{v2Progress.overallStatus}</span>
+                  <CheckCircle2 className="h-3 w-3 text-emerald-300" />
+                  {v2Progress.overallStatus}
                 </span>
               </div>
-
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-emerald-100/80">
-                <span className="inline-flex items-center gap-1.5 font-semibold bg-emerald-900/60 px-2.5 py-0.5 rounded-lg border border-emerald-700/50 text-white">
-                  <Leaf className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>{project.plantName}</span>
-                  {project.plantScientificName && (
-                    <span className="italic text-emerald-300/80">({project.plantScientificName})</span>
-                  )}
+              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-emerald-100/80">
+                <span className="inline-flex items-center gap-1 rounded-lg border border-emerald-400/25 bg-emerald-500/10 px-2 py-0.5 font-semibold text-white">
+                  <Leaf className="h-3 w-3 text-emerald-300" />
+                  {project.plantName}
+                  {project.plantScientificName ? (
+                    <span className="font-medium italic text-emerald-200/80">
+                      ({project.plantScientificName})
+                    </span>
+                  ) : null}
                 </span>
-
                 {project.updatedAt && (
-                  <span className="inline-flex items-center gap-1.5 text-emerald-300/80">
-                    <Clock className="w-3.5 h-3.5 text-emerald-400" />
+                  <span className="inline-flex items-center gap-1">
+                    <Clock className="h-3 w-3 text-emerald-300" />
                     <span suppressHydrationWarning>
-                      Last updated {new Date(project.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}
+                      Updated{" "}
+                      {new Date(project.updatedAt).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                        timeZone: "UTC",
+                      })}
                     </span>
                   </span>
                 )}
               </div>
             </div>
 
-            {/* Compact Completion Progress Card */}
-            <div className="w-full md:w-72 bg-emerald-950/60 rounded-xl border border-emerald-700/40 p-2.5 space-y-1.5 shrink-0 shadow-inner">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-emerald-300/90 flex items-center gap-1.5">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Research Completion</span>
+            <div className="w-full shrink-0 rounded-xl border border-emerald-400/25 bg-emerald-950/40 p-2.5 md:w-64">
+              <div className="flex items-center justify-between gap-2 text-[11px]">
+                <span className="inline-flex items-center gap-1 font-semibold uppercase tracking-[0.12em] text-emerald-200/90">
+                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-300" />
+                  Completion
                 </span>
-                <span className="font-mono font-bold text-white text-xs bg-emerald-800/80 px-2 py-0.5 rounded border border-emerald-600/40">
+                <span className="rounded border border-emerald-500/30 bg-emerald-800/50 px-1.5 py-0.5 font-mono text-xs font-bold text-white">
                   {v2Progress.overallProgressPercent}%
                 </span>
               </div>
-              <div className="w-full h-2 rounded-full bg-emerald-950 border border-emerald-900 overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-300 rounded-full transition-all duration-500 shadow-sm"
-                  style={{ width: `${v2Progress.overallProgressPercent}%` }}
+              <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-emerald-950">
+                <motion.div
+                  className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-300"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${v2Progress.overallProgressPercent}%` }}
+                  transition={{ duration: 0.7, ease: easeOut, delay: 0.1 }}
                 />
               </div>
             </div>
           </div>
         </div>
+      </motion.div>
 
-        {/* 2. BODY CONTENT */}
-        <div>
-        {/* Research Objective Box */}
-        {project.researchObjective && (
-          <div className="mb-8 p-4 rounded-xl bg-white border border-slate-200 shadow-xs flex items-start gap-3">
-            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0 border border-emerald-200">
-              <Info className="w-4 h-4" />
-            </div>
-            <div className="space-y-0.5">
-              <h2 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Research Objective</h2>
-              <p className="text-sm text-slate-600 leading-relaxed">{project.researchObjective}</p>
-            </div>
+      {/* Objective */}
+      {project.researchObjective && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.05 }}
+          className="flex items-start gap-3 rounded-2xl border border-[#d7e4dc]/90 bg-white p-3.5 shadow-[0_1px_2px_rgba(15,44,32,0.04)] sm:p-4"
+        >
+          <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-800">
+            <Info className="h-3.5 w-3.5" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#6d7f76]">
+              Research Objective
+            </p>
+            <p className="mt-1 text-sm leading-relaxed text-[#52645d]">{project.researchObjective}</p>
           </div>
-        )}
+        </motion.div>
+      )}
 
-        {/* THREE MAIN RESEARCH SECTIONS */}
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold text-slate-900 tracking-tight">
-              Three Main Research Sections
+      {/* Sections */}
+      <div className="space-y-3.5">
+        <div className="flex flex-col gap-1 px-0.5 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#52645d]">
+              Research Sections
             </h2>
-            <span className="text-xs text-slate-500">
-              All 3 sections must be fully completed before final manuscript submission.
-            </span>
+            <p className="mt-0.5 text-xs text-[#8aa094]">
+              Complete all sections before final manuscript submission.
+            </p>
           </div>
-
-          <div className="grid grid-cols-1 gap-6">
-            {/* ========================================================= */}
-            {/* SECTION 1: FORMULATION RESEARCH & DEVELOPMENT             */}
-            {/* ========================================================= */}
-            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-xs hover:border-emerald-300 transition-all">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
-                <div className="flex items-start gap-3.5">
-                  <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0 border border-emerald-200">
-                    <Layers className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold font-mono text-emerald-700 tracking-wider uppercase">Section 1</span>
-                      {renderSectionStatusBadge(v2Progress.section1.status)}
-                    </div>
-                    <h3 className="text-base font-bold text-slate-900">
-                      Formulation Research &amp; Development
-                    </h3>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      Specimen authentication, dosage format selection, standardized extraction, excipient matrix compounding, and batch quality control.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <div className="text-right hidden sm:block">
-                    <span className="text-xs text-slate-400 font-medium">Steps completed</span>
-                    <p className="text-sm font-bold text-slate-800 font-mono">
-                      {v2Progress.section1.completedSteps} / {v2Progress.section1.totalSteps}
-                    </p>
-                  </div>
-                  <Link
-                    href={`/researcher/projects/${project.id}/formulation-rd`}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs transition-colors shrink-0"
-                  >
-                    <span>Open Section</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </Link>
-                </div>
-              </div>
-
-              {/* 6 Steps Checklist */}
-              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {v2Progress.section1.steps.map((st, idx) => (
-                  <div
-                    key={st.stepKey}
-                    className={`p-3 rounded-lg border text-xs transition-colors ${
-                      st.completed
-                        ? "bg-emerald-50/40 border-emerald-200/80"
-                        : "bg-slate-50/60 border-slate-200 text-slate-600"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-semibold text-slate-800">
-                        {idx + 1}. {st.title}
-                      </span>
-                      {st.completed ? (
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                      ) : (
-                        <span className="w-2 h-2 rounded-full bg-slate-300 shrink-0" />
-                      )}
-                    </div>
-                    <p className="text-[11px] text-slate-500 truncate">{st.detail}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* ========================================================= */}
-            {/* SECTION 2: IN-SILICO ANALYSIS                             */}
-            {/* ========================================================= */}
-            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-xs hover:border-emerald-300 transition-all">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
-                <div className="flex items-start gap-3.5">
-                  <div className="w-10 h-10 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center shrink-0 border border-teal-200">
-                    <Cpu className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold font-mono text-teal-700 tracking-wider uppercase">Section 2</span>
-                      {renderSectionStatusBadge(v2Progress.section2.status)}
-                    </div>
-                    <h3 className="text-base font-bold text-slate-900">
-                      In-Silico Analysis
-                    </h3>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      Bioactive phytochemical library search, therapeutic target selection, ADMET screening, AutoDock Vina calculations, and 2D/3D interaction visualization.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <div className="text-right hidden sm:block">
-                    <span className="text-xs text-slate-400 font-medium">Steps completed</span>
-                    <p className="text-sm font-bold text-slate-800 font-mono">
-                      {v2Progress.section2.completedSteps} / {v2Progress.section2.totalSteps}
-                    </p>
-                  </div>
-                  <Link
-                    href={`/researcher/projects/${project.id}/in-silico`}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold shadow-xs transition-colors shrink-0"
-                  >
-                    <span>Open Section</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </Link>
-                </div>
-              </div>
-
-              {/* 8 Steps Checklist */}
-              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                {v2Progress.section2.steps.map((st, idx) => (
-                  <div
-                    key={st.stepKey}
-                    className={`p-3 rounded-lg border text-xs transition-colors ${
-                      st.completed
-                        ? "bg-teal-50/40 border-teal-200/80"
-                        : "bg-slate-50/60 border-slate-200 text-slate-600"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-semibold text-slate-800">
-                        {idx + 1}. {st.title}
-                      </span>
-                      {st.completed ? (
-                        <CheckCircle2 className="w-4 h-4 text-teal-600 shrink-0" />
-                      ) : (
-                        <span className="w-2 h-2 rounded-full bg-slate-300 shrink-0" />
-                      )}
-                    </div>
-                    <p className="text-[11px] text-slate-500 truncate">{st.detail}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* ========================================================= */}
-            {/* SECTION 3: RESEARCH PAPER SUBMISSION                      */}
-            {/* ========================================================= */}
-            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-xs hover:border-emerald-300 transition-all">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
-                <div className="flex items-start gap-3.5">
-                  <div className="w-10 h-10 rounded-lg bg-indigo-50 text-indigo-700 flex items-center justify-center shrink-0 border border-indigo-200">
-                    <FileCheck2 className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold font-mono text-indigo-700 tracking-wider uppercase">Section 3</span>
-                      {renderSectionStatusBadge(v2Progress.section3.status)}
-                    </div>
-                    <h3 className="text-base font-bold text-slate-900">
-                      Research Paper Submission
-                    </h3>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      Compiled multi-stage research summary, PDF/DOCX manuscript upload, and dossier submission for multidisciplinary expert review.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <div className="text-right hidden sm:block">
-                    <span className="text-xs text-slate-400 font-medium">Steps completed</span>
-                    <p className="text-sm font-bold text-slate-800 font-mono">
-                      {v2Progress.section3.completedSteps} / {v2Progress.section3.totalSteps}
-                    </p>
-                  </div>
-                  <Link
-                    href={`/researcher/projects/${project.id}/submission`}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-xs transition-colors shrink-0"
-                  >
-                    <span>Open Section</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </Link>
-                </div>
-              </div>
-
-              {/* 3 Steps Checklist */}
-              <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {v2Progress.section3.steps.map((st, idx) => (
-                  <Link
-                    key={st.stepKey}
-                    href={`/researcher/projects/${project.id}/submission?step=${idx + 1}`}
-                    className={`p-3 rounded-lg border text-xs transition-colors block ${
-                      st.completed
-                        ? "bg-indigo-50/40 border-indigo-200/80 hover:border-indigo-300"
-                        : "bg-slate-50/60 border-slate-200 text-slate-600 hover:border-slate-300"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-semibold text-slate-800">
-                        {idx + 1}. {st.title}
-                      </span>
-                      {st.completed ? (
-                        <CheckCircle2 className="w-4 h-4 text-indigo-600 shrink-0" />
-                      ) : (
-                        <span className="w-2 h-2 rounded-full bg-slate-300 shrink-0" />
-                      )}
-                    </div>
-                    <p className="text-[11px] text-slate-500 truncate">{st.detail}</p>
-                  </Link>
-                ))}
-              </div>
-            </div>
-
-            {/* ========================================================= */}
-            {/* SECTION 4: PROFESSIONAL APPROVAL & COMPLETION             */}
-            {/* ========================================================= */}
-            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-xs hover:border-emerald-300 transition-all">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
-                <div className="flex items-start gap-3.5">
-                  <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0 border border-emerald-200">
-                    <Award className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold font-mono text-emerald-700 tracking-wider uppercase">Section 4</span>
-                      {renderSectionStatusBadge(
-                        v2Progress.section4?.status ||
-                          (v2Progress.overallStatus === "Completed"
-                            ? "COMPLETED"
-                            : v2Progress.section3.status === "COMPLETED"
-                            ? "IN_PROGRESS"
-                            : "NOT_STARTED")
-                      )}
-                    </div>
-                    <h3 className="text-base font-bold text-slate-900">
-                      Professional Approval &amp; Research Completion
-                    </h3>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      Multidisciplinary review panel evaluations across Formulation, Bioinformatics, and Clinical Pharmacology. Unlocks completion at 100% approval.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <div className="text-right hidden sm:block">
-                    <span className="text-xs text-slate-400 font-medium">Panel Approvals</span>
-                    <p className="text-sm font-bold text-slate-800 font-mono">
-                      {v2Progress.approvedSpecialtiesCount ?? 0} / 3
-                    </p>
-                  </div>
-                  <Link
-                    href={`/researcher/projects/${project.id}/completion`}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs transition-colors shrink-0"
-                  >
-                    <span>Track Approval</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </Link>
-                </div>
-              </div>
-
-              {/* Section 4 Specialties Checklist */}
-              <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {(v2Progress.section4?.steps || [
-                  { stepKey: "formulation-review", title: "Formulation Science", completed: (v2Progress.approvedSpecialtiesCount ?? 0) >= 1, detail: "Section 1 formulation evaluation" },
-                  { stepKey: "insilico-review", title: "Bioinformatics & Docking", completed: (v2Progress.approvedSpecialtiesCount ?? 0) >= 2, detail: "Section 2 computational modeling" },
-                  { stepKey: "clinical-review", title: "Clinical Pharmacology", completed: (v2Progress.approvedSpecialtiesCount ?? 0) >= 3, detail: "Section 3 clinical review" },
-                ]).map((st, idx) => (
-                  <Link
-                    key={st.stepKey}
-                    href={`/researcher/projects/${project.id}/completion`}
-                    className={`p-3 rounded-lg border text-xs transition-colors block ${
-                      st.completed
-                        ? "bg-emerald-50/40 border-emerald-200/80 hover:border-emerald-300"
-                        : "bg-slate-50/60 border-slate-200 text-slate-600 hover:border-slate-300"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-semibold text-slate-800">
-                        {idx + 1}. {st.title}
-                      </span>
-                      {st.completed ? (
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                      ) : (
-                        <span className="w-2 h-2 rounded-full bg-slate-300 shrink-0" />
-                      )}
-                    </div>
-                    <p className="text-[11px] text-slate-500 truncate">{st.detail}</p>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          </div>
+          <p className="text-[11px] font-medium text-[#6d7f76]">
+            {sections.filter((s) => s.status === "COMPLETED").length} of {sections.length} complete
+          </p>
         </div>
 
-        {/* 3. RECENT RESEARCH ACTIVITY */}
-        <div className="mt-10 bg-white rounded-xl border border-slate-200 p-6 shadow-xs">
-          <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-4">
-            Recent Research Activity Logs
-          </h2>
-          {activities.length > 0 ? (
-            <div className="divide-y divide-slate-100">
-              {activities.map((act, index) => (
-                <div key={index} className="py-2.5 flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                    <span className="font-semibold text-slate-700">{act.actionType}</span>
-                    <span className="text-slate-500 truncate">{act.description}</span>
+        <div className="grid w-full grid-cols-1 gap-3.5">
+          {sections.map((section, index) => {
+            const Icon = section.icon;
+            const tone = section.tone;
+            return (
+              <motion.article
+                key={section.key}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.32, delay: 0.08 + index * 0.05, ease: easeOut }}
+                className="group relative overflow-hidden rounded-2xl border border-[#d7e4dc]/90 bg-[linear-gradient(165deg,#ffffff_0%,#f8fbf9_100%)] shadow-[0_1px_2px_rgba(15,44,32,0.04)] transition-all duration-300 hover:border-emerald-300/70 hover:shadow-[0_18px_34px_-22px_rgba(15,44,32,0.28)]"
+              >
+                <div className={`absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r ${tone.bar}`} />
+
+                <div className="flex flex-col gap-3.5 p-4 sm:p-5">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <span
+                        className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl shadow-sm ${tone.iconWrap}`}
+                      >
+                        <Icon className="h-4 w-4" strokeWidth={2.2} />
+                      </span>
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className={`font-mono text-[10px] font-bold uppercase tracking-[0.12em] ${tone.badge}`}>
+                            {section.num}
+                          </span>
+                          {renderSectionStatusBadge(section.status)}
+                        </div>
+                        <h3 className="mt-1 text-[15px] font-semibold leading-snug text-[#0f2c20]">
+                          {section.title}
+                        </h3>
+                        <p className="mt-0.5 text-xs leading-relaxed text-[#6d7f76]">{section.desc}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex shrink-0 items-center gap-3 sm:pt-0.5">
+                      <div className="hidden text-right sm:block">
+                        <p className="text-[10px] font-medium uppercase tracking-wider text-[#8aa094]">
+                          {section.progressLabel}
+                        </p>
+                        <p className="font-mono text-sm font-bold tabular-nums text-[#0f2c20]">
+                          {section.done} / {section.total}
+                        </p>
+                      </div>
+                      <Link
+                        href={section.href}
+                        className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold shadow-sm transition ${tone.cta}`}
+                      >
+                        {section.cta}
+                        <ArrowRight className="h-3.5 w-3.5 opacity-80" />
+                      </Link>
+                    </div>
                   </div>
-                  <span suppressHydrationWarning className="text-slate-400 font-mono text-[11px] shrink-0 ml-4">
-                    {new Date(act.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", timeZone: "UTC" })}
-                  </span>
+
+                  <div className={`grid grid-cols-1 gap-2 ${section.cols}`}>
+                    {section.steps.map((st, idx) => {
+                      const content = (
+                        <>
+                          <div className="mb-1 flex items-center justify-between gap-2">
+                            <span className="truncate text-[11px] font-semibold text-[#0f2c20]">
+                              {idx + 1}. {st.title}
+                            </span>
+                            {st.completed ? (
+                              <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                            ) : (
+                              <span className="h-2 w-2 shrink-0 rounded-full bg-[#c5d4cb]" />
+                            )}
+                          </div>
+                          <p className="truncate text-[10px] text-[#8aa094]">{st.detail}</p>
+                        </>
+                      );
+
+                      const className = `rounded-xl border p-2.5 text-left transition ${
+                        st.completed
+                          ? tone.stepDone
+                          : "border-[#e8f0eb] bg-white/70 text-[#52645d]"
+                      } ${section.stepHref ? "hover:border-emerald-300" : ""}`;
+
+                      if (section.stepHref) {
+                        return (
+                          <Link
+                            key={st.stepKey}
+                            href={
+                              section.key === "s3"
+                                ? `${section.stepHref}?step=${idx + 1}`
+                                : section.stepHref
+                            }
+                            className={`block ${className}`}
+                          >
+                            {content}
+                          </Link>
+                        );
+                      }
+
+                      return (
+                        <div key={st.stepKey} className={className}>
+                          {content}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-xs text-slate-500 italic">No activity recorded yet.</p>
-          )}
+              </motion.article>
+            );
+          })}
         </div>
       </div>
+
+      {/* Activity */}
+      <motion.section
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, delay: 0.28, ease: easeOut }}
+        className="overflow-hidden rounded-2xl border border-[#d7e4dc]/90 bg-white shadow-[0_1px_2px_rgba(15,44,32,0.04)]"
+      >
+        <div className="flex items-center justify-between gap-2 border-b border-[#e8f0eb] px-4 py-3 sm:px-5">
+          <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#52645d]">
+            Recent Research Activity
+          </h2>
+          <span className="text-[11px] font-medium text-[#8aa094]">
+            {activities.length} event{activities.length === 1 ? "" : "s"}
+          </span>
+        </div>
+
+        {activities.length > 0 ? (
+          <div className="divide-y divide-[#eef4f0]">
+            {activities.map((act, index) => (
+              <div
+                key={`${act.actionType}-${act.createdAt}-${index}`}
+                className="flex flex-col gap-1.5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-5"
+              >
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-emerald-800">
+                      {act.actionType}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-xs leading-relaxed text-[#52645d]">{act.description}</p>
+                </div>
+                <span
+                  suppressHydrationWarning
+                  className="shrink-0 font-mono text-[10px] text-[#8aa094]"
+                >
+                  {new Date(act.createdAt).toLocaleString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                    hour: "numeric",
+                    minute: "2-digit",
+                    timeZone: "UTC",
+                  })}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="px-4 py-6 text-center text-xs text-[#8aa094] sm:px-5">
+            No activity recorded yet.
+          </p>
+        )}
+      </motion.section>
     </div>
-  </div>
   );
 }

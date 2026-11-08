@@ -4,6 +4,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Cpu,
   Dna,
@@ -16,10 +17,7 @@ import {
   Play,
   Atom,
   Info,
-  CheckCircle2,
-  AlertTriangle,
-  Loader2,
-  RefreshCw,
+  X,
 } from "lucide-react";
 import PhytochemicalSelectorModal from "./PhytochemicalSelectorModal";
 import ResearchStepFooterNav from "@/components/researcher/ResearchStepFooterNav";
@@ -124,7 +122,7 @@ export default function InSilicoRdWorkspaceClient({
     { number: 8, title: "Results & Interpretation", icon: Info },
   ];
 
-  // Refresh docking workspace data
+  // Refresh docking workspace data (quiet — no banner / remount)
   const refreshWorkspace = async () => {
     try {
       const res = await fetch(`/api/researcher/projects/${project.id}/docking`);
@@ -135,25 +133,36 @@ export default function InSilicoRdWorkspaceClient({
     } catch {}
   };
 
-  // Poll workspace if any docking job is active or preparing
-  useEffect(() => {
+  // Poll only while jobs are active; depend on a cheap flag so checkbox toggles
+  // don't tear down / recreate the interval every render.
+  const hasActiveDockingJob = useMemo(() => {
     const activeStatuses = ["QUEUED", "PREPARING", "DOCKING", "PROCESSING", "RUNNING"];
-    const hasActiveJob =
+    return (
       Boolean(workspace?.busy) ||
-      workspace?.runs?.some((r: any) => activeStatuses.includes(String(r.jobStatus).toUpperCase())) ||
-      workspace?.jobs?.some((j: any) => activeStatuses.includes(String(j.status).toUpperCase()) || j.active) ||
-      workspace?.targets?.some((t: any) => t.prepStatus === "PREPARING" || t.status === "PREPARING");
+      workspace?.runs?.some((r: any) =>
+        activeStatuses.includes(String(r.jobStatus).toUpperCase())
+      ) ||
+      workspace?.jobs?.some(
+        (j: any) =>
+          activeStatuses.includes(String(j.status).toUpperCase()) || j.active
+      ) ||
+      workspace?.targets?.some(
+        (t: any) => t.prepStatus === "PREPARING" || t.status === "PREPARING"
+      )
+    );
+  }, [workspace]);
 
-    if (!hasActiveJob) return;
-
+  useEffect(() => {
+    if (!hasActiveDockingJob) return;
     const interval = setInterval(() => {
       refreshWorkspace();
     }, 2500);
-
     return () => clearInterval(interval);
-  }, [workspace]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasActiveDockingJob, project.id]);
 
-  // Load structure files for 2D/3D visualization when selectedRunId changes
+  // Load structure files only when the selected run changes (not on every
+  // workspace poll / target checkbox update).
   useEffect(() => {
     const completedRuns = (workspace?.runs || []).filter(
       (r: any) => r.jobStatus === "COMPLETED" || r.bindingAffinity !== null
@@ -165,55 +174,96 @@ export default function InSilicoRdWorkspaceClient({
     }
 
     if (!selectedRunId) return;
+    // Skip heavy structure fetch while browsing earlier steps
+    if (activeStep < 6) return;
 
+    let cancelled = false;
     const loadStructures = async () => {
       setIsLoadingStructures(true);
       try {
         const res = await fetch(
           `/api/researcher/projects/${project.id}/docking/structure-files?runId=${selectedRunId}`
         );
-        if (res.ok) {
-          const data = await res.json();
-          setStructureData({
-            receptorPdb: data.receptorPdb || "",
-            ligandPdbqt: data.ligandPdbqt || "",
-            interactions: data.interactions || null,
-          });
-        }
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (cancelled) return;
+        setStructureData({
+          receptorPdb: data.receptorPdb || "",
+          ligandPdbqt: data.ligandPdbqt || "",
+          interactions: data.interactions || null,
+        });
       } catch (err) {
         console.error("Error loading structure files:", err);
       } finally {
-        setIsLoadingStructures(false);
+        if (!cancelled) setIsLoadingStructures(false);
       }
     };
 
     loadStructures();
-  }, [selectedRunId, workspace]);
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedRunId, activeStep, project.id]);
 
   // ---------------------------------------------------------------------------
-  // STEP 2 TARGET HANDLERS
+  // STEP 2 TARGET HANDLERS — optimistic, no success-banner layout jump
   // ---------------------------------------------------------------------------
   const handleAddTarget = async (pdbId: string) => {
+    const clean = pdbId.toUpperCase();
+    if ((workspace?.targets || []).some((t: any) => String(t.pdbId).toUpperCase() === clean)) {
+      return;
+    }
+
     setIsAddingTarget(true);
-    setMessage(null);
+    // Optimistic row so the checkbox sticks immediately
+    const optimisticId = -Date.now();
+    setWorkspace((prev: any) => ({
+      ...prev,
+      targets: [
+        ...(prev?.targets || []),
+        {
+          id: optimisticId,
+          pdbId: clean,
+          targetName: clean,
+          prepStatus: "PREPARING",
+          _optimistic: true,
+        },
+      ],
+    }));
+
     try {
       const res = await fetch(`/api/researcher/projects/${project.id}/docking`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "add-target", pdbId }),
+        body: JSON.stringify({ action: "add-target", pdbId: clean }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to add target");
       if (data.workspace) setWorkspace(data.workspace);
-      setMessage({ text: `Target protein (${pdbId.toUpperCase()}) added and receptor preparation initiated!`, type: "success" });
     } catch (e: any) {
-      setMessage({ text: e.message, type: "error" });
+      // Roll back optimistic row
+      setWorkspace((prev: any) => ({
+        ...prev,
+        targets: (prev?.targets || []).filter((t: any) => t.id !== optimisticId),
+      }));
+      setMessage({ text: e.message || "Failed to add target", type: "error" });
     } finally {
       setIsAddingTarget(false);
     }
   };
 
   const handleRemoveTarget = async (targetId: number) => {
+    const previous = workspace;
+    // Optimistic remove — checkbox clears instantly
+    setWorkspace((prev: any) => ({
+      ...prev,
+      targets: (prev?.targets || []).filter((t: any) => t.id !== targetId),
+    }));
+
+    // Local-only optimistic rows never hit the API
+    if (targetId < 0) return;
+
     try {
       const res = await fetch(`/api/researcher/projects/${project.id}/docking`, {
         method: "POST",
@@ -223,8 +273,18 @@ export default function InSilicoRdWorkspaceClient({
       if (res.ok) {
         const data = await res.json();
         if (data.workspace) setWorkspace(data.workspace);
+      } else {
+        setWorkspace(previous);
+        const data = await res.json().catch(() => ({}));
+        setMessage({
+          text: data.error || "Failed to remove target",
+          type: "error",
+        });
       }
-    } catch {}
+    } catch {
+      setWorkspace(previous);
+      setMessage({ text: "Failed to remove target", type: "error" });
+    }
   };
 
   // ---------------------------------------------------------------------------
@@ -417,258 +477,285 @@ export default function InSilicoRdWorkspaceClient({
     ).length;
   }, [workspace]);
 
+  const ActiveIcon = STEPS[activeStep - 1]?.icon || Cpu;
+
   return (
-    <div className="min-h-screen bg-slate-50/50 pb-32">
-      {/* 1. TOP HEADER & COMPACT STEP NAVIGATION */}
-      <div className="bg-white border-b border-slate-200 sticky top-0 z-20 shadow-xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2 text-xs">
+    <div className="w-full max-w-none space-y-5 pb-32 text-slate-800">
+      {/* Compact workspace header — matches Section 1 */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="relative w-full overflow-hidden rounded-2xl border border-[#0f2c20]/15 bg-[linear-gradient(120deg,#0f2c20_0%,#134032_48%,#0b271b_100%)] px-4 py-3.5 text-white shadow-[0_12px_28px_-18px_rgba(15,44,32,0.55)] sm:px-5"
+      >
+        <div className="pointer-events-none absolute -right-10 -top-12 h-36 w-36 rounded-full bg-emerald-400/15 blur-3xl" />
+        <div className="relative space-y-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium text-emerald-200/80">
                 <Link
                   href={`/researcher/projects/${project.id}`}
-                  className="text-slate-500 hover:text-teal-700 flex items-center gap-1 font-medium"
+                  className="inline-flex items-center gap-1.5 transition hover:text-white"
                 >
-                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <ArrowLeft className="h-3.5 w-3.5" />
                   Workspace Hub
                 </Link>
-                <span className="text-slate-300">/</span>
-                <span className="text-slate-500 font-semibold uppercase tracking-wider text-[11px]">
-                  Section 2 / Step 0{activeStep} of 08
+                <span className="text-emerald-700">/</span>
+                <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-emerald-200">
+                  Section 2 · Step {String(activeStep).padStart(2, "0")} / 08
                 </span>
-                <span className="text-slate-300">•</span>
-                {/* Computational Status Indicator */}
-                <div className="flex items-center gap-1.5 text-[11px]">
-                  {activeRunningCount > 0 ? (
-                    <span className="flex items-center gap-1 text-blue-700 font-medium">
-                      <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                      Running ({activeRunningCount} jobs)...
-                    </span>
-                  ) : isSaving ? (
-                    <span className="flex items-center gap-1 text-amber-700 font-medium">
-                      <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                      Saving...
-                    </span>
-                  ) : message?.type === "success" ? (
-                    <span className="flex items-center gap-1 text-emerald-700 font-semibold">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                      Saved
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-1 text-slate-500">
-                      <span className="w-2 h-2 rounded-full bg-slate-300" />
-                      Draft / Ready
-                    </span>
-                  )}
-                </div>
+                <span
+                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                    activeRunningCount > 0
+                      ? "border-sky-400/40 bg-sky-500/15 text-sky-100"
+                      : isSaving
+                        ? "border-amber-400/40 bg-amber-500/15 text-amber-100"
+                        : message?.type === "success"
+                          ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-100"
+                          : "border-white/15 bg-white/5 text-emerald-100/80"
+                  }`}
+                >
+                  <span
+                    className={`h-1.5 w-1.5 rounded-full ${
+                      activeRunningCount > 0
+                        ? "animate-pulse bg-sky-300"
+                        : isSaving
+                          ? "animate-pulse bg-amber-300"
+                          : message?.type === "success"
+                            ? "bg-emerald-300"
+                            : "bg-slate-300"
+                    }`}
+                  />
+                  {activeRunningCount > 0
+                    ? `Running (${activeRunningCount})`
+                    : isSaving
+                      ? "Saving..."
+                      : message?.type === "success"
+                        ? "Saved"
+                        : "Draft"}
+                </span>
               </div>
-
-              <h1 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-                <Cpu className="w-5 h-5 text-teal-600" />
-                {STEPS[activeStep - 1].title}
-              </h1>
-
-              {/* Compact 8-segment progress bar */}
-              <div className="flex items-center gap-1 pt-0.5 max-w-sm">
-                {STEPS.map((step) => {
-                  const isFilled = step.number <= activeStep;
-                  return (
-                    <div
-                      key={step.number}
-                      className={`h-1.5 flex-1 rounded-full transition-colors cursor-pointer ${
-                        isFilled ? "bg-teal-600" : "bg-slate-200"
-                      }`}
-                      onClick={() => setActiveStep(step.number)}
-                      title={`Step ${step.number}: ${step.title}`}
-                    />
-                  );
-                })}
+              <div className="mt-1.5 flex items-center gap-2">
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-200">
+                  <ActiveIcon className="h-4 w-4" />
+                </span>
+                <h1 className="text-lg font-semibold tracking-tight text-white sm:text-xl">
+                  {STEPS[activeStep - 1].title}
+                </h1>
+              </div>
+              <div className="mt-2 flex max-w-lg items-center gap-1">
+                {STEPS.map((step) => (
+                  <button
+                    key={step.number}
+                    type="button"
+                    onClick={() => setActiveStep(step.number)}
+                    title={`Step ${step.number}: ${step.title}`}
+                    className={`h-1.5 flex-1 rounded-full transition ${
+                      step.number <= activeStep ? "bg-emerald-400" : "bg-white/15 hover:bg-white/25"
+                    }`}
+                  />
+                ))}
               </div>
             </div>
+
+            <Link
+              href={`/researcher/projects/${project.id}/submission`}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-emerald-400 px-3.5 py-2 text-xs font-semibold text-[#091a13] shadow-sm transition hover:bg-emerald-300"
+            >
+              Proceed to Section 3
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
           </div>
 
-          {/* 8 Step Switcher (Responsive) */}
-          <div className="mt-3 flex items-center gap-1 overflow-x-auto pb-1 border-t border-slate-100 pt-2">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
             {STEPS.map((step) => {
               const Icon = step.icon;
               const isCurrent = activeStep === step.number;
+              const isDone = step.number < activeStep;
               return (
                 <button
                   key={step.number}
                   type="button"
                   onClick={() => setActiveStep(step.number)}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium shrink-0 transition-all cursor-pointer ${
+                  className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-[11px] font-semibold transition ${
                     isCurrent
-                      ? "bg-teal-700 text-white font-semibold shadow-2xs"
-                      : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
+                      ? "bg-emerald-400 text-[#091a13] shadow-sm"
+                      : isDone
+                        ? "border border-emerald-400/30 bg-emerald-500/15 text-emerald-100 hover:bg-emerald-500/25"
+                        : "border border-white/10 bg-white/5 text-emerald-100/70 hover:bg-white/10 hover:text-white"
                   }`}
                 >
-                  <Icon className="w-3.5 h-3.5" />
-                  <span>
-                    {step.number}. {step.title}
-                  </span>
+                  <Icon className="h-3.5 w-3.5" />
+                  <span className="font-mono text-[10px] opacity-80">{step.number}</span>
+                  <span className="hidden lg:inline">{step.title}</span>
                 </button>
               );
             })}
           </div>
         </div>
-      </div>
+      </motion.div>
 
-      {/* 2. BODY WORKSPACE */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-5">
+      <AnimatePresence>
         {message && (
-          <div
-            className={`mb-4 p-3 rounded-lg text-xs font-medium flex items-center justify-between ${
+          <motion.div
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-xs font-medium ${
               message.type === "success"
-                ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
-                : "bg-rose-50 text-rose-800 border border-rose-200"
+                ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                : "border-rose-200 bg-rose-50 text-rose-900"
             }`}
           >
             <span>{message.text}</span>
             <button
               type="button"
               onClick={() => setMessage(null)}
-              className="text-slate-400 hover:text-slate-600"
+              className="rounded-md p-1 text-current/60 hover:bg-black/5 hover:text-current"
+              aria-label="Dismiss"
             >
-              ✕
+              <X className="h-3.5 w-3.5" />
             </button>
-          </div>
+          </motion.div>
         )}
+      </AnimatePresence>
 
-        {/* Active Step Reviewer Revision Banner */}
-        <ResearcherStepRevisionBanner
-          projectId={project.id}
-          sectionKey="section2"
-          sectionTitle="Section 2: In-Silico Molecular Docking"
-          stepNumber={activeStep}
-          stepTitle={STEPS[activeStep - 1]?.title || `Step ${activeStep}`}
-        />
+      <ResearcherStepRevisionBanner
+        projectId={project.id}
+        sectionKey="section2"
+        sectionTitle="Section 2: In-Silico Molecular Docking"
+        stepNumber={activeStep}
+        stepTitle={STEPS[activeStep - 1]?.title || `Step ${activeStep}`}
+      />
 
-        {/* STEP 1: PHYTOCHEMICAL SELECTION */}
-        {activeStep === 1 && (
-          <PhytochemicalStep1Section
-            projectId={project.id}
-            plantName={project.plantName}
-            compounds={compounds}
-            availableCompounds={availableCompounds}
-            onCompoundsChange={setCompounds}
-            onOpenAddModal={() => setShowPhytoModal(true)}
-            onRefreshWorkspace={refreshWorkspace}
-          />
-        )}
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div
+          key={activeStep}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -6 }}
+          transition={{ duration: 0.18 }}
+        >
+          {activeStep === 1 && (
+            <PhytochemicalStep1Section
+              projectId={project.id}
+              plantName={project.plantName}
+              compounds={compounds}
+              availableCompounds={availableCompounds}
+              onCompoundsChange={setCompounds}
+              onOpenAddModal={() => setShowPhytoModal(true)}
+              onRefreshWorkspace={refreshWorkspace}
+            />
+          )}
 
-        {/* STEP 2: TARGET PROTEIN SELECTION */}
-        {activeStep === 2 && (
-          <TargetProteinStep2Section
-            projectId={project.id}
-            plantName={project.plantName}
-            plantScientificName={project.plantScientificName}
-            researchObjective={project.researchObjective}
-            compounds={compounds}
-            targets={workspace?.targets || []}
-            onAddTarget={handleAddTarget}
-            onRemoveTarget={handleRemoveTarget}
-            isAddingTarget={isAddingTarget}
-          />
-        )}
+          {activeStep === 2 && (
+            <TargetProteinStep2Section
+              projectId={project.id}
+              plantName={project.plantName}
+              plantScientificName={project.plantScientificName}
+              researchObjective={project.researchObjective}
+              compounds={compounds}
+              targets={workspace?.targets || []}
+              onAddTarget={handleAddTarget}
+              onRemoveTarget={handleRemoveTarget}
+              isAddingTarget={isAddingTarget}
+            />
+          )}
 
-        {/* STEP 3: IN-SILICO SCREENING */}
-        {activeStep === 3 && (
-          <ScreeningStep3Section
-            projectId={project.id}
-            compounds={compounds}
-            screenResults={screenResults}
-            onRunScreening={handleRunScreening}
-            isScreening={isScreening}
-            onToggleDocking={handleToggleDocking}
-            onNextStep={() => setActiveStep(4)}
-          />
-        )}
+          {activeStep === 3 && (
+            <ScreeningStep3Section
+              projectId={project.id}
+              compounds={compounds}
+              screenResults={screenResults}
+              onRunScreening={handleRunScreening}
+              isScreening={isScreening}
+              onToggleDocking={handleToggleDocking}
+              onNextStep={() => setActiveStep(4)}
+            />
+          )}
 
-        {/* STEP 4: MOLECULAR DOCKING EXECUTION */}
-        {activeStep === 4 && (
-          <DockingExecutionStep4Section
-            projectId={project.id}
-            plantName={project.plantName}
-            workspace={workspace}
-            compounds={compounds}
-            onRunAllDocking={handleRunAllDocking}
-            onRetryFailed={handleRetryFailedDocking}
-            onRunSingleDocking={handleRunSingleDocking}
-            onNavigateToResults={() => setActiveStep(5)}
-            isRunningDocking={isRunningDocking}
-            exhaustiveness={exhaustiveness}
-            onExhaustivenessChange={setExhaustiveness}
-            numModes={numModes}
-            onNumModesChange={setNumModes}
-            onSelectRunForVisuals={(runId, targetStep) => {
-              setSelectedRunId(runId);
-              setActiveStep(targetStep);
-            }}
-          />
-        )}
+          {activeStep === 4 && (
+            <DockingExecutionStep4Section
+              projectId={project.id}
+              plantName={project.plantName}
+              workspace={workspace}
+              compounds={compounds}
+              onRunAllDocking={handleRunAllDocking}
+              onRetryFailed={handleRetryFailedDocking}
+              onRunSingleDocking={handleRunSingleDocking}
+              onNavigateToResults={() => setActiveStep(5)}
+              isRunningDocking={isRunningDocking}
+              exhaustiveness={exhaustiveness}
+              onExhaustivenessChange={setExhaustiveness}
+              numModes={numModes}
+              onNumModesChange={setNumModes}
+              onSelectRunForVisuals={(runId, targetStep) => {
+                setSelectedRunId(runId);
+                setActiveStep(targetStep);
+              }}
+            />
+          )}
 
-        {/* STEP 5: BINDING AFFINITY RESULTS */}
-        {activeStep === 5 && (
-          <BindingAffinityStep5Section
-            projectId={project.id}
-            plantName={project.plantName}
-            runs={workspace?.runs || []}
-            onSelectRunForVisuals={(runId, targetStep) => {
-              setSelectedRunId(runId);
-              setActiveStep(targetStep);
-            }}
-          />
-        )}
+          {activeStep === 5 && (
+            <BindingAffinityStep5Section
+              projectId={project.id}
+              plantName={project.plantName}
+              runs={workspace?.runs || []}
+              onSelectRunForVisuals={(runId, targetStep) => {
+                setSelectedRunId(runId);
+                setActiveStep(targetStep);
+              }}
+            />
+          )}
 
-        {/* STEP 6: 2D INTERACTION DIAGRAMS */}
-        {activeStep === 6 && (
-          <Interaction2DStep6Section
-            projectId={project.id}
-            plantName={project.plantName}
-            runs={workspace?.runs || []}
-            selectedRunId={selectedRunId}
-            onSelectRunId={setSelectedRunId}
-            structureData={structureData}
-            isLoadingStructures={isLoadingStructures}
-            onNavigateTo3D={() => setActiveStep(7)}
-          />
-        )}
+          {activeStep === 6 && (
+            <Interaction2DStep6Section
+              projectId={project.id}
+              plantName={project.plantName}
+              runs={workspace?.runs || []}
+              selectedRunId={selectedRunId}
+              onSelectRunId={setSelectedRunId}
+              structureData={structureData}
+              isLoadingStructures={isLoadingStructures}
+              onNavigateTo3D={() => setActiveStep(7)}
+            />
+          )}
 
-        {/* STEP 7: 3D MOLECULAR VISUALIZATION */}
-        {activeStep === 7 && (
-          <Molecular3DStep7Section
-            projectId={project.id}
-            plantName={project.plantName}
-            runs={workspace?.runs || []}
-            selectedRunId={selectedRunId}
-            onSelectRunId={setSelectedRunId}
-            structureData={structureData}
-            isLoadingStructures={isLoadingStructures}
-          />
-        )}
+          {activeStep === 7 && (
+            <Molecular3DStep7Section
+              projectId={project.id}
+              plantName={project.plantName}
+              runs={workspace?.runs || []}
+              selectedRunId={selectedRunId}
+              onSelectRunId={setSelectedRunId}
+              structureData={structureData}
+              isLoadingStructures={isLoadingStructures}
+            />
+          )}
 
-        {/* STEP 8: RESULTS & INTERPRETATION */}
-        {activeStep === 8 && (
-          <InterpretationStep8Section
-            projectId={project.id}
-            plantName={project.plantName}
-            compoundsCount={compounds.length}
-            targetsCount={workspace?.targets?.length || 0}
-            completedRunsCount={
-              (workspace?.runs || []).filter((r: any) => r.bindingAffinity !== null).length
-            }
-            topRuns={(workspace?.runs || []).filter((r: any) => r.bindingAffinity !== null)}
-            synthesisText={synthesisText}
-            onSynthesisTextChange={setSynthesisText}
-            limitationsText={limitationsText}
-            onLimitationsTextChange={setLimitationsText}
-            onSaveSynthesis={handleSaveSynthesis}
-            isSaving={isSaving}
-            onProceedToSection3={() => router.push(`/researcher/projects/${project.id}/submission`)}
-          />
-        )}
-      </div>
+          {activeStep === 8 && (
+            <InterpretationStep8Section
+              projectId={project.id}
+              plantName={project.plantName}
+              compoundsCount={compounds.length}
+              targetsCount={workspace?.targets?.length || 0}
+              completedRunsCount={
+                (workspace?.runs || []).filter((r: any) => r.bindingAffinity !== null).length
+              }
+              topRuns={(workspace?.runs || []).filter((r: any) => r.bindingAffinity !== null)}
+              synthesisText={synthesisText}
+              onSynthesisTextChange={setSynthesisText}
+              limitationsText={limitationsText}
+              onLimitationsTextChange={setLimitationsText}
+              onSaveSynthesis={handleSaveSynthesis}
+              isSaving={isSaving}
+              onProceedToSection3={() =>
+                router.push(`/researcher/projects/${project.id}/submission`)
+              }
+            />
+          )}
+        </motion.div>
+      </AnimatePresence>
 
       {/* Phytochemical Selector Modal */}
       {showPhytoModal && (

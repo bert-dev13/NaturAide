@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Boxes,
   Search,
@@ -32,6 +33,8 @@ import {
   Clock,
   ArrowRight,
   ShieldAlert,
+  Beaker,
+  Leaf,
 } from "lucide-react";
 import {
   MATERIAL_TYPES,
@@ -516,238 +519,285 @@ export default function MaterialsStep4Section({
   const currentDosageForm = productSelection?.deliveryFormat || "Topical Hydrogel";
   const currentExtractionMethod = extraction?.extractionMethod || "Standardized Extraction";
   const currentExtractId = extraction?.extractFractionName || "AKP-EXT-001";
+  const easeOut = [0.22, 1, 0.36, 1] as const;
+
+  const inventoryFilters = [
+    { key: "ALL", label: "All", count: materials.length },
+    { key: "ACTIVE_BOTANICAL", label: "Botanical", count: activeBotanicalCount },
+    { key: "EXCIPIENT", label: "Excipients", count: excipientCount },
+    { key: "SOLVENT", label: "Solvents", count: solventCount },
+    { key: "PRESERVATIVE", label: "Preservative", count: preservativeCount },
+    { key: "ANALYTICAL_STANDARD", label: "Analytical", count: analyticalCount },
+  ];
 
   return (
     <div className="space-y-4">
-      {/* ===================================================================== */}
-      {/* 1. MINIMAL STEP HEADER                                                */}
-      {/* ===================================================================== */}
-      <div className="bg-white rounded-xl border border-slate-200 p-3 sm:p-4 shadow-2xs">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-          <div className="space-y-0.5">
-            <span className="text-[10px] font-bold text-emerald-800 tracking-wider uppercase">
-              Section 1 / Step 04 of 06
+      {/* Compact status strip — step chrome lives in parent workspace header */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.28, ease: easeOut }}
+        className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[#d7e4dc]/90 bg-white px-4 py-2.5 shadow-[0_1px_2px_rgba(15,44,32,0.04)]"
+      >
+        <div className="flex items-center gap-2 text-[11px] text-[#6d7f76]">
+          <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-800">
+            <Boxes className="h-3.5 w-3.5" />
+          </span>
+          <span className="font-semibold text-[#0f2c20]">Materials &amp; Excipients</span>
+          <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-900">
+            {materials.length} cataloged
+          </span>
+        </div>
+        <div className="flex items-center gap-2 text-[11px] font-semibold">
+          {isSaving ? (
+            <span className="inline-flex items-center gap-1 text-amber-700">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
+              Saving...
             </span>
-            <div className="flex items-center gap-2">
-              <Boxes className="w-5 h-5 text-emerald-600 shrink-0" />
-              <h1 className="text-base sm:text-lg font-bold text-slate-900">
-                Materials &amp; Excipients Inventory
-              </h1>
+          ) : isDirty ? (
+            <span className="inline-flex items-center gap-1 text-amber-700">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+              Unsaved
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-emerald-800">
+              <Check className="h-3.5 w-3.5" />
+              Saved
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={handleOpenManualAddModal}
+            className="inline-flex items-center gap-1 rounded-xl border border-[#d7e4dc] bg-[#f7faf8] px-2.5 py-1 text-[11px] font-semibold text-[#52645d] hover:border-emerald-400 hover:bg-emerald-50"
+          >
+            <Plus className="h-3 w-3" />
+            Manual Add
+          </button>
+        </div>
+      </motion.div>
+
+      {/* Project context */}
+      <motion.section
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, ease: easeOut }}
+        className="relative overflow-hidden rounded-2xl border border-[#d7e4dc]/90 bg-[linear-gradient(165deg,#ffffff_0%,#f8fbf9_100%)] p-4 shadow-[0_1px_2px_rgba(15,44,32,0.04)]"
+      >
+        <div className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-emerald-600 via-teal-400 to-cyan-300" />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-start gap-2.5">
+            <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-800">
+              <Leaf className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold text-[#0f2c20]">{project.plantName}</h2>
+              <p className="mt-0.5 text-[11px] text-[#8aa094]">
+                <span className="font-semibold text-[#52645d]">{currentDosageForm}</span>
+                <span className="mx-1.5 text-[#d7e4dc]">·</span>
+                <span className="font-mono text-[#52645d]">{currentExtractId}</span>
+                <span className="mx-1.5 text-[#d7e4dc]">·</span>
+                {currentExtractionMethod}
+              </p>
             </div>
           </div>
-
-          <div className="flex items-center gap-3">
-            {/* Quick Context Pill */}
-            <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-600">
-              <span className="font-semibold text-slate-800">{project.plantName}</span>
-              <span>•</span>
-              <span className="text-emerald-700 font-medium">{currentDosageForm}</span>
-              <span>•</span>
-              <span className="font-mono text-slate-500 text-[11px]">{currentExtractId}</span>
-            </div>
-
-            {/* Saved Indicator */}
-            <div className="flex items-center gap-1.5 text-xs font-semibold">
-              {isDirty ? (
-                <span className="flex items-center gap-1 text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                  Unsaved Changes
+          <div className="flex flex-wrap gap-1.5">
+            {[
+              { n: "1", label: "Suggest" },
+              { n: "2", label: "Select & add" },
+              { n: "3", label: "Review inventory" },
+            ].map((step, idx) => (
+              <span
+                key={step.n}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-[#d7e4dc] bg-white px-2.5 py-1 text-[10px] font-semibold text-[#52645d]"
+              >
+                <span className="inline-flex h-4 w-4 items-center justify-center rounded-md bg-emerald-600 text-[9px] font-bold text-white">
+                  {step.n}
                 </span>
-              ) : (
-                <span className="flex items-center gap-1 text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                  <Check className="w-3.5 h-3.5 text-emerald-600 stroke-[2.5]" />
-                  Saved
-                </span>
-              )}
-            </div>
+                {step.label}
+                {idx < 2 && <ChevronRight className="h-3 w-3 text-[#c5d4cb]" />}
+              </span>
+            ))}
           </div>
         </div>
-      </div>
+      </motion.section>
 
-      {/* ===================================================================== */}
-      {/* 2. AI MATERIALS ASSISTANT & ONE-CLICK IMPORT (PRIMARY FAST-PATH)       */}
-      {/* ===================================================================== */}
-      <div className="bg-gradient-to-br from-emerald-900/5 via-white to-slate-50 rounded-xl border border-emerald-200/80 p-3.5 sm:p-4 shadow-2xs space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-          <div className="space-y-0.5">
-            <div className="flex items-center gap-2">
-              <div className="p-1 rounded-lg bg-emerald-600 text-white shadow-2xs">
-                <Sparkles className="w-4 h-4" />
-              </div>
-              <h2 className="text-xs sm:text-sm font-bold text-slate-900">
-                AI Materials Assistant
-              </h2>
-              {aiProvenance && (
-                <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100/70 text-emerald-800 uppercase tracking-wider">
-                  {aiProvenance === "ai" ? "AI Grounded" : "Compendial Baseline"}
-                </span>
-              )}
-            </div>
-            <p className="text-[11px] text-slate-500">
-              Contextual candidate materials grounded in your plant identity ({project.plantName}), extraction protocol ({currentExtractionMethod}), and dosage form ({currentDosageForm}).
+      {/* 1. AI Suggest */}
+      <motion.section
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.04, ease: easeOut }}
+        className="space-y-3 rounded-2xl border border-[#d7e4dc]/90 bg-white p-4 shadow-[0_1px_2px_rgba(15,44,32,0.04)] sm:p-5"
+      >
+        <div className="flex flex-col gap-3 border-b border-[#e8f0eb] pb-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-[#52645d]">
+              <span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-emerald-600 text-[10px] font-bold text-white">
+                1
+              </span>
+              <Sparkles className="h-3.5 w-3.5 text-emerald-700" />
+              Suggest compatible materials
+            </h3>
+            <p className="mt-1 text-[11px] text-[#8aa094]">
+              Grounded in {project.plantName}, {currentExtractionMethod}, and {currentDosageForm}.
             </p>
           </div>
-
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2">
+            {aiProvenance && (
+              <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-900">
+                {aiProvenance === "ai" ? "AI Grounded" : "Compendial"}
+              </span>
+            )}
             <button
               type="button"
               onClick={handleFetchAiRecommendations}
               disabled={isLoadingAi || isImporting}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-all shadow-2xs disabled:opacity-50 cursor-pointer"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-700 px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-800 disabled:opacity-50"
             >
-              <Wand2 className={`w-3.5 h-3.5 ${isLoadingAi ? "animate-spin" : ""}`} />
-              <span>
-                {isLoadingAi
-                  ? "Analyzing Scoping Data..."
-                  : aiRecommendations.length > 0
-                  ? "Regenerate Suggestions"
+              <Wand2 className={`h-3.5 w-3.5 ${isLoadingAi ? "animate-spin" : ""}`} />
+              {isLoadingAi
+                ? "Analyzing..."
+                : aiRecommendations.length > 0
+                  ? "Regenerate"
                   : "AI Suggest Materials"}
-              </span>
             </button>
           </div>
         </div>
 
-        {/* AI Error Alert */}
-        {aiError && (
-          <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-              <span>{aiError}</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setAiError(null)}
-              className="text-rose-500 hover:text-rose-700 p-1"
+        <AnimatePresence>
+          {aiError && (
+            <motion.div
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="flex items-center justify-between gap-2 rounded-xl border border-rose-200 bg-rose-50 p-2.5 text-xs text-rose-700"
             >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        )}
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 shrink-0 text-rose-600" />
+                <span>{aiError}</span>
+              </div>
+              <button type="button" onClick={() => setAiError(null)} className="p-1 text-rose-500 hover:text-rose-700">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-        {/* Import Feedback Banner */}
-        {importFeedback && (
-          <div
-            className={`p-2.5 rounded-lg text-xs flex items-center justify-between gap-2 border ${
-              importFeedback.type === "success"
-                ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                : "bg-rose-50 text-rose-800 border-rose-200"
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              {importFeedback.type === "success" ? (
-                <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-              ) : (
-                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-              )}
-              <span className="font-medium">{importFeedback.message}</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setImportFeedback(null)}
-              className="text-slate-400 hover:text-slate-700 p-1"
+        <AnimatePresence>
+          {importFeedback && (
+            <motion.div
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className={`flex items-center justify-between gap-2 rounded-xl border p-2.5 text-xs ${
+                importFeedback.type === "success"
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                  : "border-rose-200 bg-rose-50 text-rose-800"
+              }`}
             >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        )}
+              <div className="flex items-center gap-2">
+                {importFeedback.type === "success" ? (
+                  <Check className="h-4 w-4 shrink-0 text-emerald-600" />
+                ) : (
+                  <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
+                )}
+                <span className="font-medium">{importFeedback.message}</span>
+              </div>
+              <button type="button" onClick={() => setImportFeedback(null)} className="p-1 text-[#8aa094] hover:text-[#52645d]">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-        {/* LOADING SKELETON */}
         {isLoadingAi && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
+          <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2 lg:grid-cols-3">
             {[1, 2, 3, 4, 5, 6].map((idx) => (
               <div
                 key={idx}
-                className="p-3 rounded-xl border border-slate-200 bg-white/70 space-y-2 animate-pulse"
+                className="animate-pulse space-y-2 rounded-2xl border border-[#e8f0eb] bg-[#f7faf8] p-3"
               >
                 <div className="flex items-center justify-between">
-                  <div className="h-4 bg-slate-200 rounded w-28" />
-                  <div className="h-4 bg-emerald-100 rounded w-16" />
+                  <div className="h-4 w-28 rounded bg-[#d7e4dc]" />
+                  <div className="h-4 w-16 rounded bg-emerald-100" />
                 </div>
-                <div className="h-3 bg-slate-200 rounded w-36" />
-                <div className="h-8 bg-slate-100 rounded w-full" />
+                <div className="h-3 w-36 rounded bg-[#d7e4dc]" />
+                <div className="h-8 w-full rounded bg-[#e8f0eb]" />
               </div>
             ))}
           </div>
         )}
 
-        {/* EMPTY STATE (Before click) */}
         {!isLoadingAi && aiRecommendations.length === 0 && (
-          <div className="py-5 px-4 text-center rounded-xl bg-white border border-dashed border-emerald-300 space-y-2">
-            <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto">
-              <Sparkles className="w-5 h-5" />
+          <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-emerald-300/80 bg-[linear-gradient(180deg,#f7faf8_0%,#ffffff_100%)] px-4 py-8 text-center">
+            <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
+              <Wand2 className="h-5 w-5" />
             </div>
-            <div className="space-y-0.5 max-w-md mx-auto">
-              <p className="text-xs font-bold text-slate-800">
-                Generate Smart Materials for {project.plantName} {currentDosageForm}
+            <div className="max-w-md space-y-1">
+              <p className="text-sm font-semibold text-[#0f2c20]">
+                Build a starter inventory for {project.plantName}
               </p>
-              <p className="text-[11px] text-slate-500">
-                Click <strong>AI Suggest Materials</strong> to automatically evaluate compatible botanical extracts, excipients, continuous vehicles, and analytical standards.
+              <p className="text-[11px] leading-relaxed text-[#8aa094]">
+                One click suggests botanical actives, gelling agents, vehicles, preservatives, and
+                analytical standards matched to this hydrogel protocol.
               </p>
             </div>
             <button
               type="button"
               onClick={handleFetchAiRecommendations}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold cursor-pointer shadow-2xs"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-700 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-800"
             >
-              <Wand2 className="w-3.5 h-3.5" />
-              <span>AI Suggest Materials</span>
+              <Sparkles className="h-3.5 w-3.5" />
+              Start with AI Suggest
             </button>
+            <p className="text-[10px] text-[#8aa094]">
+              Or use <button type="button" onClick={handleOpenManualAddModal} className="font-semibold text-emerald-800 underline-offset-2 hover:underline">Manual Add</button> for a single known material.
+            </p>
           </div>
         )}
 
-        {/* RECOMMENDATIONS ACTIVE CONTENT */}
         {!isLoadingAi && aiRecommendations.length > 0 && (
-          <div className="space-y-2.5">
-            {/* Action Bar: Select All, Count, Import Button */}
-            <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-emerald-100/80">
-              <div className="flex items-center gap-2 text-xs">
-                <button
-                  type="button"
-                  onClick={handleSelectAll}
-                  className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-900 hover:underline cursor-pointer"
-                >
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#e8f0eb] bg-[#f7faf8] px-3 py-2">
+              <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-emerald-600 text-[10px] font-bold text-white">
+                  2
+                </span>
+                <span className="font-semibold text-[#0f2c20]">Select candidates to add</span>
+                <span className="text-[#c5d4cb]">|</span>
+                <button type="button" onClick={handleSelectAll} className="font-semibold text-emerald-800 hover:underline">
                   Select All
                 </button>
-                <span className="text-slate-300">|</span>
-                <button
-                  type="button"
-                  onClick={handleDeselectAll}
-                  className="text-[11px] font-semibold text-slate-500 hover:text-slate-700 hover:underline cursor-pointer"
-                >
-                  Deselect All
+                <button type="button" onClick={handleDeselectAll} className="font-semibold text-[#6d7f76] hover:underline">
+                  Clear
                 </button>
-                <span className="text-slate-300">|</span>
-                <span className="text-[11px] font-medium text-slate-600">
+                <span className="text-[#8aa094]">
                   <span className="font-bold text-emerald-800">{selectedRecIds.size}</span> of{" "}
                   {aiRecommendations.length} selected
                 </span>
               </div>
-
               <button
                 type="button"
                 onClick={handleImportSelected}
                 disabled={selectedRecIds.size === 0 || isImporting}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-2xs disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {isImporting ? (
                   <>
-                    <RotateCcw className="w-3.5 h-3.5 animate-spin" />
-                    <span>Importing to Inventory...</span>
+                    <RotateCcw className="h-3.5 w-3.5 animate-spin" />
+                    Importing...
                   </>
                 ) : (
                   <>
-                    <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-                    <span>
-                      Add {selectedRecIds.size > 0 ? `${selectedRecIds.size} ` : ""}Selected to Inventory
-                    </span>
+                    <Plus className="h-3.5 w-3.5 stroke-[2.5]" />
+                    Add {selectedRecIds.size > 0 ? selectedRecIds.size : ""} to Inventory
+                    <ArrowRight className="h-3.5 w-3.5" />
                   </>
                 )}
               </button>
             </div>
 
-            {/* Cards Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
-              {aiRecommendations.map((rec) => {
+            <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-3">
+              {aiRecommendations.map((rec, idx) => {
                 const norm = rec.materialName.toLowerCase().trim();
                 const isAlreadyInInventory = existingMaterialNamesNormalized.has(norm);
                 const isSelected = selectedRecIds.has(rec.id);
@@ -755,814 +805,678 @@ export default function MaterialsStep4Section({
                 const typeSpec = MATERIAL_TYPES.find((t) => t.key === rec.materialType);
 
                 return (
-                  <div
+                  <motion.div
                     key={rec.id}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.25, delay: Math.min(idx * 0.03, 0.24), ease: easeOut }}
                     onClick={() => handleToggleSelect(rec.id, isAlreadyInInventory)}
-                    className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between gap-2 cursor-pointer ${
+                    className={`flex cursor-pointer flex-col justify-between gap-2 rounded-2xl border p-3.5 text-left transition ${
                       isAlreadyInInventory
-                        ? "bg-slate-50/80 border-slate-200 opacity-75 cursor-default"
+                        ? "cursor-default border-[#e8f0eb] bg-[#f7faf8] opacity-75"
                         : isSelected
-                        ? "bg-emerald-50/70 border-emerald-400 ring-1 ring-emerald-400 shadow-2xs"
-                        : "bg-white border-slate-200 hover:border-slate-300 hover:shadow-2xs"
+                          ? "border-emerald-400 bg-emerald-50/70 ring-1 ring-emerald-400/40 shadow-sm"
+                          : "border-[#d7e4dc]/90 bg-white hover:border-emerald-300 hover:shadow-sm"
                     }`}
                   >
                     <div className="space-y-1.5">
-                      {/* Top Row: Checkbox, Name & Type Badge */}
                       <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-start gap-2 min-w-0">
+                        <div className="flex min-w-0 items-start gap-2">
                           <input
                             type="checkbox"
                             checked={isSelected || isAlreadyInInventory}
                             disabled={isAlreadyInInventory}
-                            onChange={() => {}} // handled by card onClick
-                            className="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer disabled:cursor-default"
+                            onChange={() => {}}
+                            className="mt-0.5 cursor-pointer rounded text-emerald-600 focus:ring-emerald-500 disabled:cursor-default"
                           />
                           <div className="min-w-0">
-                            <span className="font-bold text-slate-900 text-xs block truncate leading-tight">
+                            <span className="block truncate text-xs font-bold leading-tight text-[#0f2c20]">
                               {rec.materialName}
                             </span>
-                            <span className="text-[10px] text-slate-500 font-medium block truncate">
+                            <span className="block truncate text-[10px] font-medium text-[#8aa094]">
                               {rec.functionalRole}
                             </span>
                           </div>
                         </div>
-
-                        <div className="shrink-0 flex flex-col items-end gap-1">
+                        <div className="flex shrink-0 flex-col items-end gap-1">
                           <span
-                            className={`px-1.5 py-0.5 rounded text-[9px] font-bold border whitespace-nowrap ${
-                              typeSpec?.badgeClass || "bg-slate-100 text-slate-700 border-slate-200"
+                            className={`whitespace-nowrap rounded-md border px-1.5 py-0.5 text-[9px] font-bold ${
+                              typeSpec?.badgeClass || "border-[#d7e4dc] bg-[#f7faf8] text-[#52645d]"
                             }`}
                           >
                             {typeSpec?.label || rec.materialType}
                           </span>
                           {isAlreadyInInventory && (
-                            <span className="px-1.5 py-0.2 rounded text-[8px] font-bold bg-slate-200 text-slate-700">
+                            <span className="rounded bg-[#e8f0eb] px-1.5 py-0.5 text-[8px] font-bold text-[#52645d]">
                               In Inventory
                             </span>
                           )}
                         </div>
                       </div>
 
-                      {/* Active Botanical Link Info */}
                       {rec.materialType === "ACTIVE_BOTANICAL" && (
-                        <div className="p-1.5 rounded-lg bg-emerald-100/60 border border-emerald-200/80 text-[10px] text-emerald-900 space-y-0.5">
+                        <div className="space-y-0.5 rounded-xl border border-emerald-200/80 bg-emerald-50/70 p-2 text-[10px] text-emerald-900">
                           <div className="flex items-center justify-between">
-                            <span className="font-semibold">Linked Extract ID:</span>
+                            <span className="font-semibold">Linked Extract</span>
                             <span className="font-mono font-bold text-emerald-800">
                               {rec.extractFractionId || currentExtractId}
                             </span>
                           </div>
-                          <div className="flex items-center justify-between text-emerald-700 text-[9px]">
-                            <span>Method: {extraction?.extractionMethod || "Standardized"}</span>
-                            <span>•</span>
-                            <span>Solvent: {extraction?.extractionSolvent || "Hydroethanolic"}</span>
+                          <div className="flex items-center gap-1 text-[9px] text-emerald-700">
+                            <Beaker className="h-2.5 w-2.5" />
+                            {extraction?.extractionSolvent || "Hydroethanolic"}
                           </div>
                         </div>
                       )}
 
-                      {/* Scientific Justification */}
-                      <p className="text-[11px] text-slate-600 leading-relaxed line-clamp-2">
+                      <p className="line-clamp-2 text-[11px] leading-relaxed text-[#6d7f76]">
                         {rec.scientificJustification}
                       </p>
 
-                      {/* Expandable Compatibility & References */}
-                      {isExpanded && (
-                        <div
-                          className="pt-1.5 border-t border-slate-100 space-y-1 text-[10px] text-slate-600"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <div>
-                            <span className="font-bold text-slate-700 block">Compatibility Considerations:</span>
-                            <p className="text-slate-600">{rec.compatibilityNotes}</p>
-                          </div>
-                          <div className="flex items-center justify-between text-slate-400 font-mono text-[9px]">
-                            <span>Suggested Grade: {rec.suggestedGrade}</span>
-                            <span>Unit: {rec.suggestedUnit}</span>
-                          </div>
-                          {rec.supportingReferences && rec.supportingReferences.length > 0 && (
-                            <div className="pt-0.5">
-                              <span className="font-bold text-slate-700 block">Compendial Reference:</span>
-                              <span className="italic text-slate-500 block truncate">
-                                {rec.supportingReferences[0]}
-                              </span>
+                      <AnimatePresence>
+                        {isExpanded && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: "auto" }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="space-y-1 overflow-hidden border-t border-[#e8f0eb] pt-1.5 text-[10px] text-[#6d7f76]"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <div>
+                              <span className="block font-bold text-[#52645d]">Compatibility</span>
+                              <p>{rec.compatibilityNotes}</p>
                             </div>
-                          )}
-                        </div>
-                      )}
+                            <div className="flex items-center justify-between font-mono text-[9px] text-[#8aa094]">
+                              <span>{rec.suggestedGrade}</span>
+                              <span>{rec.suggestedUnit}</span>
+                            </div>
+                            {rec.supportingReferences?.[0] && (
+                              <p className="truncate italic text-[#8aa094]">{rec.supportingReferences[0]}</p>
+                            )}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </div>
 
-                    {/* Card Footer: Status & Expand Toggle */}
-                    <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-[10px] text-slate-400">
-                      <span className="font-mono font-medium text-slate-500">
-                        Status: Planned (Unverified)
-                      </span>
+                    <div className="flex items-center justify-between border-t border-[#e8f0eb] pt-1.5 text-[10px] text-[#8aa094]">
+                      <span className="font-medium">Planned · unverified</span>
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           handleToggleExpand(rec.id);
                         }}
-                        className="text-emerald-700 hover:text-emerald-900 font-semibold cursor-pointer"
+                        className="font-semibold text-emerald-800 hover:text-emerald-950"
                       >
-                        {isExpanded ? "Hide Details" : "View Details"}
+                        {isExpanded ? "Hide" : "Details"}
                       </button>
                     </div>
-                  </div>
+                  </motion.div>
                 );
               })}
             </div>
 
-            {/* Scientific Disclaimer */}
-            <div className="p-2 rounded-lg bg-slate-50 border border-slate-200 text-[10px] text-slate-500 flex items-start gap-1.5">
-              <Info className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
+            <div className="flex items-start gap-1.5 rounded-xl border border-[#e8f0eb] bg-[#f7faf8] p-2.5 text-[10px] text-[#8aa094]">
+              <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#c5d4cb]" />
               <span>
-                Candidate materials are recommended for research scoping. Actual formulation stability, organoleptic profile, and clinical efficacy must be confirmed through bench compounding and quality control testing.
+                Suggestions are for research scoping. Confirm stability and QC on the bench before
+                clinical claims.
               </span>
             </div>
           </div>
         )}
-      </div>
+      </motion.section>
 
-      {/* ===================================================================== */}
-      {/* 3. CURRENT PROJECT MATERIALS INVENTORY TABLE                          */}
-      {/* ===================================================================== */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-2xs space-y-3">
-        {/* Table Header & Search Filter Bar */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
-          <div className="flex items-center gap-2">
-            <Package className="w-4 h-4 text-emerald-600" />
-            <h2 className="text-xs sm:text-sm font-bold text-slate-800">
-              Project Materials Inventory ({materials.length})
-            </h2>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Search Input */}
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
-              <input
-                type="text"
-                value={tableSearch}
-                onChange={(e) => setTableSearch(e.target.value)}
-                placeholder="Search materials, lots, suppliers..."
-                className="pl-8 pr-3 py-1.5 rounded-lg border border-slate-300 text-xs w-48 sm:w-56 focus:outline-none focus:border-emerald-500"
-              />
-              {tableSearch && (
-                <button
-                  type="button"
-                  onClick={() => setTableSearch("")}
-                  className="absolute right-2 top-2 text-slate-400 hover:text-slate-600"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              )}
-            </div>
-
-            {/* Filter Pills */}
-            <div className="flex items-center gap-1 overflow-x-auto text-[11px]">
-              {[
-                { key: "ALL", label: `All (${materials.length})` },
-                { key: "ACTIVE_BOTANICAL", label: `Botanical (${activeBotanicalCount})` },
-                { key: "EXCIPIENT", label: `Excipients (${excipientCount})` },
-                { key: "SOLVENT", label: `Solvents (${solventCount})` },
-                { key: "PRESERVATIVE", label: `Preservative (${preservativeCount})` },
-                { key: "ANALYTICAL_STANDARD", label: `Analytical (${analyticalCount})` },
-              ].map((f) => (
-                <button
-                  key={f.key}
-                  type="button"
-                  onClick={() => setTableTypeFilter(f.key)}
-                  className={`px-2 py-1 rounded-lg font-medium transition-colors cursor-pointer ${
-                    tableTypeFilter === f.key
-                      ? "bg-emerald-600 text-white font-semibold shadow-2xs"
-                      : "bg-slate-100 hover:bg-slate-200 text-slate-700"
-                  }`}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
-
-            <button
-              type="button"
-              onClick={handleOpenManualAddModal}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold cursor-pointer shadow-2xs transition-colors"
-            >
-              <Plus className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Manual Add</span>
-            </button>
+      {/* 3. Inventory */}
+      <motion.section
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.08, ease: easeOut }}
+        className="space-y-2 rounded-2xl border border-[#d7e4dc]/90 bg-white p-3 shadow-[0_1px_2px_rgba(15,44,32,0.04)] sm:p-4"
+      >
+        <div className="flex flex-col gap-2 border-b border-[#e8f0eb] pb-2.5 sm:flex-row sm:items-center sm:justify-between">
+          <h3 className="inline-flex flex-wrap items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-[#52645d]">
+            <span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-emerald-600 text-[10px] font-bold text-white">
+              3
+            </span>
+            Project inventory
+            <span className="font-medium normal-case tracking-normal text-[#8aa094]">
+              · {filteredMaterials.length}/{materials.length}
+            </span>
+          </h3>
+          <div className="relative">
+            <Search className="absolute left-2 top-1.5 h-3.5 w-3.5 text-[#8aa094]" />
+            <input
+              type="text"
+              value={tableSearch}
+              onChange={(e) => setTableSearch(e.target.value)}
+              placeholder="Search name, lot, supplier..."
+              className="w-full rounded-lg border border-[#d5e3da] bg-[#fbfdfb] py-1 pl-7 pr-7 text-[11px] text-[#0f2c20] outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15 sm:w-52"
+            />
+            {tableSearch && (
+              <button
+                type="button"
+                onClick={() => setTableSearch("")}
+                className="absolute right-1.5 top-1.5 text-[#8aa094] hover:text-[#52645d]"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Inventory Records Table */}
+        <div className="flex gap-1 overflow-x-auto pb-0.5">
+          {inventoryFilters.map((f) => (
+            <button
+              key={f.key}
+              type="button"
+              onClick={() => setTableTypeFilter(f.key)}
+              className={`inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-semibold transition ${
+                tableTypeFilter === f.key
+                  ? "bg-emerald-700 text-white shadow-sm"
+                  : "border border-[#d7e4dc] bg-[#f7faf8] text-[#52645d] hover:border-emerald-400 hover:bg-emerald-50"
+              }`}
+            >
+              {f.label}
+              <span
+                className={`rounded px-1 py-0.5 text-[9px] font-bold tabular-nums ${
+                  tableTypeFilter === f.key ? "bg-white/20 text-white" : "bg-white text-[#8aa094]"
+                }`}
+              >
+                {f.count}
+              </span>
+            </button>
+          ))}
+        </div>
+
         {filteredMaterials.length > 0 ? (
-          <div className="overflow-x-auto border border-slate-100 rounded-xl">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 text-slate-600 border-b border-slate-200 font-semibold uppercase text-[10px] tracking-wider">
-                <tr>
-                  <th className="py-2.5 px-3">Material</th>
-                  <th className="py-2.5 px-3">Type</th>
-                  <th className="py-2.5 px-3">Grade / Specification</th>
-                  <th className="py-2.5 px-3">Stock on Hand</th>
-                  <th className="py-2.5 px-3">Supplier &amp; Lot</th>
-                  <th className="py-2.5 px-3">Status</th>
-                  <th className="py-2.5 px-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
+          <div className="overflow-hidden rounded-xl border border-[#d7e4dc]/90">
+            <div className="hidden grid-cols-[minmax(0,1.4fr)_6.5rem_7rem_minmax(0,1fr)_4.5rem] gap-2 border-b border-[#e8f0eb] bg-[#f7faf8] px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-wider text-[#8aa094] md:grid">
+              <span>Material</span>
+              <span>Status</span>
+              <span>Stock</span>
+              <span>Supplier / lot</span>
+              <span className="text-right">Actions</span>
+            </div>
+            <div className="divide-y divide-[#e8f0eb]">
+              <AnimatePresence mode="popLayout">
                 {filteredMaterials.map((mat) => {
                   const typeSpec = MATERIAL_TYPES.find((t) => t.key === mat.materialType);
                   const isPlanned = mat.inventoryStatus === "PLANNED" || !mat.quantityAvailable;
 
                   return (
-                    <tr key={mat.id} className="hover:bg-slate-50/70 transition-colors">
-                      <td className="py-2.5 px-3">
-                        <div className="space-y-0.5">
-                          <span className="font-bold text-slate-900 block">{mat.materialName}</span>
-                          <span className="text-[10px] text-slate-500 font-medium block truncate max-w-xs">
-                            {mat.functionDescription || "Compounding component"}
+                    <motion.div
+                      key={mat.id}
+                      layout
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.15, ease: easeOut }}
+                      className="grid grid-cols-1 items-center gap-1.5 bg-white px-2.5 py-1.5 transition hover:bg-[#f7faf8] md:grid-cols-[minmax(0,1.4fr)_6.5rem_7rem_minmax(0,1fr)_4.5rem] md:gap-2"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex min-w-0 items-center gap-1.5">
+                          <span className="truncate text-xs font-semibold text-[#0f2c20]">
+                            {mat.materialName}
+                          </span>
+                          <span
+                            className={`shrink-0 rounded border px-1 py-0.5 text-[8px] font-bold ${
+                              typeSpec?.badgeClass ||
+                              "border-[#d7e4dc] bg-[#f7faf8] text-[#52645d]"
+                            }`}
+                          >
+                            {typeSpec?.label || mat.materialType}
                           </span>
                         </div>
-                      </td>
+                        <p className="truncate text-[10px] text-[#8aa094]">
+                          {mat.functionDescription || "Compounding component"}
+                          {mat.gradeOrPurity ? ` · ${mat.gradeOrPurity}` : ""}
+                        </p>
+                      </div>
 
-                      <td className="py-2.5 px-3 whitespace-nowrap">
-                        <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
-                            typeSpec?.badgeClass || "bg-slate-100 text-slate-700 border-slate-200"
-                          }`}
-                        >
-                          {typeSpec?.label || mat.materialType}
-                        </span>
-                      </td>
-
-                      <td className="py-2.5 px-3 text-slate-600 whitespace-nowrap">
-                        <span className="font-medium">{mat.gradeOrPurity || "Compendial Grade"}</span>
-                      </td>
-
-                      <td className="py-2.5 px-3 whitespace-nowrap">
+                      <div>
                         {isPlanned ? (
-                          <span className="font-sans text-[10px] font-semibold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                            Planned (Pending Receipt)
-                          </span>
-                        ) : (
-                          <span className="font-mono font-bold text-emerald-800 bg-emerald-50/70 px-2 py-0.5 rounded border border-emerald-200/60">
-                            {mat.quantityAvailable} {mat.unit || "g"}
-                          </span>
-                        )}
-                      </td>
-
-                      <td className="py-2.5 px-3 text-slate-500 min-w-40">
-                        <div className="space-y-0.5">
-                          <span className="text-slate-800 font-medium block truncate max-w-48">
-                            {mat.supplierOrSource || "Unassigned"}
-                          </span>
-                          <span className="text-[10px] font-mono text-slate-400 block">
-                            Lot: {mat.lotOrBatchNumber || "Pending"}
-                          </span>
-                        </div>
-                      </td>
-
-                      <td className="py-2.5 px-3 whitespace-nowrap">
-                        {isPlanned ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-700 bg-amber-50/80 px-2 py-0.5 rounded-full border border-amber-200">
-                            <Clock className="w-2.5 h-2.5 text-amber-600" />
+                          <span className="inline-flex items-center gap-1 rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-semibold text-amber-800">
+                            <Clock className="h-2.5 w-2.5" />
                             Planned
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-700 bg-emerald-50/80 px-2 py-0.5 rounded-full border border-emerald-200">
-                            <Check className="w-2.5 h-2.5 text-emerald-600" />
-                            Verified Stock
+                          <span className="inline-flex items-center gap-1 rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-800">
+                            <Check className="h-2.5 w-2.5" />
+                            In stock
                           </span>
                         )}
-                      </td>
+                      </div>
 
-                      <td className="py-2.5 px-3 text-right whitespace-nowrap space-x-1">
+                      <div className="font-mono text-[11px] font-bold text-[#0f2c20]">
+                        {isPlanned
+                          ? <span className="font-sans text-[10px] font-medium text-amber-700">Pending</span>
+                          : `${mat.quantityAvailable} ${mat.unit || "g"}`}
+                      </div>
+
+                      <div className="min-w-0 text-[11px]">
+                        <span className="block truncate font-medium text-[#52645d]">
+                          {mat.supplierOrSource || "Unassigned"}
+                        </span>
+                        <span className="block truncate font-mono text-[10px] text-[#8aa094]">
+                          {mat.lotOrBatchNumber || "Lot pending"}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-end gap-0.5">
                         <button
                           type="button"
                           onClick={() => setSelectedDetailMaterial(mat)}
-                          className="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-semibold cursor-pointer"
-                          title="View Material Specification"
+                          className="rounded p-1 text-[#8aa094] transition hover:bg-emerald-50 hover:text-emerald-800"
+                          title="View details"
                         >
-                          Details
+                          <ChevronRight className="h-3.5 w-3.5" />
                         </button>
-
                         <button
                           type="button"
                           onClick={() => handleStartEditing(mat)}
-                          className="p-1 rounded text-slate-400 hover:text-emerald-700 hover:bg-slate-100 cursor-pointer transition-colors"
+                          className="rounded p-1 text-[#8aa094] transition hover:bg-emerald-50 hover:text-emerald-800"
                           title="Edit Material"
                         >
-                          <Edit2 className="w-3.5 h-3.5" />
+                          <Edit2 className="h-3.5 w-3.5" />
                         </button>
-
                         <button
                           type="button"
                           onClick={() => onDeleteMaterial(mat.id)}
-                          className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-slate-100 cursor-pointer transition-colors"
+                          className="rounded p-1 text-[#8aa094] transition hover:bg-rose-50 hover:text-rose-600"
                           title="Remove Material"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Trash2 className="h-3.5 w-3.5" />
                         </button>
-                      </td>
-                    </tr>
+                      </div>
+                    </motion.div>
                   );
                 })}
-              </tbody>
-            </table>
+              </AnimatePresence>
+            </div>
           </div>
         ) : (
-          <div className="py-8 text-center rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
-            <Boxes className="w-8 h-8 text-slate-400 mx-auto" />
-            <div className="space-y-0.5">
-              <p className="text-xs font-bold text-slate-700">No Materials in Inventory</p>
-              <p className="text-[11px] text-slate-400">
-                Use the AI Materials Assistant above to generate suggestions, or click Manual Add.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={handleOpenManualAddModal}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold cursor-pointer shadow-2xs"
-            >
-              <Plus className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Manual Add Material</span>
-            </button>
+          <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-[#d7e4dc] bg-[#f7faf8] py-8 text-center">
+            <Boxes className="h-7 w-7 text-[#c5d4cb]" />
+            <p className="text-xs font-bold text-[#52645d]">
+              {materials.length === 0 ? "Inventory is empty" : "No matches for this filter"}
+            </p>
+            <p className="text-[11px] text-[#8aa094]">
+              {materials.length === 0
+                ? "Start with AI Suggest, or add one material manually."
+                : "Try another type filter or clear search."}
+            </p>
+            {materials.length === 0 && (
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleFetchAiRecommendations}
+                  className="inline-flex items-center gap-1 rounded-lg bg-emerald-700 px-2.5 py-1 text-[11px] font-semibold text-white"
+                >
+                  <Wand2 className="h-3 w-3" />
+                  AI Suggest
+                </button>
+                <button
+                  type="button"
+                  onClick={handleOpenManualAddModal}
+                  className="inline-flex items-center gap-1 rounded-lg border border-[#d7e4dc] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#52645d] hover:border-emerald-400"
+                >
+                  <Plus className="h-3 w-3 text-emerald-700" />
+                  Manual Add
+                </button>
+              </div>
+            )}
           </div>
         )}
-      </div>
+      </motion.section>
 
-      {/* ===================================================================== */}
-      {/* 4. MANUAL ADD / EDIT MATERIAL MODAL (ENHANCED & ENLARGED UI)          */}
-      {/* ===================================================================== */}
+      {/* Add / Edit material modal */}
       {(isManualFormOpen || editingMaterialId !== null) && (
         <div
-          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 sm:p-6 overflow-y-auto"
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 p-4 backdrop-blur-xs sm:items-center sm:p-6"
           onClick={handleCancelEditing}
         >
           <div
             id="material-input-form"
             onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-2xl max-w-4xl w-full shadow-2xl border border-slate-200/90 animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[92vh]"
+            className="my-4 flex w-full max-w-2xl flex-col rounded-2xl border border-[#d7e4dc] bg-white shadow-2xl sm:my-0"
           >
-            {/* Modal Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-emerald-50/60 via-white to-slate-50/60 rounded-t-2xl shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs shrink-0">
-                  {editingMaterialId ? <Edit2 className="w-5 h-5" /> : <Plus className="w-5 h-5 stroke-[2.5]" />}
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">
-                      {editingMaterialId ? "Update Inventory Record" : "Materials & Excipients Inventory"}
-                    </span>
-                    <span className="text-slate-300">•</span>
-                    <span className="text-[11px] font-medium text-slate-500">
-                      {project.plantName} ({currentDosageForm})
-                    </span>
-                  </div>
-                  <h2 className="text-base sm:text-lg font-bold text-slate-900">
-                    {editingMaterialId ? "Edit Cataloged Material" : "Add Material to Inventory"}
-                  </h2>
-                </div>
+            <div className="flex items-center justify-between border-b border-[#e8f0eb] px-5 py-3.5">
+              <div className="min-w-0">
+                <h2 className="text-base font-bold text-[#0f2c20]">
+                  {editingMaterialId ? "Edit material" : "Add material"}
+                </h2>
+                <p className="truncate text-[11px] text-[#8aa094]">
+                  {project.plantName} · {currentDosageForm}
+                </p>
               </div>
-
               <button
                 type="button"
                 onClick={handleCancelEditing}
-                className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer transition-colors"
-                title="Close modal"
+                className="rounded-lg p-1.5 text-[#8aa094] transition hover:bg-[#f7faf8] hover:text-[#52645d]"
               >
-                <X className="w-5 h-5" />
+                <X className="h-4 w-4" />
               </button>
             </div>
 
-            {/* Modal Body */}
-            <form onSubmit={handleSubmitForm} className="flex flex-col flex-1 min-h-0">
-              <div className="px-6 py-5 space-y-5 overflow-y-auto flex-1">
+            <form onSubmit={handleSubmitForm} className="flex flex-col">
+              <div className="space-y-4 px-5 py-4 pb-8">
                 {formError && (
-                  <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium flex items-center gap-2.5">
-                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                    <span>{formError}</span>
+                  <div className="flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-2 text-[11px] font-medium text-rose-700">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                    {formError}
                   </div>
                 )}
 
-                {/* SECTION A: MATERIAL CLASSIFICATION SELECTOR CARDS (No overlapping dropdown!) */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="block font-bold text-slate-800 text-xs uppercase tracking-wider">
-                      1. Material Classification Type <span className="text-rose-500">*</span>
-                    </label>
-                    <span className="text-[11px] text-slate-400">
-                      Select category to load curated pharmacopeial presets
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+                {/* Type pills */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-[#8aa094]">
+                    Type
+                  </label>
+                  <div className="flex flex-wrap gap-1.5">
                     {MATERIAL_TYPES.map((t) => {
                       const isActive = formType === t.key;
                       return (
                         <button
                           key={t.key}
                           type="button"
+                          title={t.description}
                           onClick={() => {
                             setFormType(t.key);
-                            setIsTypeDropdownOpen(false);
                             setIsDirty(true);
                           }}
-                          className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-1 ${
+                          className={`rounded-lg px-3 py-1.5 text-[11px] font-semibold transition ${
                             isActive
-                              ? "bg-emerald-50/90 border-emerald-500 ring-1 ring-emerald-500 shadow-2xs"
-                              : "bg-slate-50/60 border-slate-200 hover:bg-white hover:border-slate-300"
+                              ? "bg-emerald-700 text-white"
+                              : "border border-[#d7e4dc] bg-[#f7faf8] text-[#52645d] hover:border-emerald-400"
                           }`}
                         >
-                          <div className="flex items-center justify-between gap-1">
-                            <span
-                              className={`text-xs font-bold leading-tight ${
-                                isActive ? "text-emerald-950" : "text-slate-800"
-                              }`}
-                            >
-                              {t.label}
-                            </span>
-                            {isActive && (
-                              <span className="w-4 h-4 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0">
-                                <Check className="w-2.5 h-2.5 stroke-[3]" />
-                              </span>
-                            )}
-                          </div>
-                          <span className="text-[10px] text-slate-500 line-clamp-2 leading-snug">
-                            {t.description}
-                          </span>
+                          {t.label}
                         </button>
                       );
                     })}
                   </div>
                 </div>
 
-                {/* SECTION B: MATERIAL IDENTITY & CURATED PRESETS */}
-                <div
-                  className={`p-4 rounded-xl bg-slate-50/70 border border-slate-200/80 space-y-3.5 relative ${
-                    isNameDropdownOpen ? "z-40" : "z-10"
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <label className="block font-bold text-slate-800 text-xs uppercase tracking-wider">
-                      2. Material Identity &amp; Functional Role <span className="text-rose-500">*</span>
-                    </label>
-                    <span className="text-[11px] text-emerald-700 font-medium">
-                      {catalogPresetsForCurrentType.length} curated presets available
-                    </span>
+                {/* Name — full width so preset menu doesn't cover Role */}
+                <div className="relative z-30 space-y-1.5" ref={nameDropdownRef}>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-[#8aa094]">
+                    Material name <span className="text-rose-500">*</span>
+                  </label>
+                  <div className="flex gap-1.5">
+                    <input
+                      type="text"
+                      value={formName}
+                      onChange={(e) => {
+                        setFormName(e.target.value);
+                        setNameSearchQuery(e.target.value);
+                        setIsDirty(true);
+                      }}
+                      onFocus={() => {
+                        setIsNameDropdownOpen(true);
+                        setIsGradeDropdownOpen(false);
+                        setIsUnitDropdownOpen(false);
+                      }}
+                      placeholder="Type or pick a preset"
+                      className="w-full rounded-xl border border-[#d5e3da] bg-[#fbfdfb] px-3 py-2 text-sm font-semibold text-[#0f2c20] outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsGradeDropdownOpen(false);
+                        setIsUnitDropdownOpen(false);
+                        setIsNameDropdownOpen(!isNameDropdownOpen);
+                      }}
+                      className={`shrink-0 rounded-xl border px-3 transition ${
+                        isNameDropdownOpen
+                          ? "border-emerald-500 bg-emerald-50 text-emerald-800"
+                          : "border-[#d5e3da] bg-white text-[#8aa094] hover:bg-[#f7faf8]"
+                      }`}
+                      title="Browse presets"
+                    >
+                      <ChevronDown className="h-4 w-4" />
+                    </button>
                   </div>
-
-                  {/* Quick-Select Preset Chips */}
-                  {catalogPresetsForCurrentType.length > 0 && (
-                    <div className="space-y-1.5">
-                      <span className="text-[11px] font-medium text-slate-500 block">
-                        Quick-fill from curated {MATERIAL_TYPES.find((t) => t.key === formType)?.label} catalog:
-                      </span>
-                      <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1">
-                        {catalogPresetsForCurrentType.map((preset) => {
-                          const isSelectedPreset =
-                            formName.trim().toLowerCase() === preset.name.toLowerCase();
-                          return (
+                  {isNameDropdownOpen && (
+                    <div className="absolute left-0 right-0 top-full z-50 mt-1.5 overflow-hidden rounded-xl border border-[#d7e4dc] bg-white shadow-2xl">
+                      <div className="border-b border-[#e8f0eb] bg-[#f7faf8] p-2">
+                        <div className="relative">
+                          <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-[#8aa094]" />
+                          <input
+                            type="text"
+                            value={nameSearchQuery}
+                            onChange={(e) => setNameSearchQuery(e.target.value)}
+                            placeholder="Search presets..."
+                            className="w-full rounded-lg border border-[#d5e3da] bg-white py-1.5 pl-8 pr-3 text-xs outline-none focus:border-emerald-600"
+                          />
+                        </div>
+                      </div>
+                      <div className="max-h-52 overflow-y-auto">
+                        {filteredCatalogPresets.length > 0 ? (
+                          filteredCatalogPresets.map((preset) => (
                             <button
                               key={preset.id}
                               type="button"
                               onClick={() => handleSelectPreset(preset)}
-                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border transition-all cursor-pointer ${
-                                isSelectedPreset
-                                  ? "bg-emerald-600 text-white border-emerald-600 shadow-2xs"
-                                  : "bg-white hover:bg-emerald-50/70 text-slate-700 border-slate-200/90 hover:border-emerald-300"
-                              }`}
-                              title={`${preset.suggestedRole} — ${preset.description}`}
+                              className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-xs hover:bg-emerald-50"
                             >
-                              <span>{preset.name}</span>
-                              <span
-                                className={`text-[10px] px-1.5 py-0.2 rounded ${
-                                  isSelectedPreset
-                                    ? "bg-emerald-700 text-emerald-50"
-                                    : "bg-slate-100 text-slate-500"
-                                }`}
-                              >
+                              <span className="truncate font-semibold text-[#0f2c20]">
+                                {preset.name}
+                              </span>
+                              <span className="shrink-0 rounded-md bg-[#f7faf8] px-1.5 py-0.5 text-[10px] text-[#8aa094]">
                                 {preset.suggestedRole}
                               </span>
                             </button>
-                          );
-                        })}
+                          ))
+                        ) : (
+                          <p className="px-3 py-4 text-center text-xs text-[#8aa094]">
+                            No presets — keep typing a custom name
+                          </p>
+                        )}
                       </div>
                     </div>
                   )}
+                </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
-                    {/* Material Name Input + Searchable Preset Dropdown */}
-                    <div className="space-y-1.5 relative z-30" ref={nameDropdownRef}>
-                      <label className="block font-semibold text-slate-700 text-xs">
-                        Material Name <span className="text-rose-500">*</span>
-                      </label>
-                      <div className="flex items-center gap-1.5">
-                        <input
-                          type="text"
-                          value={formName}
-                          onChange={(e) => {
-                            setFormName(e.target.value);
-                            setNameSearchQuery(e.target.value);
-                            setIsDirty(true);
-                          }}
-                          onFocus={() => {
-                            setIsGradeDropdownOpen(false);
-                            setIsUnitDropdownOpen(false);
-                          }}
-                          placeholder="Enter custom material name or click a preset above..."
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-xs font-semibold text-slate-900 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15 shadow-2xs"
-                        />
+                {/* Role — below name so dropdown never covers it */}
+                <div className="space-y-1.5" ref={roleDropdownRef}>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-[#8aa094]">
+                    Role
+                  </label>
+                  <input
+                    type="text"
+                    value={formRole}
+                    onChange={(e) => {
+                      setFormRole(e.target.value);
+                      setIsDirty(true);
+                    }}
+                    placeholder="e.g. Gelling Agent"
+                    className="w-full rounded-xl border border-[#d5e3da] bg-[#fbfdfb] px-3 py-2 text-sm text-[#0f2c20] outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15"
+                  />
+                </div>
+
+                {/* Grade + stock */}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="relative z-20 space-y-1.5" ref={gradeDropdownRef}>
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-[#8aa094]">
+                      Grade
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsNameDropdownOpen(false);
+                        setIsUnitDropdownOpen(false);
+                        setIsGradeDropdownOpen(!isGradeDropdownOpen);
+                      }}
+                      className="flex w-full items-center justify-between rounded-xl border border-[#d5e3da] bg-[#fbfdfb] px-3 py-2 text-left text-sm font-semibold text-[#0f2c20]"
+                    >
+                      <span className="truncate">{formGrade}</span>
+                      <ChevronDown className="h-4 w-4 shrink-0 text-[#8aa094]" />
+                    </button>
+                    {isGradeDropdownOpen && (
+                      <div className="absolute left-0 right-0 top-full z-50 mt-1.5 max-h-48 overflow-y-auto rounded-xl border border-[#d7e4dc] bg-white p-1.5 shadow-2xl">
+                        {COMMON_GRADES.map((gradeStr) => (
+                          <button
+                            key={gradeStr}
+                            type="button"
+                            onClick={() => {
+                              setFormGrade(gradeStr);
+                              setIsGradeDropdownOpen(false);
+                              setIsDirty(true);
+                            }}
+                            className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-xs ${
+                              formGrade === gradeStr
+                                ? "bg-emerald-50 font-bold text-emerald-900"
+                                : "text-[#52645d] hover:bg-[#f7faf8]"
+                            }`}
+                          >
+                            {gradeStr}
+                            {formGrade === gradeStr && (
+                              <Check className="h-3.5 w-3.5 text-emerald-600" />
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-[#8aa094]">
+                      Stock{" "}
+                      <span className="font-medium normal-case tracking-normal">
+                        (blank = Planned)
+                      </span>
+                    </label>
+                    <div className="flex gap-1.5">
+                      <input
+                        type="text"
+                        value={formQuantity}
+                        onChange={(e) => {
+                          setFormQuantity(e.target.value);
+                          setIsDirty(true);
+                        }}
+                        placeholder="e.g. 500"
+                        className="w-full rounded-xl border border-[#d5e3da] bg-[#fbfdfb] px-3 py-2 font-mono text-sm font-bold text-[#0f2c20] outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15"
+                      />
+                      <div className="relative w-24 shrink-0" ref={unitDropdownRef}>
                         <button
                           type="button"
                           onClick={() => {
+                            setIsNameDropdownOpen(false);
                             setIsGradeDropdownOpen(false);
-                            setIsUnitDropdownOpen(false);
-                            setIsNameDropdownOpen(!isNameDropdownOpen);
+                            setIsUnitDropdownOpen(!isUnitDropdownOpen);
                           }}
-                          className={`px-3 py-2.5 rounded-xl border text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors shrink-0 ${
-                            isNameDropdownOpen
-                              ? "border-emerald-500 bg-emerald-50 text-emerald-800"
-                              : "border-slate-300 bg-white hover:bg-slate-50 text-slate-600"
-                          }`}
-                          title="Search preset catalog"
+                          className="flex w-full items-center justify-between rounded-xl border border-[#d5e3da] bg-[#f7faf8] px-2.5 py-2 font-mono text-sm font-bold text-[#0f2c20]"
                         >
-                          <Search className="w-3.5 h-3.5" />
-                          <ChevronDown className="w-3.5 h-3.5" />
+                          {formUnit}
+                          <ChevronDown className="h-3.5 w-3.5 text-[#8aa094]" />
                         </button>
+                        {isUnitDropdownOpen && (
+                          <div className="absolute left-0 right-0 top-full z-50 mt-1.5 max-h-44 w-28 overflow-y-auto rounded-xl border border-[#d7e4dc] bg-white p-1 shadow-2xl">
+                            {COMMON_UNITS.map((unitStr) => (
+                              <button
+                                key={unitStr}
+                                type="button"
+                                onClick={() => {
+                                  setFormUnit(unitStr);
+                                  setIsUnitDropdownOpen(false);
+                                  setIsDirty(true);
+                                }}
+                                className={`w-full rounded-lg px-2.5 py-1.5 text-left font-mono text-xs ${
+                                  formUnit === unitStr
+                                    ? "bg-emerald-50 font-bold text-emerald-900"
+                                    : "hover:bg-[#f7faf8]"
+                                }`}
+                              >
+                                {unitStr}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
-
-                      {isNameDropdownOpen && (
-                        <div className="absolute top-full left-0 right-0 mt-1.5 bg-white rounded-xl border border-slate-200 shadow-2xl z-50 overflow-hidden max-h-56 flex flex-col animate-in fade-in zoom-in-95 duration-100">
-                          <div className="p-2 border-b border-slate-100 bg-slate-50">
-                            <div className="relative">
-                              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2" />
-                              <input
-                                type="text"
-                                value={nameSearchQuery}
-                                onChange={(e) => setNameSearchQuery(e.target.value)}
-                                placeholder={`Search ${filteredCatalogPresets.length} curated presets...`}
-                                className="w-full pl-8 pr-3 py-1.5 bg-white rounded-lg border border-slate-200 text-xs focus:outline-none focus:border-emerald-500"
-                              />
-                            </div>
-                          </div>
-
-                          <div className="overflow-y-auto divide-y divide-slate-100">
-                            {filteredCatalogPresets.length > 0 ? (
-                              filteredCatalogPresets.map((preset) => (
-                                <button
-                                  key={preset.id}
-                                  type="button"
-                                  onClick={() => handleSelectPreset(preset)}
-                                  className="w-full p-2.5 text-left hover:bg-emerald-50/70 transition-colors cursor-pointer space-y-0.5"
-                                >
-                                  <div className="flex items-center justify-between gap-2">
-                                    <span className="font-bold text-slate-800 text-xs">{preset.name}</span>
-                                    <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200/60 shrink-0">
-                                      {preset.suggestedRole}
-                                    </span>
-                                  </div>
-                                  <p className="text-[10px] text-slate-500 line-clamp-1">{preset.description}</p>
-                                </button>
-                              ))
-                            ) : (
-                              <div className="p-3 text-center text-xs text-slate-400">
-                                No matching presets. You can type any custom material name directly.
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Functional Role */}
-                    <div className="space-y-1.5" ref={roleDropdownRef}>
-                      <label className="block font-semibold text-slate-700 text-xs">
-                        Functional Role in Formulation <span className="text-rose-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={formRole}
-                        onChange={(e) => {
-                          setFormRole(e.target.value);
-                          setIsDirty(true);
-                        }}
-                        placeholder="e.g. Primary Gelling Agent, Humectant, Vehicle"
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-xs font-medium text-slate-800 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15 shadow-2xs"
-                      />
                     </div>
                   </div>
                 </div>
 
-                {/* SECTION C: SPECIFICATION, STOCK, SUPPLIER & STORAGE */}
-                <div className="space-y-3">
-                  <label className="block font-bold text-slate-800 text-xs uppercase tracking-wider">
-                    3. Quality Specification, Stock &amp; Traceability
-                  </label>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Grade / Compendial Standard */}
-                    <div className="space-y-1.5 relative z-20" ref={gradeDropdownRef}>
-                      <label className="block font-semibold text-slate-700 text-xs">
-                        Grade / Compendial Standard
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsNameDropdownOpen(false);
-                          setIsUnitDropdownOpen(false);
-                          setIsGradeDropdownOpen(!isGradeDropdownOpen);
-                        }}
-                        className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white hover:border-slate-400 text-left text-xs font-semibold text-slate-800 cursor-pointer shadow-2xs"
-                      >
-                        <span className="truncate">{formGrade}</span>
-                        <ChevronDown
-                          className={`w-4 h-4 text-slate-400 transition-transform shrink-0 ${
-                            isGradeDropdownOpen ? "rotate-180" : ""
-                          }`}
-                        />
-                      </button>
-
-                      {isGradeDropdownOpen && (
-                        <div className="absolute bottom-full left-0 right-0 mb-1.5 bg-white rounded-xl border border-slate-200 shadow-2xl z-50 p-1.5 divide-y divide-slate-100 max-h-52 overflow-y-auto animate-in fade-in zoom-in-95 duration-100">
-                          {COMMON_GRADES.map((gradeStr) => (
-                            <button
-                              key={gradeStr}
-                              type="button"
-                              onClick={() => {
-                                setFormGrade(gradeStr);
-                                setIsGradeDropdownOpen(false);
-                                setIsDirty(true);
-                              }}
-                              className={`w-full px-3 py-2 text-left rounded-lg text-xs cursor-pointer flex items-center justify-between ${
-                                formGrade === gradeStr
-                                  ? "bg-emerald-50 text-emerald-900 font-bold"
-                                  : "hover:bg-slate-50 text-slate-700 font-medium"
-                              }`}
-                            >
-                              <span>{gradeStr}</span>
-                              {formGrade === gradeStr && (
-                                <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                              )}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Available Stock & Unit */}
-                    <div className="space-y-1.5 relative z-20">
-                      <label className="block font-semibold text-slate-700 text-xs">
-                        Stock on Hand &amp; Measurement Unit
-                      </label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={formQuantity}
-                          onChange={(e) => {
-                            setFormQuantity(e.target.value);
-                            setIsDirty(true);
-                          }}
-                          placeholder="e.g. 500 (leave blank if Planned)"
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15 shadow-2xs"
-                        />
-
-                        <div className="relative w-32 shrink-0" ref={unitDropdownRef}>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setIsNameDropdownOpen(false);
-                              setIsGradeDropdownOpen(false);
-                              setIsUnitDropdownOpen(!isUnitDropdownOpen);
-                            }}
-                            className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl border border-slate-300 bg-slate-50 hover:bg-slate-100 text-xs font-bold font-mono text-slate-800 cursor-pointer shadow-2xs"
-                          >
-                            <span>{formUnit}</span>
-                            <ChevronDown
-                              className={`w-3.5 h-3.5 text-slate-400 transition-transform ${
-                                isUnitDropdownOpen ? "rotate-180" : ""
-                              }`}
-                            />
-                          </button>
-
-                          {isUnitDropdownOpen && (
-                            <div className="absolute bottom-full right-0 mb-1.5 bg-white rounded-xl border border-slate-200 shadow-2xl z-50 p-1 w-32 max-h-48 overflow-y-auto animate-in fade-in zoom-in-95 duration-100">
-                              {COMMON_UNITS.map((unitStr) => (
-                                <button
-                                  key={unitStr}
-                                  type="button"
-                                  onClick={() => {
-                                    setFormUnit(unitStr);
-                                    setIsUnitDropdownOpen(false);
-                                    setIsDirty(true);
-                                  }}
-                                  className={`w-full px-3 py-1.5 text-left text-xs font-mono rounded-lg cursor-pointer flex items-center justify-between ${
-                                    formUnit === unitStr
-                                      ? "bg-emerald-50 text-emerald-900 font-bold"
-                                      : "hover:bg-slate-50 text-slate-700"
-                                  }`}
-                                >
-                                  <span>{unitStr}</span>
-                                  {formUnit === unitStr && (
-                                    <Check className="w-3 h-3 text-emerald-600" />
-                                  )}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
+                {/* Traceability */}
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <div className="space-y-1.5" ref={supplierDropdownRef}>
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-[#8aa094]">
+                      Supplier
+                    </label>
+                    <input
+                      type="text"
+                      value={formSupplier}
+                      onChange={(e) => {
+                        setFormSupplier(e.target.value);
+                        setIsDirty(true);
+                      }}
+                      placeholder="Optional"
+                      className="w-full rounded-xl border border-[#d5e3da] bg-[#fbfdfb] px-3 py-2 text-sm text-[#0f2c20] outline-none focus:border-emerald-600"
+                    />
                   </div>
-
-                  {/* Supplier, Lot Number & Storage Conditions */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
-                    {/* Supplier / Source */}
-                    <div className="space-y-1.5" ref={supplierDropdownRef}>
-                      <label className="block font-semibold text-slate-700 text-xs">
-                        Supplier / Internal Depot
-                      </label>
-                      <input
-                        type="text"
-                        value={formSupplier}
-                        onChange={(e) => {
-                          setFormSupplier(e.target.value);
-                          setIsDirty(true);
-                        }}
-                        placeholder="e.g. Sigma-Aldrich, Internal Depot"
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-xs text-slate-800 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15 shadow-2xs"
-                      />
-                    </div>
-
-                    {/* Lot / Accession Number */}
-                    <div className="space-y-1.5">
-                      <label className="block font-semibold text-slate-700 text-xs">
-                        Lot / Batch Accession Number
-                      </label>
-                      <input
-                        type="text"
-                        value={formLot}
-                        onChange={(e) => {
-                          setFormLot(e.target.value);
-                          setIsDirty(true);
-                        }}
-                        placeholder="e.g. LOT-2026-C940-01"
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-xs font-mono text-slate-800 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15 shadow-2xs"
-                      />
-                    </div>
-
-                    {/* Storage Conditions */}
-                    <div className="space-y-1.5">
-                      <label className="block font-semibold text-slate-700 text-xs">
-                        Storage &amp; Handling Conditions
-                      </label>
-                      <input
-                        type="text"
-                        value={formStorage}
-                        onChange={(e) => {
-                          setFormStorage(e.target.value);
-                          setIsDirty(true);
-                        }}
-                        placeholder="e.g. Cool, dry place (15-25°C)"
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-xs text-slate-800 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15 shadow-2xs"
-                      />
-                    </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-[#8aa094]">
+                      Lot #
+                    </label>
+                    <input
+                      type="text"
+                      value={formLot}
+                      onChange={(e) => {
+                        setFormLot(e.target.value);
+                        setIsDirty(true);
+                      }}
+                      placeholder="Optional"
+                      className="w-full rounded-xl border border-[#d5e3da] bg-[#fbfdfb] px-3 py-2 font-mono text-sm text-[#0f2c20] outline-none focus:border-emerald-600"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-[#8aa094]">
+                      Storage
+                    </label>
+                    <input
+                      type="text"
+                      value={formStorage}
+                      onChange={(e) => {
+                        setFormStorage(e.target.value);
+                        setIsDirty(true);
+                      }}
+                      placeholder="15–25°C dry"
+                      className="w-full rounded-xl border border-[#d5e3da] bg-[#fbfdfb] px-3 py-2 text-sm text-[#0f2c20] outline-none focus:border-emerald-600"
+                    />
                   </div>
                 </div>
               </div>
 
-              {/* Modal Sticky Footer */}
-              <div className="flex items-center justify-between px-6 py-4 border-t border-slate-200 bg-slate-50/80 rounded-b-2xl shrink-0">
-                <span className="text-[11px] text-slate-500">
+              <div className="flex items-center justify-between gap-2 border-t border-[#e8f0eb] bg-[#f7faf8] px-5 py-3">
+                <span className="text-[11px] text-[#8aa094]">
                   {formQuantity.trim()
-                    ? `Inventory status will be recorded as Verified Stock (${formQuantity} ${formUnit}).`
-                    : "Inventory status will be recorded as Planned (Pending Receipt)."}
+                    ? `In stock · ${formQuantity} ${formUnit}`
+                    : "Status: Planned"}
                 </span>
-
-                <div className="flex items-center gap-2.5">
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={handleCancelEditing}
                     disabled={isSaving}
-                    className="px-4 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold transition-colors cursor-pointer"
+                    className="rounded-xl border border-[#d7e4dc] bg-white px-4 py-2 text-xs font-semibold text-[#52645d] hover:bg-white"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={isSaving}
-                    className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-sm disabled:opacity-50 cursor-pointer"
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-700 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-800 disabled:opacity-50"
                   >
                     {isSaving ? (
                       <>
-                        <RotateCcw className="w-3.5 h-3.5 animate-spin" />
-                        <span>Saving...</span>
+                        <RotateCcw className="h-3.5 w-3.5 animate-spin" />
+                        Saving...
                       </>
                     ) : (
                       <>
-                        <Check className="w-4 h-4 stroke-[2.5]" />
-                        <span>{editingMaterialId ? "Update Material Record" : "Add Material to Inventory"}</span>
+                        <Check className="h-3.5 w-3.5" />
+                        {editingMaterialId ? "Save" : "Add"}
                       </>
                     )}
                   </button>

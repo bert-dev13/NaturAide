@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Package,
   Sparkles,
@@ -16,7 +17,7 @@ import {
   X,
   Droplets,
   Pill,
-  Plus,
+  Leaf,
 } from "lucide-react";
 import {
   PRODUCT_CATEGORIES,
@@ -55,11 +56,23 @@ interface Props {
   isSaving: boolean;
 }
 
+const easeOut = [0.22, 1, 0.36, 1] as const;
+
+const fieldClass =
+  "h-10 w-full rounded-xl border border-[#d5e3da] bg-[#fbfdfb] px-3 text-xs font-medium text-[#0f2c20] outline-none transition focus:border-emerald-600 focus:bg-white focus:ring-2 focus:ring-emerald-600/15";
+
 function getFormatIcon(name?: string) {
   const f = (name || "").toLowerCase();
-  if (f.includes("hydrogel") || f.includes("gel") || f.includes("spray") || f.includes("lotion")) return Droplets;
+  if (f.includes("hydrogel") || f.includes("gel") || f.includes("spray") || f.includes("lotion"))
+    return Droplets;
   if (f.includes("cream") || f.includes("ointment")) return Layers;
-  if (f.includes("syrup") || f.includes("solution") || f.includes("suspension") || f.includes("tea")) return FlaskConical;
+  if (
+    f.includes("syrup") ||
+    f.includes("solution") ||
+    f.includes("suspension") ||
+    f.includes("tea")
+  )
+    return FlaskConical;
   if (f.includes("capsule") || f.includes("tablet")) return Pill;
   if (f.includes("soap")) return Sparkles;
   return Package;
@@ -72,21 +85,16 @@ export default function ProductSelectionStep2Section({
   linkedLiterature = [],
   productSelection,
   onChange,
-  onSave,
-  isSaving,
 }: Props) {
-  // Format Search & Dropdown State
-  const [formatSearch, setFormatSearch] = useState<string>("");
-  const [isFormatDropdownOpen, setIsFormatDropdownOpen] = useState<boolean>(false);
+  const [formatSearch, setFormatSearch] = useState("");
+  const [isFormatDropdownOpen, setIsFormatDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Target Applications Dropdown State
-  const [isAppDropdownOpen, setIsAppDropdownOpen] = useState<boolean>(false);
-  const [appSearchQuery, setAppSearchQuery] = useState<string>("");
-  const [customAppInput, setCustomAppInput] = useState<string>("");
+  const [isAppDropdownOpen, setIsAppDropdownOpen] = useState(false);
+  const [appSearchQuery, setAppSearchQuery] = useState("");
+  const [customAppInput, setCustomAppInput] = useState("");
   const appDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Field change tracking (track if user has modified preset values)
   const [modifiedFields, setModifiedFields] = useState<Record<string, boolean>>({
     productType: false,
     deliveryFormat: false,
@@ -96,23 +104,21 @@ export default function ProductSelectionStep2Section({
     rationale: false,
   });
 
-  // Overwrite confirmation modal / alert
   const [pendingPreset, setPendingPreset] = useState<ProductFormatPreset | null>(null);
-
-  // AI Rationale Refinement State
-  const [isAiRefining, setIsAiRefining] = useState<boolean>(false);
+  const [isAiRefining, setIsAiRefining] = useState(false);
   const [aiNotice, setAiNotice] = useState<string | null>(null);
   const rationaleTextareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Auto-resize rationale textarea so all text displays completely without vertical scrolling
   useEffect(() => {
     if (rationaleTextareaRef.current) {
       rationaleTextareaRef.current.style.height = "auto";
-      rationaleTextareaRef.current.style.height = `${Math.max(180, rationaleTextareaRef.current.scrollHeight)}px`;
+      rationaleTextareaRef.current.style.height = `${Math.max(
+        180,
+        rationaleTextareaRef.current.scrollHeight
+      )}px`;
     }
   }, [productSelection.rationale]);
 
-  // Close dropdowns on click outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -126,7 +132,6 @@ export default function ProductSelectionStep2Section({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Compute focus-aware recommendations
   const scoredRecommendations = useMemo(() => {
     const partsArray: string[] = [];
     if (plantData?.partsStudied) {
@@ -145,26 +150,24 @@ export default function ProductSelectionStep2Section({
       plantScientificName: verifiedPlant?.scientificName || project.plantScientificName,
       plantParts: partsArray,
       traditionalUses: plantData?.traditionalUses || verifiedPlant?.traditionalUses,
-      traditionalPreparations: plantData?.ethnobotanicalNotes || verifiedPlant?.traditionalPreparations,
+      traditionalPreparations:
+        plantData?.ethnobotanicalNotes || verifiedPlant?.traditionalPreparations,
       researchTitle: project.title,
       researchObjective: project.researchObjective,
     });
   }, [project, plantData, verifiedPlant]);
 
-  // Current selected preset if matched
   const currentPreset = useMemo(() => {
     const curFormat = (productSelection.deliveryFormat || "").toLowerCase();
     if (!curFormat) return null;
     return (
       PRODUCT_FORMAT_PRESETS.find(
         (p) =>
-          p.name.toLowerCase() === curFormat ||
-          p.dosageForm.toLowerCase() === curFormat
+          p.name.toLowerCase() === curFormat || p.dosageForm.toLowerCase() === curFormat
       ) || null
     );
   }, [productSelection.deliveryFormat]);
 
-  // Filtered presets for searchable dropdown
   const filteredPresets = useMemo(() => {
     if (!formatSearch.trim()) return PRODUCT_FORMAT_PRESETS;
     const q = formatSearch.toLowerCase();
@@ -177,33 +180,45 @@ export default function ProductSelectionStep2Section({
     );
   }, [formatSearch]);
 
-  // Current route
   const currentRoute: ProductRoute = useMemo(() => {
     if (currentPreset) return currentPreset.route;
     const cat = (productSelection.productType || "").toLowerCase();
     const fmt = (productSelection.deliveryFormat || "").toLowerCase();
-    if (cat.includes("oral") || fmt.includes("syrup") || fmt.includes("tea") || fmt.includes("capsule") || fmt.includes("tablet")) {
+    if (
+      cat.includes("oral") ||
+      fmt.includes("syrup") ||
+      fmt.includes("tea") ||
+      fmt.includes("capsule") ||
+      fmt.includes("tablet")
+    ) {
       return "Oral";
     }
-    if (cat.includes("topical") || fmt.includes("cream") || fmt.includes("gel") || fmt.includes("ointment") || fmt.includes("spray")) {
+    if (
+      cat.includes("topical") ||
+      fmt.includes("cream") ||
+      fmt.includes("gel") ||
+      fmt.includes("ointment") ||
+      fmt.includes("spray")
+    ) {
       return "Topical";
     }
     return "Other";
   }, [currentPreset, productSelection.productType, productSelection.deliveryFormat]);
 
-  // Available dosage forms filtered by category
   const filteredDosageForms = useMemo(() => {
     const cat = productSelection.productType;
     if (cat === "Topical Research Formulation" || cat === "Cosmetic Research Formulation") {
       return PRODUCT_FORMAT_PRESETS.filter((p) => p.route === "Topical");
     }
-    if (cat === "Oral Research Formulation" || cat === "Phytopharmaceutical Research Product") {
+    if (
+      cat === "Oral Research Formulation" ||
+      cat === "Phytopharmaceutical Research Product"
+    ) {
       return PRODUCT_FORMAT_PRESETS.filter((p) => p.route === "Oral");
     }
     return PRODUCT_FORMAT_PRESETS;
   }, [productSelection.productType]);
 
-  // Selected target applications parsed as array of chips
   const selectedApplicationList = useMemo(() => {
     if (!productSelection.targetIndications) return [];
     return productSelection.targetIndications
@@ -212,20 +227,25 @@ export default function ProductSelectionStep2Section({
       .filter(Boolean);
   }, [productSelection.targetIndications]);
 
-  // Filtered target applications for dropdown
   const filteredTargetApplications = useMemo(() => {
     if (!appSearchQuery.trim()) return TARGET_APPLICATIONS;
     const q = appSearchQuery.toLowerCase();
     return TARGET_APPLICATIONS.filter((app) => app.label.toLowerCase().includes(q));
   }, [appSearchQuery]);
 
-  // Check if vulnerable population is selected
   const isVulnerablePopulation = useMemo(() => {
     const pop = (productSelection.intendedPopulation || "").toLowerCase();
-    return pop.includes("pediatric") || pop.includes("adolescent") || pop.includes("infant") || pop.includes("child");
+    return (
+      pop.includes("pediatric") ||
+      pop.includes("adolescent") ||
+      pop.includes("infant") ||
+      pop.includes("child")
+    );
   }, [productSelection.intendedPopulation]);
 
-  // Handle Preset Selection
+  const plantPartsLabel =
+    plantData?.partsStudied || verifiedPlant?.documentedParts?.join(", ") || "Leaves";
+
   const applyPresetDirectly = (preset: ProductFormatPreset, overwriteModified = true) => {
     const updated: any = { ...productSelection };
 
@@ -245,10 +265,13 @@ export default function ProductSelectionStep2Section({
       updated.packagingType = preset.defaultPackaging;
     }
     if (overwriteModified || !modifiedFields.rationale) {
-      const partsArray = verifiedPlant?.documentedParts || (plantData?.partsStudied ? [plantData.partsStudied] : ["Leaves"]);
+      const partsArray =
+        verifiedPlant?.documentedParts ||
+        (plantData?.partsStudied ? [plantData.partsStudied] : ["Leaves"]);
       updated.rationale = generateScientificRationale({
         plantName: verifiedPlant?.commonName || project.plantName,
-        plantScientificName: verifiedPlant?.scientificName || project.plantScientificName,
+        plantScientificName:
+          verifiedPlant?.scientificName || project.plantScientificName,
         deliveryFormat: preset.dosageForm,
         productType: preset.category,
         targetIndications: preset.indicationSummary,
@@ -282,13 +305,11 @@ export default function ProductSelectionStep2Section({
     }
   };
 
-  // Field change helper
   const handleFieldChange = (field: keyof typeof productSelection, value: string) => {
     setModifiedFields((prev) => ({ ...prev, [field]: true }));
     onChange({ ...productSelection, [field]: value });
   };
 
-  // Toggle/Remove Target Application Tag
   const toggleApplicationTag = (label: string) => {
     let updatedList: string[];
     if (selectedApplicationList.includes(label)) {
@@ -309,19 +330,24 @@ export default function ProductSelectionStep2Section({
     setCustomAppInput("");
   };
 
-  // AI Refine Rationale
   const handleAiRefineRationale = async () => {
     setIsAiRefining(true);
     setAiNotice(null);
     try {
-      const partsArray = verifiedPlant?.documentedParts || (plantData?.partsStudied ? [plantData.partsStudied] : ["Leaves"]);
+      const partsArray =
+        verifiedPlant?.documentedParts ||
+        (plantData?.partsStudied ? [plantData.partsStudied] : ["Leaves"]);
       const res = await fetch(`/api/researcher/projects/${project.id}/product-selection`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "generate-ai-rationale",
-          plantName: plantData?.commonName || verifiedPlant?.commonName || project.plantName,
-          plantScientificName: plantData?.scientificName || verifiedPlant?.scientificName || project.plantScientificName,
+          plantName:
+            plantData?.commonName || verifiedPlant?.commonName || project.plantName,
+          plantScientificName:
+            plantData?.scientificName ||
+            verifiedPlant?.scientificName ||
+            project.plantScientificName,
           deliveryFormat: productSelection.deliveryFormat,
           productType: productSelection.productType,
           targetIndications: productSelection.targetIndications,
@@ -337,7 +363,7 @@ export default function ProductSelectionStep2Section({
 
       if (data.rationale) {
         handleFieldChange("rationale", data.rationale);
-        setAiNotice("AI refined scientific rationale generated!");
+        setAiNotice("AI refined scientific rationale generated.");
       }
     } catch (err: any) {
       setAiNotice(`Rationale notice: ${err.message || "Using template generator."}`);
@@ -346,9 +372,10 @@ export default function ProductSelectionStep2Section({
     }
   };
 
-  // Reset rationale to preset default
   const handleRestorePresetRationale = () => {
-    const partsArray = verifiedPlant?.documentedParts || (plantData?.partsStudied ? [plantData.partsStudied] : ["Leaves"]);
+    const partsArray =
+      verifiedPlant?.documentedParts ||
+      (plantData?.partsStudied ? [plantData.partsStudied] : ["Leaves"]);
     const standardRationale = generateScientificRationale({
       plantName: verifiedPlant?.commonName || project.plantName,
       plantScientificName: verifiedPlant?.scientificName || project.plantScientificName,
@@ -365,508 +392,603 @@ export default function ProductSelectionStep2Section({
   };
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs space-y-3.5">
-      {/* ===================================================================== */}
-      {/* 1. COMPACT BOTANICAL CONTEXT ROW                                       */}
-      {/* ===================================================================== */}
-      <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="font-bold text-slate-900">{verifiedPlant?.commonName || project.plantName}</span>
-          <span className="text-[11px] text-slate-500 italic font-medium">
-            ({verifiedPlant?.scientificName || project.plantScientificName || "Binomial unassigned"})
-          </span>
-          {verifiedPlant?.family && (
-            <span className="text-[10px] font-mono text-emerald-800 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
-              {verifiedPlant.family}
+    <div className="space-y-4">
+      {/* Botanical context */}
+      <motion.section
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, ease: easeOut }}
+        className="relative overflow-hidden rounded-2xl border border-[#d7e4dc]/90 bg-[linear-gradient(165deg,#ffffff_0%,#f8fbf9_100%)] p-4 shadow-[0_1px_2px_rgba(15,44,32,0.04)]"
+      >
+        <div className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-emerald-600 via-teal-400 to-cyan-300" />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-800">
+              <Leaf className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <h2 className="text-sm font-semibold text-[#0f2c20]">
+                  {verifiedPlant?.commonName || project.plantName}
+                </h2>
+                <span className="text-xs italic text-[#6d7f76]">
+                  ({verifiedPlant?.scientificName || project.plantScientificName || "Unassigned"})
+                </span>
+                {verifiedPlant?.family && (
+                  <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-mono text-[10px] font-semibold text-emerald-900">
+                    {verifiedPlant.family}
+                  </span>
+                )}
+              </div>
+              <p className="mt-0.5 text-[11px] text-[#8aa094]">
+                Parts: <span className="font-semibold text-[#52645d]">{plantPartsLabel}</span>
+                <span className="mx-1.5 text-[#d7e4dc]">·</span>
+                Linked refs:{" "}
+                <span className="font-semibold text-[#52645d]">{linkedLiterature.length}</span>
+              </p>
+            </div>
+          </div>
+          {productSelection.deliveryFormat && (
+            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-teal-200 bg-teal-50 px-3 py-1.5 text-[11px] font-bold text-teal-900">
+              <Package className="h-3.5 w-3.5" />
+              {productSelection.deliveryFormat}
             </span>
           )}
         </div>
+      </motion.section>
 
-        <div className="flex items-center gap-3 text-[11px] text-slate-500">
-          <span>
-            Parts: <strong className="text-slate-700">{plantData?.partsStudied || verifiedPlant?.documentedParts?.join(", ") || "Leaves"}</strong>
-          </span>
-          <span>•</span>
-          <span>
-            Linked References: <strong className="text-slate-700">{linkedLiterature.length}</strong>
-          </span>
-        </div>
-      </div>
+      {/* Recommended formats */}
+      <motion.section
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.04, ease: easeOut }}
+        className="rounded-2xl border border-[#d7e4dc]/90 bg-white p-4 shadow-[0_1px_2px_rgba(15,44,32,0.04)] sm:p-5"
+      >
+        <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-[#52645d]">
+              <Sparkles className="h-3.5 w-3.5 text-emerald-700" />
+              Recommended Formats
+            </h3>
+            <p className="mt-0.5 text-[11px] text-[#8aa094]">
+              Aligned with botanical focus and research objective
+            </p>
+          </div>
 
-      {/* ===================================================================== */}
-      {/* 2. COMPACT RECOMMENDED FORMATS & SEARCHABLE DROPDOWN                  */}
-      {/* ===================================================================== */}
-      <div className="space-y-1.5">
-        <div className="flex items-center justify-between">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
-            <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Recommended Formats Aligned With Research Focus</span>
-          </span>
-
-          {/* Browse All Formats Dropdown */}
           <div className="relative" ref={dropdownRef}>
             <button
               type="button"
               onClick={() => setIsFormatDropdownOpen(!isFormatDropdownOpen)}
-              className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 cursor-pointer"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-[#d7e4dc] bg-[#f7faf8] px-3 py-1.5 text-[11px] font-semibold text-emerald-900 transition hover:border-emerald-400 hover:bg-emerald-50"
             >
-              <Search className="w-3 h-3" />
-              <span>Browse All Formats ({PRODUCT_FORMAT_PRESETS.length})</span>
-              <ChevronDown className={`w-3 h-3 transition-transform ${isFormatDropdownOpen ? "rotate-180" : ""}`} />
-            </button>
-
-            {isFormatDropdownOpen && (
-              <div className="absolute right-0 z-40 mt-1 w-72 sm:w-80 bg-white rounded-xl border border-slate-200 shadow-xl p-2 text-xs space-y-2 animate-in fade-in duration-100">
-                <div className="relative">
-                  <Search className="w-3 h-3 text-slate-400 absolute left-2.5 top-2.5" />
-                  <input
-                    type="text"
-                    placeholder="Search format (e.g. hydrogel, capsule, syrup)..."
-                    value={formatSearch}
-                    onChange={(e) => setFormatSearch(e.target.value)}
-                    className="w-full pl-7 pr-2 py-1 text-xs rounded-md border border-slate-200 focus:outline-none focus:border-emerald-500"
-                    autoFocus
-                  />
-                </div>
-
-                <div className="max-h-60 overflow-y-auto space-y-1 divide-y divide-slate-100">
-                  {(["Topical", "Oral", "Other"] as ProductRoute[]).map((groupRoute) => {
-                    const groupPresets = filteredPresets.filter((p) => p.route === groupRoute);
-                    if (groupPresets.length === 0) return null;
-
-                    return (
-                      <div key={groupRoute} className="pt-1 first:pt-0">
-                        <div className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-slate-50 rounded">
-                          {groupRoute} Formulations
-                        </div>
-                        <div className="space-y-0.5 mt-0.5">
-                          {groupPresets.map((preset) => {
-                            const isCurrent =
-                              Boolean(productSelection.deliveryFormat) &&
-                              productSelection.deliveryFormat.toLowerCase() === preset.dosageForm.toLowerCase();
-                            const Icon = getFormatIcon(preset.name);
-                            return (
-                              <div
-                                key={preset.id}
-                                onClick={() => handleSelectPreset(preset)}
-                                className={`px-2 py-1.5 rounded-lg flex items-center justify-between cursor-pointer transition-colors ${
-                                  isCurrent ? "bg-emerald-50 text-emerald-950 font-semibold" : "hover:bg-slate-50 text-slate-700"
-                                }`}
-                              >
-                                <div className="flex items-center gap-1.5 min-w-0">
-                                  <Icon className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                                  <span className="truncate">{preset.name}</span>
-                                </div>
-                                {isCurrent && <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Small Selectable Recommendation Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {scoredRecommendations.slice(0, 4).map((item: ScoredPreset, idx: number) => {
-            const isSelected =
-              Boolean(productSelection.deliveryFormat) &&
-              productSelection.deliveryFormat.toLowerCase() === item.preset.dosageForm.toLowerCase();
-            const Icon = getFormatIcon(item.preset.name);
-
-            return (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => handleSelectPreset(item.preset)}
-                className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between gap-2 ${
-                  isSelected
-                    ? "bg-emerald-50 border-emerald-500 text-emerald-950 ring-1 ring-emerald-500 font-semibold shadow-2xs"
-                    : "bg-white border-slate-200 hover:border-slate-300 text-slate-800"
-                }`}
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  <Icon className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span className="text-xs truncate">{item.preset.name}</span>
-                </div>
-                {isSelected && <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* OVERWRITE CONFIRMATION ALERT */}
-      {pendingPreset && (
-        <div className="p-3 rounded-xl bg-amber-50 border border-amber-300 text-xs space-y-2 animate-in fade-in duration-100">
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex items-start gap-1.5">
-              <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
-              <p className="text-amber-900 leading-snug">
-                You have modified some fields. Apply <strong>{pendingPreset.name}</strong> defaults, or keep your custom edits?
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setPendingPreset(null)}
-              className="text-amber-700 hover:text-amber-950"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2 justify-end">
-            <button
-              type="button"
-              onClick={() => applyPresetDirectly(pendingPreset, false)}
-              className="px-2.5 py-1 rounded-md bg-white border border-amber-300 text-amber-900 font-semibold hover:bg-amber-100 text-[11px]"
-            >
-              Keep My Edits
-            </button>
-            <button
-              type="button"
-              onClick={() => applyPresetDirectly(pendingPreset, true)}
-              className="px-3 py-1 rounded-md bg-emerald-700 text-white font-semibold hover:bg-emerald-800 text-[11px] shadow-2xs"
-            >
-              Apply Preset Defaults
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ===================================================================== */}
-      {/* 3. PRODUCT SPECIFICATIONS (CLEAN TWO-COLUMN FORM)                      */}
-      {/* ===================================================================== */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs pt-1">
-        {/* LEFT COLUMN: Category, Dosage Form, Population */}
-        <div className="space-y-3">
-          {/* Product Category Dropdown */}
-          <div>
-            <label className="block font-semibold text-slate-700 mb-1">
-              Product Category
-            </label>
-            <select
-              value={productSelection.productType}
-              onChange={(e) => handleFieldChange("productType", e.target.value)}
-              className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white font-medium text-slate-800 focus:outline-none focus:border-emerald-500"
-            >
-              {PRODUCT_CATEGORIES.map((cat) => (
-                <option key={cat} value={cat}>
-                  {cat}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Dosage Form Dropdown (Filtered) */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="block font-semibold text-slate-700">
-                Dosage Form
-              </label>
-              <span className="text-[10px] font-medium text-slate-400">
-                {productSelection.deliveryFormat}
-              </span>
-            </div>
-            <select
-              value={
-                filteredDosageForms.some((f) => f.dosageForm === productSelection.deliveryFormat)
-                  ? productSelection.deliveryFormat
-                  : "Custom"
-              }
-              onChange={(e) => {
-                if (e.target.value === "Custom") {
-                  handleFieldChange("deliveryFormat", "Custom Formulation");
-                } else {
-                  const match = PRODUCT_FORMAT_PRESETS.find((p) => p.dosageForm === e.target.value);
-                  if (match) {
-                    handleSelectPreset(match);
-                  } else {
-                    handleFieldChange("deliveryFormat", e.target.value);
-                  }
-                }
-              }}
-              className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white font-medium text-slate-800 focus:outline-none focus:border-emerald-500"
-            >
-              {filteredDosageForms.map((df) => (
-                <option key={df.id} value={df.dosageForm}>
-                  {df.dosageForm} ({df.route})
-                </option>
-              ))}
-              <option value="Custom">Custom / Other Dosage Form...</option>
-            </select>
-            {productSelection.deliveryFormat.includes("Custom") && (
-              <input
-                type="text"
-                placeholder="Enter custom format name..."
-                value={productSelection.deliveryFormat}
-                onChange={(e) => handleFieldChange("deliveryFormat", e.target.value)}
-                className="mt-1.5 w-full px-2.5 py-1 rounded-lg border border-slate-300 text-xs"
+              <Search className="h-3 w-3" />
+              Browse All ({PRODUCT_FORMAT_PRESETS.length})
+              <ChevronDown
+                className={`h-3 w-3 transition ${isFormatDropdownOpen ? "rotate-180" : ""}`}
               />
-            )}
-          </div>
+            </button>
 
-          {/* Target Population Dropdown */}
-          <div>
-            <label className="block font-semibold text-slate-700 mb-1">
-              Intended Target Population
-            </label>
-            <select
-              value={
-                TARGET_POPULATIONS.some((p) => p.label === productSelection.intendedPopulation)
-                  ? productSelection.intendedPopulation
-                  : "custom"
-              }
-              onChange={(e) => {
-                if (e.target.value === "custom") {
-                  handleFieldChange("intendedPopulation", "Custom Population Specification");
-                } else {
-                  handleFieldChange("intendedPopulation", e.target.value);
-                }
-              }}
-              className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white font-medium text-slate-800 focus:outline-none focus:border-emerald-500"
-            >
-              {TARGET_POPULATIONS.map((pop) => (
-                <option key={pop.id} value={pop.label}>
-                  {pop.label}
-                </option>
-              ))}
-              <option value="custom">Other / Custom Population...</option>
-            </select>
-
-            {/* Compact Pediatric / High-Risk Safety Notice */}
-            {isVulnerablePopulation && (
-              <div className="mt-2 p-2 rounded-lg bg-rose-50 border border-rose-200 text-rose-900 text-[11px] flex items-start gap-1.5">
-                <ShieldAlert className="w-3.5 h-3.5 text-rose-600 shrink-0 mt-0.5" />
-                <span className="leading-snug">
-                  <strong>Special Population Caution:</strong> Pediatric/vulnerable cohorts require strict excipient limits (e.g. propylene glycol thresholds) and institutional ethics (IRB) review prior to in-vivo protocols.
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* RIGHT COLUMN: Target Applications, Packaging */}
-        <div className="space-y-3">
-          {/* Target Applications (Searchable Multi-Select + Removable Chips) */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="block font-semibold text-slate-700">
-                Target Applications
-              </label>
-              <span className="text-[10px] text-slate-400">
-                {selectedApplicationList.length} selected
-              </span>
-            </div>
-
-            {/* Dropdown Selector */}
-            <div className="relative" ref={appDropdownRef}>
-              <button
-                type="button"
-                onClick={() => setIsAppDropdownOpen(!isAppDropdownOpen)}
-                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white hover:border-emerald-500 text-slate-700 text-xs cursor-pointer shadow-2xs"
-              >
-                <span className="text-slate-500">
-                  {selectedApplicationList.length > 0
-                    ? `${selectedApplicationList.length} application(s) selected`
-                    : "Select target applications..."}
-                </span>
-                <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isAppDropdownOpen ? "rotate-180" : ""}`} />
-              </button>
-
-              {isAppDropdownOpen && (
-                <div className="absolute left-0 right-0 z-40 mt-1 bg-white rounded-xl border border-slate-200 shadow-xl p-2 text-xs space-y-1.5 animate-in fade-in duration-100">
+            <AnimatePresence>
+              {isFormatDropdownOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  className="absolute right-0 z-40 mt-1.5 w-72 space-y-2 rounded-2xl border border-[#d7e4dc] bg-white p-2.5 shadow-xl sm:w-80"
+                >
                   <div className="relative">
-                    <Search className="w-3 h-3 text-slate-400 absolute left-2.5 top-2.5" />
+                    <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#8aa094]" />
                     <input
                       type="text"
-                      placeholder="Filter applications..."
-                      value={appSearchQuery}
-                      onChange={(e) => setAppSearchQuery(e.target.value)}
-                      className="w-full pl-7 pr-2 py-1 text-xs rounded-md border border-slate-200 focus:outline-none focus:border-emerald-500"
+                      placeholder="Search format..."
+                      value={formatSearch}
+                      onChange={(e) => setFormatSearch(e.target.value)}
+                      className="h-9 w-full rounded-xl border border-[#d5e3da] bg-[#fbfdfb] pl-8 pr-2 text-xs outline-none focus:border-emerald-600"
                       autoFocus
                     />
                   </div>
-
-                  <div className="max-h-48 overflow-y-auto space-y-0.5">
-                    {filteredTargetApplications.map((app) => {
-                      const isSelected = selectedApplicationList.includes(app.label);
+                  <div className="max-h-60 space-y-1 overflow-y-auto">
+                    {(["Topical", "Oral", "Other"] as ProductRoute[]).map((groupRoute) => {
+                      const groupPresets = filteredPresets.filter((p) => p.route === groupRoute);
+                      if (groupPresets.length === 0) return null;
                       return (
-                        <div
-                          key={app.id}
-                          onClick={() => toggleApplicationTag(app.label)}
-                          className={`px-2 py-1.5 rounded-lg flex items-center justify-between cursor-pointer transition-colors ${
-                            isSelected ? "bg-emerald-50 text-emerald-950 font-semibold" : "hover:bg-slate-50 text-slate-700"
-                          }`}
-                        >
-                          <div className="flex items-center gap-1.5">
-                            {isSelected ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <div className="w-3.5" />}
-                            <span>{app.label}</span>
-                          </div>
-                          <span className="text-[10px] text-slate-400 font-mono">({app.category})</span>
+                        <div key={groupRoute}>
+                          <p className="rounded-lg bg-[#f7faf8] px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[#8aa094]">
+                            {groupRoute}
+                          </p>
+                          {groupPresets.map((preset) => {
+                            const isCurrent =
+                              Boolean(productSelection.deliveryFormat) &&
+                              productSelection.deliveryFormat.toLowerCase() ===
+                                preset.dosageForm.toLowerCase();
+                            const Icon = getFormatIcon(preset.name);
+                            return (
+                              <button
+                                key={preset.id}
+                                type="button"
+                                onClick={() => handleSelectPreset(preset)}
+                                className={`mt-0.5 flex w-full items-center justify-between rounded-xl px-2 py-1.5 text-left text-xs transition ${
+                                  isCurrent
+                                    ? "bg-emerald-50 font-semibold text-emerald-950"
+                                    : "text-[#52645d] hover:bg-[#f4f8f5]"
+                                }`}
+                              >
+                                <span className="flex min-w-0 items-center gap-1.5">
+                                  <Icon className="h-3.5 w-3.5 shrink-0 text-emerald-700" />
+                                  <span className="truncate">{preset.name}</span>
+                                </span>
+                                {isCurrent && <Check className="h-3.5 w-3.5 text-emerald-600" />}
+                              </button>
+                            );
+                          })}
                         </div>
                       );
                     })}
                   </div>
-
-                  {/* Add Custom Application */}
-                  <div className="pt-1.5 border-t border-slate-100 flex items-center gap-1">
-                    <input
-                      type="text"
-                      placeholder="Add custom application..."
-                      value={customAppInput}
-                      onChange={(e) => setCustomAppInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          addCustomApplication();
-                        }
-                      }}
-                      className="flex-1 px-2 py-1 text-xs rounded-md border border-slate-200 focus:outline-none focus:border-emerald-500"
-                    />
-                    <button
-                      type="button"
-                      onClick={addCustomApplication}
-                      className="px-2 py-1 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold cursor-pointer"
-                    >
-                      Add
-                    </button>
-                  </div>
-                </div>
+                </motion.div>
               )}
-            </div>
-
-            {/* Selected Application Chips */}
-            <div className="flex flex-wrap gap-1 mt-1.5 min-h-6">
-              {selectedApplicationList.length > 0 ? (
-                selectedApplicationList.map((tag) => (
-                  <span
-                    key={tag}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-900 border border-emerald-200 text-[11px] font-medium shadow-2xs"
-                  >
-                    <span>{tag}</span>
-                    <button
-                      type="button"
-                      onClick={() => toggleApplicationTag(tag)}
-                      className="text-emerald-700 hover:text-rose-600 p-0.5 rounded-full hover:bg-emerald-100 cursor-pointer"
-                    >
-                      <X className="w-2.5 h-2.5" />
-                    </button>
-                  </span>
-                ))
-              ) : (
-                <span className="text-[11px] text-slate-400 italic">No applications tagged yet.</span>
-              )}
-            </div>
-          </div>
-
-          {/* Packaging & Container Dropdown */}
-          <div>
-            <label className="block font-semibold text-slate-700 mb-1">
-              Packaging &amp; Container Specification
-            </label>
-            <select
-              value={
-                (PACKAGING_OPTIONS[currentRoute] || []).includes(productSelection.packagingType)
-                  ? productSelection.packagingType
-                  : "custom"
-              }
-              onChange={(e) => {
-                if (e.target.value === "custom") {
-                  handleFieldChange("packagingType", "Custom Laboratory Packaging");
-                } else {
-                  handleFieldChange("packagingType", e.target.value);
-                }
-              }}
-              className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white font-medium text-slate-800 focus:outline-none focus:border-emerald-500"
-            >
-              {(PACKAGING_OPTIONS[currentRoute] || PACKAGING_OPTIONS.Topical).map((pack) => (
-                <option key={pack} value={pack}>
-                  {pack}
-                </option>
-              ))}
-              <option value="custom">Other / Custom Packaging...</option>
-            </select>
-            <input
-              type="text"
-              placeholder="Packaging details / barrier notes..."
-              value={productSelection.packagingType}
-              onChange={(e) => handleFieldChange("packagingType", e.target.value)}
-              className="mt-1.5 w-full px-2.5 py-1 rounded-lg border border-slate-300 text-xs"
-            />
+            </AnimatePresence>
           </div>
         </div>
-      </div>
 
-      {/* ===================================================================== */}
-      {/* 4. SCIENTIFIC RATIONALE (EXPANDED EDITABLE TEXTAREA WITH AI ASSIST)    */}
-      {/* ===================================================================== */}
-      <div className="space-y-2.5 pt-2 border-t border-slate-100">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <label className="block font-bold text-slate-800 text-sm tracking-tight">
-            Delivery System Scientific Rationale
-          </label>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {scoredRecommendations.slice(0, 4).map((item: ScoredPreset, idx: number) => {
+            const isSelected =
+              Boolean(productSelection.deliveryFormat) &&
+              productSelection.deliveryFormat.toLowerCase() ===
+                item.preset.dosageForm.toLowerCase();
+            const Icon = getFormatIcon(item.preset.name);
+            return (
+              <motion.button
+                key={item.preset.id}
+                type="button"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.25, delay: 0.05 + idx * 0.04 }}
+                whileHover={{ y: -2 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => handleSelectPreset(item.preset)}
+                className={`flex items-center justify-between gap-2 rounded-2xl border p-3 text-left transition ${
+                  isSelected
+                    ? "border-emerald-500 bg-[linear-gradient(165deg,#ecfdf5_0%,#ffffff_70%)] text-emerald-950 shadow-[0_0_0_1px_rgba(16,185,129,0.35)]"
+                    : "border-[#e8f0eb] bg-[#fbfdfb] text-[#0f2c20] hover:border-emerald-300 hover:bg-emerald-50/40"
+                }`}
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  <span
+                    className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                      isSelected
+                        ? "bg-emerald-600 text-white"
+                        : "bg-emerald-50 text-emerald-800"
+                    }`}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                  </span>
+                  <span className="truncate text-xs font-semibold">{item.preset.name}</span>
+                </span>
+                {isSelected && <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600" />}
+              </motion.button>
+            );
+          })}
+        </div>
+      </motion.section>
 
+      <AnimatePresence>
+        {pendingPreset && (
+          <motion.div
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            className="rounded-2xl border border-amber-200 bg-amber-50 p-3.5 text-xs"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" />
+                <p className="leading-snug text-amber-950">
+                  You have modified some fields. Apply{" "}
+                  <strong>{pendingPreset.name}</strong> defaults, or keep your custom edits?
+                </p>
+              </div>
+              <button type="button" onClick={() => setPendingPreset(null)}>
+                <X className="h-3.5 w-3.5 text-amber-700" />
+              </button>
+            </div>
+            <div className="mt-2.5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => applyPresetDirectly(pendingPreset, false)}
+                className="rounded-xl border border-amber-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-amber-950 hover:bg-amber-100"
+              >
+                Keep My Edits
+              </button>
+              <button
+                type="button"
+                onClick={() => applyPresetDirectly(pendingPreset, true)}
+                className="rounded-xl bg-[#0f2c20] px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-[#164533]"
+              >
+                Apply Preset Defaults
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Specs form */}
+      <motion.section
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.08, ease: easeOut }}
+        className="rounded-2xl border border-[#d7e4dc]/90 bg-white p-4 shadow-[0_1px_2px_rgba(15,44,32,0.04)] sm:p-5"
+      >
+        <h3 className="mb-3 text-[11px] font-bold uppercase tracking-[0.14em] text-[#52645d]">
+          Product Specifications
+        </h3>
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="space-y-3.5">
+            <div>
+              <label className="mb-1.5 block text-[11px] font-semibold text-[#52645d]">
+                Product Category
+              </label>
+              <select
+                value={productSelection.productType}
+                onChange={(e) => handleFieldChange("productType", e.target.value)}
+                className={fieldClass}
+              >
+                {PRODUCT_CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <div className="mb-1.5 flex items-center justify-between">
+                <label className="block text-[11px] font-semibold text-[#52645d]">
+                  Dosage Form
+                </label>
+                <span className="font-mono text-[10px] text-[#8aa094]">
+                  {productSelection.deliveryFormat}
+                </span>
+              </div>
+              <select
+                value={
+                  filteredDosageForms.some(
+                    (f) => f.dosageForm === productSelection.deliveryFormat
+                  )
+                    ? productSelection.deliveryFormat
+                    : "Custom"
+                }
+                onChange={(e) => {
+                  if (e.target.value === "Custom") {
+                    handleFieldChange("deliveryFormat", "Custom Formulation");
+                  } else {
+                    const match = PRODUCT_FORMAT_PRESETS.find(
+                      (p) => p.dosageForm === e.target.value
+                    );
+                    if (match) handleSelectPreset(match);
+                    else handleFieldChange("deliveryFormat", e.target.value);
+                  }
+                }}
+                className={fieldClass}
+              >
+                {filteredDosageForms.map((df) => (
+                  <option key={df.id} value={df.dosageForm}>
+                    {df.dosageForm} ({df.route})
+                  </option>
+                ))}
+                <option value="Custom">Custom / Other Dosage Form...</option>
+              </select>
+              {productSelection.deliveryFormat.includes("Custom") && (
+                <input
+                  type="text"
+                  placeholder="Enter custom format name..."
+                  value={productSelection.deliveryFormat}
+                  onChange={(e) => handleFieldChange("deliveryFormat", e.target.value)}
+                  className={`mt-2 ${fieldClass}`}
+                />
+              )}
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-[11px] font-semibold text-[#52645d]">
+                Intended Target Population
+              </label>
+              <select
+                value={
+                  TARGET_POPULATIONS.some(
+                    (p) => p.label === productSelection.intendedPopulation
+                  )
+                    ? productSelection.intendedPopulation
+                    : "custom"
+                }
+                onChange={(e) => {
+                  if (e.target.value === "custom") {
+                    handleFieldChange(
+                      "intendedPopulation",
+                      "Custom Population Specification"
+                    );
+                  } else {
+                    handleFieldChange("intendedPopulation", e.target.value);
+                  }
+                }}
+                className={fieldClass}
+              >
+                {TARGET_POPULATIONS.map((pop) => (
+                  <option key={pop.id} value={pop.label}>
+                    {pop.label}
+                  </option>
+                ))}
+                <option value="custom">Other / Custom Population...</option>
+              </select>
+
+              <AnimatePresence>
+                {isVulnerablePopulation && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="mt-2 overflow-hidden"
+                  >
+                    <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-2.5 text-[11px] text-rose-900">
+                      <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-rose-600" />
+                      <span className="leading-snug">
+                        <strong>Special Population Caution:</strong> Pediatric/vulnerable
+                        cohorts require strict excipient limits and IRB review prior to
+                        in-vivo protocols.
+                      </span>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+
+          <div className="space-y-3.5">
+            <div>
+              <div className="mb-1.5 flex items-center justify-between">
+                <label className="block text-[11px] font-semibold text-[#52645d]">
+                  Target Applications
+                </label>
+                <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-mono text-[10px] font-bold text-emerald-900">
+                  {selectedApplicationList.length} selected
+                </span>
+              </div>
+
+              <div className="relative" ref={appDropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setIsAppDropdownOpen(!isAppDropdownOpen)}
+                  className="flex h-10 w-full items-center justify-between rounded-xl border border-[#d5e3da] bg-[#fbfdfb] px-3 text-xs text-[#52645d] transition hover:border-emerald-400"
+                >
+                  <span>
+                    {selectedApplicationList.length > 0
+                      ? `${selectedApplicationList.length} application(s) selected`
+                      : "Select target applications..."}
+                  </span>
+                  <ChevronDown
+                    className={`h-3.5 w-3.5 text-[#8aa094] transition ${
+                      isAppDropdownOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
+
+                <AnimatePresence>
+                  {isAppDropdownOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -6 }}
+                      className="absolute left-0 right-0 z-40 mt-1.5 space-y-2 rounded-2xl border border-[#d7e4dc] bg-white p-2.5 shadow-xl"
+                    >
+                      <div className="relative">
+                        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#8aa094]" />
+                        <input
+                          type="text"
+                          placeholder="Filter applications..."
+                          value={appSearchQuery}
+                          onChange={(e) => setAppSearchQuery(e.target.value)}
+                          className="h-9 w-full rounded-xl border border-[#d5e3da] bg-[#fbfdfb] pl-8 pr-2 text-xs outline-none focus:border-emerald-600"
+                          autoFocus
+                        />
+                      </div>
+                      <div className="max-h-48 space-y-0.5 overflow-y-auto">
+                        {filteredTargetApplications.map((app) => {
+                          const isSelected = selectedApplicationList.includes(app.label);
+                          return (
+                            <button
+                              key={app.id}
+                              type="button"
+                              onClick={() => toggleApplicationTag(app.label)}
+                              className={`flex w-full items-center justify-between rounded-xl px-2 py-1.5 text-left text-xs transition ${
+                                isSelected
+                                  ? "bg-emerald-50 font-semibold text-emerald-950"
+                                  : "text-[#52645d] hover:bg-[#f4f8f5]"
+                              }`}
+                            >
+                              <span className="flex items-center gap-1.5">
+                                {isSelected ? (
+                                  <Check className="h-3.5 w-3.5 text-emerald-600" />
+                                ) : (
+                                  <span className="w-3.5" />
+                                )}
+                                {app.label}
+                              </span>
+                              <span className="font-mono text-[10px] text-[#8aa094]">
+                                {app.category}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div className="flex items-center gap-1.5 border-t border-[#e8f0eb] pt-2">
+                        <input
+                          type="text"
+                          placeholder="Add custom application..."
+                          value={customAppInput}
+                          onChange={(e) => setCustomAppInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              addCustomApplication();
+                            }
+                          }}
+                          className="h-8 flex-1 rounded-lg border border-[#d5e3da] px-2 text-xs outline-none focus:border-emerald-600"
+                        />
+                        <button
+                          type="button"
+                          onClick={addCustomApplication}
+                          className="rounded-lg bg-[#0f2c20] px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-[#164533]"
+                        >
+                          Add
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              <div className="mt-2 flex min-h-7 flex-wrap gap-1.5">
+                {selectedApplicationList.length > 0 ? (
+                  selectedApplicationList.map((tag) => (
+                    <span
+                      key={tag}
+                      className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-900"
+                    >
+                      {tag}
+                      <button
+                        type="button"
+                        onClick={() => toggleApplicationTag(tag)}
+                        className="rounded p-0.5 hover:bg-emerald-100 hover:text-rose-600"
+                      >
+                        <X className="h-2.5 w-2.5" />
+                      </button>
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-[11px] italic text-[#8aa094]">
+                    No applications tagged yet.
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-[11px] font-semibold text-[#52645d]">
+                Packaging &amp; Container
+              </label>
+              <select
+                value={
+                  (PACKAGING_OPTIONS[currentRoute] || []).includes(
+                    productSelection.packagingType
+                  )
+                    ? productSelection.packagingType
+                    : "custom"
+                }
+                onChange={(e) => {
+                  if (e.target.value === "custom") {
+                    handleFieldChange("packagingType", "Custom Laboratory Packaging");
+                  } else {
+                    handleFieldChange("packagingType", e.target.value);
+                  }
+                }}
+                className={fieldClass}
+              >
+                {(PACKAGING_OPTIONS[currentRoute] || PACKAGING_OPTIONS.Topical).map(
+                  (pack) => (
+                    <option key={pack} value={pack}>
+                      {pack}
+                    </option>
+                  )
+                )}
+                <option value="custom">Other / Custom Packaging...</option>
+              </select>
+              <input
+                type="text"
+                placeholder="Packaging details / barrier notes..."
+                value={productSelection.packagingType}
+                onChange={(e) => handleFieldChange("packagingType", e.target.value)}
+                className={`mt-2 ${fieldClass}`}
+              />
+            </div>
+          </div>
+        </div>
+      </motion.section>
+
+      {/* Rationale */}
+      <motion.section
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.12, ease: easeOut }}
+        className="rounded-2xl border border-[#d7e4dc]/90 bg-white p-4 shadow-[0_1px_2px_rgba(15,44,32,0.04)] sm:p-5"
+      >
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#52645d]">
+              Delivery System Scientific Rationale
+            </h3>
+            <p className="mt-0.5 text-[11px] text-[#8aa094]">
+              Document route, vehicle, partitioning, and QC requirements
+            </p>
+          </div>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={handleRestorePresetRationale}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-100 hover:border-slate-300 text-xs font-semibold cursor-pointer transition-colors shadow-2xs"
-              title="Reset rationale to baseline catalog preset"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-[#d7e4dc] bg-white px-3 py-1.5 text-xs font-semibold text-[#52645d] transition hover:border-emerald-400 hover:bg-emerald-50 hover:text-emerald-900"
             >
-              <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
-              <span>Reset</span>
+              <RotateCcw className="h-3.5 w-3.5" />
+              Reset
             </button>
-
             <button
               type="button"
               onClick={handleAiRefineRationale}
               disabled={isAiRefining}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-300 text-xs font-semibold shadow-2xs disabled:opacity-50 cursor-pointer transition-colors"
-              title="Enhance rationale with scientific formulation literature"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-teal-200 bg-teal-50 px-3 py-1.5 text-xs font-semibold text-teal-900 transition hover:bg-teal-100 disabled:opacity-50"
             >
               {isAiRefining ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-teal-600" />
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : (
-                <Sparkles className="w-3.5 h-3.5 text-teal-600" />
+                <Sparkles className="h-3.5 w-3.5" />
               )}
-              <span>AI Assist: Refine</span>
+              AI Assist: Refine
             </button>
           </div>
         </div>
 
-        {aiNotice && (
-          <div className="p-2.5 rounded-lg bg-teal-50 border border-teal-200 text-teal-900 text-xs flex items-center justify-between shadow-2xs">
-            <span className="font-medium">{aiNotice}</span>
-            <button
-              type="button"
-              onClick={() => setAiNotice(null)}
-              className="text-teal-600 hover:text-teal-800 font-bold ml-2 cursor-pointer text-sm"
+        <AnimatePresence>
+          {aiNotice && (
+            <motion.div
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="mb-3 flex items-center justify-between gap-2 rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-xs font-medium text-teal-900"
             >
-              ✕
-            </button>
-          </div>
-        )}
+              <span>{aiNotice}</span>
+              <button type="button" onClick={() => setAiNotice(null)}>
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <textarea
           ref={rationaleTextareaRef}
           rows={7}
-          value={productSelection.rationale}
+          value={productSelection.rationale ?? ""}
           onChange={(e) => handleFieldChange("rationale", e.target.value)}
           placeholder="Document scientific rationale for delivery route, vehicle characteristics, active partitioning, barrier protection, and required quality/safety testing (pH, viscosity, microbial purity)..."
-          className="w-full min-h-[180px] p-3.5 rounded-xl border border-slate-300 font-sans text-xs sm:text-sm text-slate-800 leading-relaxed focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 shadow-inner resize-y transition-all"
+          className="min-h-[180px] w-full resize-y rounded-2xl border border-[#d5e3da] bg-[#fbfdfb] p-3.5 text-xs leading-relaxed text-[#0f2c20] outline-none transition focus:border-emerald-600 focus:bg-white focus:ring-2 focus:ring-emerald-600/15 sm:text-sm"
         />
 
-        <div className="flex items-center justify-between text-xs text-slate-500">
-          <span>Review and approve before saving. Unverified therapeutic efficacy claims are prohibited.</span>
-          <span className="font-mono text-slate-500 font-medium">{productSelection.rationale?.length || 0} chars</span>
+        <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-[#8aa094]">
+          <span>Review before saving. Unverified therapeutic efficacy claims are prohibited.</span>
+          <span className="shrink-0 font-mono font-medium tabular-nums text-[#6d7f76]">
+            {productSelection.rationale?.length || 0} chars
+          </span>
         </div>
-      </div>
+      </motion.section>
     </div>
   );
 }

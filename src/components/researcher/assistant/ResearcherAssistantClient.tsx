@@ -297,8 +297,20 @@ export default function ResearcherAssistantClient({
     setTimeout(() => setCopiedMessageId(null), 2000);
   };
 
-  // Clear Chat Option (removes current conversation and starts fresh)
+  const canClearChat =
+    messages.length > 0 || Boolean(attachedPaper) || Boolean(conversationId) || Boolean(inputMessage.trim());
+
+  // Clear chat: wipe local thread + detach paper; delete server conversation when present
   const handleClearChat = async () => {
+    if (!canClearChat || clearingChat) return;
+    if (
+      messages.length > 0 &&
+      typeof window !== "undefined" &&
+      !window.confirm("Clear this chat? Message history will be removed.")
+    ) {
+      return;
+    }
+
     setClearingChat(true);
     try {
       if (conversationId) {
@@ -414,83 +426,76 @@ export default function ResearcherAssistantClient({
     );
   };
 
+  const suggested = attachedPaper ? PAPER_SUGGESTED_QUESTIONS : DOSSIER_SUGGESTED_QUESTIONS;
+
   return (
     <div
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className={`space-y-4 w-full h-[calc(100vh-130px)] flex flex-col relative transition-colors ${
-        isDraggingOver ? "ring-4 ring-emerald-400/50 rounded-2xl bg-emerald-50/20" : ""
+      className={`relative flex h-[calc(100vh-120px)] w-full flex-col gap-3 transition-colors ${
+        isDraggingOver ? "rounded-2xl bg-emerald-50/30 ring-2 ring-emerald-400/40" : ""
       }`}
     >
-      {/* Hidden file input for paper uploads */}
       <input
         ref={fileInputRef}
         type="file"
         accept=".pdf,.docx,.txt,.md"
         onChange={(e) => {
-          if (e.target.files && e.target.files[0]) {
-            handleFileUpload(e.target.files[0]);
-          }
+          if (e.target.files?.[0]) handleFileUpload(e.target.files[0]);
         }}
         className="hidden"
       />
 
-      {/* Drag & drop overlay indicator */}
       {isDraggingOver && (
-        <div className="absolute inset-0 bg-emerald-600/10 backdrop-blur-xs rounded-2xl z-50 flex items-center justify-center border-2 border-dashed border-emerald-500 pointer-events-none">
-          <div className="bg-white px-6 py-4 rounded-2xl shadow-xl border border-emerald-200 text-center space-y-1">
-            <Upload className="w-8 h-8 text-emerald-600 mx-auto animate-bounce" />
-            <h4 className="font-bold text-sm text-slate-900">Drop Research Paper Here</h4>
-            <p className="text-xs text-slate-500">PDF, DOCX, or text manuscript for immediate analysis</p>
+        <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center rounded-2xl border-2 border-dashed border-emerald-500 bg-emerald-600/10 backdrop-blur-xs">
+          <div className="rounded-2xl border border-emerald-200 bg-white px-5 py-3 text-center shadow-lg">
+            <Upload className="mx-auto mb-1.5 h-6 w-6 animate-bounce text-emerald-700" />
+            <p className="text-sm font-semibold text-[#0f2c20]">Drop paper</p>
+            <p className="text-[11px] text-[#6d7f76]">PDF · DOCX · TXT</p>
           </div>
         </div>
       )}
 
-      {/* HERO HEADER BAR (Forest Emerald Theme) */}
-      <div className="relative overflow-hidden p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-[#0a2318] via-[#0f2c20] to-[#164533] border border-emerald-500/30 text-white shadow-lg shadow-emerald-950/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
-        <div className="absolute -top-12 -right-12 w-48 h-48 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none animate-pulse" />
-
-        <div className="relative z-10 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center text-emerald-300 shrink-0 shadow-inner">
-            <Sparkles className="w-5 h-5 text-emerald-300 animate-pulse" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-base sm:text-lg font-heading font-extrabold text-white leading-tight drop-shadow-xs">
-                Ask NatureAide
-              </h1>
-              <span className="hidden sm:inline-flex px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-200 border border-emerald-400/30 text-[10px] font-extrabold uppercase tracking-wider">
-                AI Scientific Research Assistant
-              </span>
+      {/* Compact hero */}
+      <div className="relative shrink-0 overflow-hidden rounded-2xl border border-[#0f2c20]/15 bg-[linear-gradient(120deg,#0f2c20_0%,#134032_48%,#0b271b_100%)] px-4 py-3 text-white shadow-[0_12px_28px_-18px_rgba(15,44,32,0.55)] sm:px-5">
+        <div className="pointer-events-none absolute -right-10 -top-12 h-32 w-32 rounded-full bg-emerald-400/15 blur-3xl" />
+        <div className="relative flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-200">
+              <Sparkles className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-base font-semibold tracking-tight text-white sm:text-lg">
+                  Ask NatureAide
+                </h1>
+                <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-200">
+                  Research AI
+                </span>
+              </div>
+              <p className="truncate text-[11px] text-emerald-200/70">
+                {selectedProject?.plantName || "Select a dossier"} · grounded Q&amp;A
+              </p>
             </div>
-            <p className="text-[11px] text-emerald-200/80">
-              Grounded Medicinal Plant Literature · In-Silico Screening · Together AI Inference
-            </p>
           </div>
-        </div>
 
-        {/* Project Selector & Actions (Includes Clear Chat Option) */}
-        <div className="relative z-10 flex flex-wrap items-center gap-2">
-          {(messages.length > 0 || attachedPaper) && (
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
             <button
               type="button"
               onClick={handleClearChat}
-              disabled={clearingChat}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-rose-500/20 hover:border-rose-400/40 border border-white/20 text-xs font-semibold text-emerald-100 hover:text-rose-200 transition-colors cursor-pointer disabled:opacity-50"
-              title="Clear current chat and start fresh"
+              disabled={!canClearChat || clearingChat}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/5 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-100 transition hover:border-rose-400/40 hover:bg-rose-500/20 hover:text-rose-100 disabled:cursor-not-allowed disabled:opacity-40"
+              title="Clear chat"
+              aria-label="Clear chat"
             >
               {clearingChat ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : (
-                <Trash2 className="w-3.5 h-3.5 text-rose-300" />
+                <Trash2 className="h-3.5 w-3.5" />
               )}
-              <span>Clear Chat</span>
+              Clear chat
             </button>
-          )}
-
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-emerald-200 font-semibold whitespace-nowrap">Dossier:</span>
             <div className="relative">
               <select
                 value={selectedProjectId || ""}
@@ -500,127 +505,100 @@ export default function ResearcherAssistantClient({
                   setConversationId(null);
                   setAttachedPaper(null);
                 }}
-                className="pl-3 pr-8 py-1.5 rounded-xl border border-white/20 bg-white/10 text-xs font-semibold text-white outline-none focus:bg-[#0f2c20] backdrop-blur-md cursor-pointer appearance-none max-w-[220px] truncate"
+                className="max-w-[220px] cursor-pointer appearance-none truncate rounded-xl border border-white/15 bg-white/10 py-1.5 pl-3 pr-8 text-[11px] font-semibold text-white outline-none backdrop-blur-md focus:bg-[#0f2c20]"
+                title="Active dossier"
               >
                 {projects.map((p) => (
-                  <option key={p.id} value={p.id} className="text-slate-900 bg-white">
-                    {p.plantName} ({p.title})
+                  <option key={p.id} value={p.id} className="bg-white text-slate-900">
+                    {p.plantName}
                   </option>
                 ))}
               </select>
-              <ChevronDown className="w-3.5 h-3.5 text-emerald-200 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-emerald-200" />
             </div>
           </div>
         </div>
       </div>
 
-      {/* QUICK MANUSCRIPT ATTACHMENT STRIP IF DOSSIER HAS MANUSCRIPT */}
+      {/* Manuscript quick-load */}
       {selectedProject?.hasManuscript && !attachedPaper && (
-        <div className="px-4 py-2.5 rounded-xl bg-emerald-50/80 border border-emerald-200/80 flex items-center justify-between gap-3 text-xs shrink-0 animate-in fade-in duration-200">
-          <div className="flex items-center gap-2 text-slate-700">
-            <FileText className="w-4 h-4 text-emerald-700 shrink-0" />
-            <span>
-              This project has an uploaded manuscript:{" "}
-              <strong className="text-slate-900">{selectedProject.manuscriptFileName || "manuscript.pdf"}</strong>
+        <div className="flex shrink-0 items-center justify-between gap-3 rounded-2xl border border-[#d7e4dc]/90 bg-white px-3.5 py-2 shadow-[0_1px_2px_rgba(15,44,32,0.04)]">
+          <div className="flex min-w-0 items-center gap-2 text-[11px] text-[#52645d]">
+            <FileText className="h-3.5 w-3.5 shrink-0 text-emerald-700" />
+            <span className="truncate font-medium text-[#0f2c20]">
+              {selectedProject.manuscriptFileName || "manuscript.pdf"}
             </span>
           </div>
-
           <button
             type="button"
             onClick={handleLoadProjectManuscript}
             disabled={loadingManuscript}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0f2c20] hover:bg-[#164533] disabled:opacity-50 text-white font-semibold transition-colors cursor-pointer shrink-0"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-[#0f2c20] px-3 py-1.5 text-[11px] font-semibold text-emerald-100 transition hover:bg-[#1e5c44] disabled:opacity-50"
           >
             {loadingManuscript ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
-              <BookOpen className="w-3.5 h-3.5" />
+              <BookOpen className="h-3.5 w-3.5" />
             )}
-            <span>Analyze Project Paper</span>
+            Analyze paper
           </button>
         </div>
       )}
 
-      {/* CHAT MESSAGES CONTAINER */}
-      <div className="flex-1 bg-white border border-[#dde6df] rounded-2xl shadow-xs p-4 sm:p-6 overflow-y-auto space-y-4">
-        {/* Welcome Banner when Empty */}
+      {/* Chat surface */}
+      <div className="flex-1 space-y-3 overflow-y-auto rounded-2xl border border-[#d7e4dc]/90 bg-white p-3 shadow-[0_1px_2px_rgba(15,44,32,0.04)] sm:p-4">
         {messages.length === 0 && (
-          <div className="p-6 rounded-2xl bg-[#faf9f5] border border-[#dde6df] text-center max-w-2xl mx-auto space-y-4 my-4">
-            <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-700 mx-auto flex items-center justify-center shadow-xs">
-              <Sparkles className="w-6 h-6" />
-            </div>
-            <div className="space-y-1">
-              <h3 className="font-heading font-extrabold text-sm text-[#0f2c20]">
-                Grounded Scientific Research &amp; Paper Q&amp;A Assistant
-              </h3>
-              <p className="text-xs text-[#52665b] leading-relaxed max-w-lg mx-auto">
-                {attachedPaper ? (
-                  <>
-                    Active Paper: <strong className="text-[#0f2c20]">{attachedPaper.fileName}</strong> (
-                    {attachedPaper.pageCount} pages). Ask any question, request a summary, or inspect methodology,
-                    phytochemicals, and docking scores just like ChatGPT.
-                  </>
-                ) : (
-                  <>
-                    Ask specific questions about your research dossier{" "}
-                    <span className="font-bold text-[#0f2c20]">
-                      {selectedProject?.plantName ? `(${selectedProject.plantName})` : ""}
-                    </span>
-                    , or <strong>upload any research paper</strong> (PDF / DOCX) to analyze it.
-                  </>
-                )}
-              </p>
+          <div className="mx-auto my-2 max-w-2xl space-y-3 rounded-2xl border border-[#e6ebe7] bg-[linear-gradient(165deg,#ffffff_0%,#f8fbf9_100%)] p-4 sm:p-5">
+            <div className="flex items-start gap-2.5">
+              <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-800">
+                <Sparkles className="h-4 w-4" />
+              </span>
+              <div className="min-w-0">
+                <h3 className="text-sm font-semibold text-[#0f2c20]">
+                  {attachedPaper ? "Paper ready" : "Ask about your dossier"}
+                </h3>
+                <p className="mt-0.5 text-[11px] text-[#6d7f76]">
+                  {attachedPaper
+                    ? `${attachedPaper.fileName}${attachedPaper.pageCount ? ` · ${attachedPaper.pageCount}p` : ""}`
+                    : selectedProject?.plantName
+                      ? `${selectedProject.plantName} · upload a paper or pick a prompt`
+                      : "Select a project · upload a paper"}
+                </p>
+              </div>
             </div>
 
-            {/* Quick Upload Action inside Welcome Card */}
             {!attachedPaper && (
-              <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploadingFile}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white hover:bg-emerald-50 border border-emerald-300 text-xs font-bold text-emerald-800 transition-colors shadow-2xs cursor-pointer"
-                >
-                  {uploadingFile ? (
-                    <Loader2 className="w-4 h-4 animate-spin text-emerald-700" />
-                  ) : (
-                    <Upload className="w-4 h-4 text-emerald-700" />
-                  )}
-                  <span>Upload Research Paper / Manuscript</span>
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingFile}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-[#d7e4dc] bg-white px-3 py-1.5 text-[11px] font-semibold text-[#52645d] transition hover:border-emerald-300 hover:text-emerald-900"
+              >
+                {uploadingFile ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Upload className="h-3.5 w-3.5" />
+                )}
+                Upload paper
+              </button>
             )}
 
-            {/* Suggested Questions Grid */}
-            <div className="pt-2 text-left space-y-2">
-              <p className="text-[11px] font-bold text-[#78997f] uppercase tracking-wider text-center">
-                Suggested Research Queries
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {(attachedPaper ? PAPER_SUGGESTED_QUESTIONS : DOSSIER_SUGGESTED_QUESTIONS).map((q, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => handleSendMessage(q)}
-                    className="p-2.5 rounded-xl bg-white hover:bg-emerald-50/70 border border-[#dde6df] hover:border-emerald-300 text-left text-xs font-medium text-slate-700 hover:text-emerald-900 transition-all flex items-center justify-between group cursor-pointer shadow-2xs"
-                  >
-                    <span className="truncate pr-2">{q}</span>
-                    <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-600 shrink-0 group-hover:translate-x-0.5 transition-transform" />
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="p-2.5 rounded-xl bg-white border border-[#dde6df] text-[11px] text-[#52665b] flex items-center justify-center gap-2">
-              <AlertCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-              <span>
-                Evidence-grounded assistant. Predicted binding scores reflect in-silico models and do not replace laboratory assay verification.
-              </span>
+            <div className="flex flex-wrap gap-1.5">
+              {suggested.map((q) => (
+                <button
+                  key={q}
+                  type="button"
+                  onClick={() => handleSendMessage(q)}
+                  className="inline-flex items-center gap-1 rounded-xl border border-[#d7e4dc] bg-white px-2.5 py-1.5 text-[11px] font-medium text-[#0f2c20] transition hover:border-emerald-300 hover:bg-emerald-50/60"
+                >
+                  {q.replace(/\.$/, "")}
+                  <ArrowRight className="h-3 w-3 text-[#c5d4cb]" />
+                </button>
+              ))}
             </div>
           </div>
         )}
 
-        {/* Message Feed */}
         {messages.map((msg) => {
           const isUser = msg.sender === "USER";
           const isCopied = copiedMessageId === msg.id;
@@ -628,66 +606,54 @@ export default function ResearcherAssistantClient({
           return (
             <div
               key={msg.id}
-              className={`flex gap-3 max-w-3xl ${
-                isUser ? "ml-auto flex-row-reverse" : "mr-auto"
-              } animate-in fade-in duration-150`}
+              className={`flex max-w-3xl gap-2.5 ${isUser ? "ml-auto flex-row-reverse" : "mr-auto"}`}
             >
-              {/* Avatar */}
               <div
-                className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-xs ${
+                className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${
                   isUser
-                    ? "bg-[#0f2c20] text-emerald-300"
-                    : "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                    ? "bg-[#0f2c20] text-emerald-200"
+                    : "border border-emerald-200 bg-emerald-50 text-emerald-800"
                 }`}
               >
-                {isUser ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
+                {isUser ? <User className="h-3.5 w-3.5" /> : <Bot className="h-3.5 w-3.5" />}
               </div>
 
-              {/* Message Bubble */}
               <div
-                className={`relative group rounded-2xl p-4 text-xs transition-all ${
+                className={`rounded-2xl px-3.5 py-2.5 text-xs ${
                   isUser
-                    ? "bg-[#0f2c20] text-white shadow-xs rounded-tr-xs"
-                    : "bg-[#f8faf8] border border-[#dde6df] text-slate-900 shadow-2xs rounded-tl-xs"
+                    ? "rounded-tr-md bg-[#0f2c20] text-white"
+                    : "rounded-tl-md border border-[#e6ebe7] bg-[#f8fbf9] text-[#1a2e24]"
                 }`}
               >
-                {/* Paper attachment pill inside user message */}
                 {isUser && msg.attachedPaper && (
-                  <div className="mb-2 pb-2 border-b border-emerald-800/80 flex items-center gap-1.5 text-[11px] text-emerald-200">
-                    <FileText className="w-3.5 h-3.5 text-emerald-300" />
-                    <span className="font-semibold truncate">
-                      Attached: {msg.attachedPaper.fileName}
-                      {msg.attachedPaper.pageCount ? ` (${msg.attachedPaper.pageCount} pages)` : ""}
-                    </span>
+                  <div className="mb-1.5 flex items-center gap-1 border-b border-emerald-800/60 pb-1.5 text-[10px] text-emerald-200">
+                    <FileText className="h-3 w-3" />
+                    <span className="truncate font-semibold">{msg.attachedPaper.fileName}</span>
                   </div>
                 )}
 
-                {/* Content */}
                 {isUser ? (
                   <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
                 ) : (
-                  <div>{renderMessageContent(msg.content)}</div>
+                  renderMessageContent(msg.content)
                 )}
 
-                {/* Action Bar (Copy button on assistant messages) */}
                 {!isUser && (
-                  <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400">
-                    <span className="font-mono">Together AI · Grounded Research</span>
+                  <div className="mt-2 flex items-center justify-end border-t border-[#eef2ef] pt-1.5">
                     <button
                       type="button"
                       onClick={() => handleCopyMessage(msg.id, msg.content)}
-                      className="inline-flex items-center gap-1 text-slate-500 hover:text-emerald-700 transition-colors cursor-pointer"
-                      title="Copy response to clipboard"
+                      className="inline-flex items-center gap-1 text-[10px] text-[#8aa094] transition hover:text-emerald-800"
                     >
                       {isCopied ? (
                         <>
-                          <Check className="w-3 h-3 text-emerald-600" />
-                          <span className="text-emerald-700 font-semibold">Copied!</span>
+                          <Check className="h-3 w-3 text-emerald-600" />
+                          Copied
                         </>
                       ) : (
                         <>
-                          <Copy className="w-3 h-3" />
-                          <span>Copy</span>
+                          <Copy className="h-3 w-3" />
+                          Copy
                         </>
                       )}
                     </button>
@@ -698,149 +664,119 @@ export default function ResearcherAssistantClient({
           );
         })}
 
-        {/* Loading Indicator */}
         {loading && (
-          <div className="flex gap-3 max-w-xl mr-auto animate-in fade-in duration-150">
-            <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center justify-center shrink-0">
-              <Bot className="w-4 h-4" />
+          <div className="mr-auto flex max-w-md gap-2.5">
+            <div className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-800">
+              <Bot className="h-3.5 w-3.5" />
             </div>
-            <div className="p-4 rounded-2xl rounded-tl-xs bg-[#f8faf8] border border-[#dde6df] text-xs text-slate-700 space-y-2">
-              <div className="flex items-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin text-emerald-700" />
-                <span className="font-semibold text-[#0f2c20]">
-                  Analyzing research evidence &amp; literature...
-                </span>
-              </div>
-              <p className="text-[11px] text-[#78997f]">
-                Correlating botanical assays, docking scores, and safety monographs.
-              </p>
+            <div className="rounded-2xl rounded-tl-md border border-[#e6ebe7] bg-[#f8fbf9] px-3.5 py-2.5 text-[11px] text-[#52645d]">
+              <span className="inline-flex items-center gap-1.5 font-semibold text-[#0f2c20]">
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-700" />
+                Thinking…
+              </span>
             </div>
-          </div>
-        )}
-
-        {/* Bottom clear chat button when there are messages */}
-        {messages.length > 0 && !loading && (
-          <div className="flex justify-center pt-2">
-            <button
-              type="button"
-              onClick={handleClearChat}
-              disabled={clearingChat}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-              title="Clear all messages in this conversation"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span>Clear chat history</span>
-            </button>
           </div>
         )}
 
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Upload Error Banner */}
       {uploadError && (
-        <div className="px-4 py-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center justify-between gap-2 shrink-0">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-            <span>{uploadError}</span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setUploadError(null)}
-            className="text-rose-500 hover:text-rose-700"
-          >
-            <X className="w-4 h-4" />
+        <div className="flex shrink-0 items-center justify-between gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] text-rose-800">
+          <span className="inline-flex items-center gap-1.5">
+            <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+            {uploadError}
+          </span>
+          <button type="button" onClick={() => setUploadError(null)}>
+            <X className="h-3.5 w-3.5" />
           </button>
         </div>
       )}
 
-      {/* ACTIVE ATTACHED PAPER STRIP */}
       {attachedPaper && (
-        <div className="px-4 py-2 rounded-xl bg-emerald-50 border border-emerald-300 flex items-center justify-between gap-3 text-xs shrink-0 animate-in fade-in duration-150">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="w-6 h-6 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0">
-              <FileText className="w-3.5 h-3.5" />
+        <div className="flex shrink-0 items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50/70 px-3 py-2 text-[11px]">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-emerald-700 text-white">
+              <FileText className="h-3 w-3" />
             </span>
-            <div className="min-w-0">
-              <p className="font-bold text-slate-900 truncate">
-                Active Paper: {attachedPaper.fileName}
-              </p>
-              <p className="text-[10px] text-emerald-800">
-                {attachedPaper.pageCount} page{attachedPaper.pageCount === 1 ? "" : "s"} · Ready for Q&amp;A
-                (e.g., &ldquo;Summarize this paper&rdquo;)
-              </p>
-            </div>
+            <span className="truncate font-semibold text-[#0f2c20]">{attachedPaper.fileName}</span>
+            {attachedPaper.pageCount ? (
+              <span className="shrink-0 text-[#6d7f76]">{attachedPaper.pageCount}p</span>
+            ) : null}
           </div>
           <button
             type="button"
             onClick={() => setAttachedPaper(null)}
-            className="p-1 rounded-lg hover:bg-emerald-100 text-emerald-700 hover:text-emerald-900 transition-colors cursor-pointer shrink-0"
-            title="Detach this paper"
+            className="rounded-md p-1 text-emerald-800 hover:bg-emerald-100"
+            title="Detach"
           >
-            <X className="w-4 h-4" />
+            <X className="h-3.5 w-3.5" />
           </button>
         </div>
       )}
 
-      {/* INPUT BOX & ATTACHMENT CONTROLS */}
-      <div className="relative shrink-0 space-y-2">
-        <div className="relative flex items-end gap-2 bg-white border border-[#dde6df] focus-within:border-emerald-600 focus-within:ring-2 focus-within:ring-emerald-500/20 rounded-2xl p-2 shadow-xs transition-all">
-          {/* File Upload Button (Paperclip) */}
+      <div className="flex shrink-0 items-end gap-2 rounded-2xl border border-[#d7e4dc] bg-white p-2 shadow-[0_1px_2px_rgba(15,44,32,0.04)] focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/15">
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploadingFile}
+          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[#6d7f76] transition hover:bg-[#f6f8f6] hover:text-emerald-800"
+          title="Attach paper"
+        >
+          {uploadingFile ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Paperclip className="h-4 w-4" />
+          )}
+        </button>
+
+        <textarea
+          ref={textareaRef}
+          rows={1}
+          value={inputMessage}
+          onChange={(e) => setInputMessage(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              handleSendMessage();
+            }
+          }}
+          placeholder={
+            attachedPaper
+              ? `Ask about ${attachedPaper.fileName}…`
+              : selectedProject?.plantName
+                ? `Ask about ${selectedProject.plantName}…`
+                : "Ask NatureAide…"
+          }
+          className="max-h-32 min-h-[36px] flex-1 resize-none bg-transparent px-1 py-2 text-xs leading-relaxed text-[#1a2e24] outline-none placeholder:text-[#8aa094]"
+        />
+
+        {canClearChat && (
           <button
             type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploadingFile}
-            className="p-2.5 rounded-xl hover:bg-slate-100 text-slate-500 hover:text-emerald-700 transition-colors cursor-pointer shrink-0"
-            title="Upload research paper or manuscript (PDF, DOCX, TXT)"
+            onClick={handleClearChat}
+            disabled={clearingChat}
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[#8aa094] transition hover:bg-rose-50 hover:text-rose-700 disabled:opacity-50"
+            title="Clear chat"
+            aria-label="Clear chat"
           >
-            {uploadingFile ? (
-              <Loader2 className="w-4 h-4 animate-spin text-emerald-700" />
+            {clearingChat ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
-              <Paperclip className="w-4 h-4" />
+              <Trash2 className="h-4 w-4" />
             )}
           </button>
+        )}
 
-          {/* Text Input */}
-          <textarea
-            ref={textareaRef}
-            rows={1}
-            value={inputMessage}
-            onChange={(e) => setInputMessage(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleSendMessage();
-              }
-            }}
-            placeholder={
-              attachedPaper
-                ? `Ask any question about "${attachedPaper.fileName}" (e.g., "Summarize this paper", "What are the limitations?")...`
-                : selectedProject
-                ? `Ask a question about ${selectedProject.plantName} or attach a research paper to analyze...`
-                : "Ask NatureAide a research question or attach a paper to analyze..."
-            }
-            className="flex-1 max-h-36 min-h-[40px] py-2 px-1 text-xs text-slate-800 placeholder:text-slate-400 bg-transparent resize-none outline-none leading-relaxed"
-          />
-
-          {/* Send Button */}
-          <button
-            type="button"
-            onClick={() => handleSendMessage()}
-            disabled={!inputMessage.trim() || loading}
-            className="p-2.5 rounded-xl bg-[#0f2c20] hover:bg-[#164533] disabled:bg-slate-200 text-white disabled:text-slate-400 transition-all shadow-xs cursor-pointer disabled:cursor-not-allowed shrink-0"
-            title="Send message"
-          >
-            <Send className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* Footer Note */}
-        <div className="flex items-center justify-between px-2 text-[10px] text-[#78997f]">
-          <span>
-            Tip: You can drag &amp; drop PDF manuscripts directly into the chat or ask &ldquo;Please summarize this paper&rdquo;.
-          </span>
-          <span className="font-mono hidden sm:inline">NaturAide AI Lab v1.0</span>
-        </div>
+        <button
+          type="button"
+          onClick={() => handleSendMessage()}
+          disabled={!inputMessage.trim() || loading}
+          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#0f2c20] text-emerald-100 transition hover:bg-[#1e5c44] disabled:bg-[#e6ebe7] disabled:text-[#8aa094]"
+          title="Send"
+        >
+          <Send className="h-4 w-4" />
+        </button>
       </div>
     </div>
   );

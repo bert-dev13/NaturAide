@@ -3,9 +3,10 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { ChevronLeft, ChevronRight, Database, ArrowRight, LogOut } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import LogoutButton from "@/components/LogoutButton";
 import ResearcherNavSections from "./ResearcherNavSections";
+import { useLiveDisplayName } from "@/hooks/useLiveDisplayName";
 
 export default function ResearcherSidebar({
   user,
@@ -17,26 +18,8 @@ export default function ResearcherSidebar({
     role: string;
   };
 }) {
-  const [userName, setUserName] = useState(user?.name || "");
+  const { name: userName, initial } = useLiveDisplayName(user?.name || "");
   const [collapsed, setCollapsed] = useState(false);
-
-  React.useEffect(() => {
-    if (user?.name) {
-      setUserName(user.name);
-    }
-  }, [user?.name]);
-
-  React.useEffect(() => {
-    const handleProfileUpdate = (e: any) => {
-      if (e.detail?.name) {
-        setUserName(e.detail.name);
-      }
-    };
-    window.addEventListener("natureaide:user-profile-updated", handleProfileUpdate);
-    return () => {
-      window.removeEventListener("natureaide:user-profile-updated", handleProfileUpdate);
-    };
-  }, []);
 
   React.useEffect(() => {
     const updateSidebarVar = () => {
@@ -124,7 +107,7 @@ export default function ResearcherSidebar({
                 className="flex items-center gap-2.5 min-w-0 flex-1 group"
               >
                 <div className="w-8 h-8 rounded-lg bg-emerald-900/80 text-emerald-300 font-semibold text-xs flex items-center justify-center shrink-0 border border-emerald-700/50">
-                  {(userName || "R").charAt(0).toUpperCase()}
+                  {initial}
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-medium text-white truncate group-hover:text-emerald-300 transition-colors">
@@ -140,15 +123,6 @@ export default function ResearcherSidebar({
                 className="p-1.5 text-slate-400 hover:text-rose-300 hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer"
               />
             </div>
-
-            {/* System Status Pill */}
-            <div className="flex items-center justify-between px-2 text-[10px] text-emerald-400/60 font-mono">
-              <span className="flex items-center gap-1.5">
-                <Database className="w-3 h-3 text-emerald-500" />
-                <span>MySQL Active</span>
-              </span>
-              <span>v1.0 Lab</span>
-            </div>
           </div>
         ) : (
           <div className="flex flex-col items-center gap-2">
@@ -157,7 +131,7 @@ export default function ResearcherSidebar({
               className="w-9 h-9 rounded-lg bg-emerald-900/80 text-emerald-300 font-semibold text-xs flex items-center justify-center border border-emerald-700/50 hover:bg-emerald-800 transition-colors"
               title={`${userName} (Researcher Profile)`}
             >
-              {(userName || "R").charAt(0).toUpperCase()}
+              {initial}
             </Link>
             <LogoutButton
               iconOnly

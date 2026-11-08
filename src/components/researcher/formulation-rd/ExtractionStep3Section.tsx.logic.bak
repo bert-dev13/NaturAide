@@ -1,0 +1,153 @@
+"use client";
+
+import React, { useState, useMemo, useEffect, useRef } from "react";
+import {
+  Beaker,
+  Search,
+  Check,
+  ChevronDown,
+  AlertTriangle,
+  RotateCcw,
+  FlaskConical,
+  Sparkles,
+  Info,
+  Clock,
+  Scale,
+  ShieldCheck,
+  ShieldAlert,
+  ExternalLink,
+  BookOpen,
+  X,
+  Calculator,
+  Flame,
+  Thermometer,
+} from "lucide-react";
+import {
+  EXTRACTION_METHODS,
+  ExtractionMethodPreset,
+  SOLVENT_SYSTEMS,
+  SolventSystemSpec,
+  SOLVENT_CONCENTRATION_OPTIONS,
+  SOLVENT_RATIO_OPTIONS,
+  SOLVENT_RATIO_PRESETS,
+  SolventRatioPreset,
+  parseSolventRatio,
+  isSolventConcentrationMeaningful,
+  checkSolventCompatibility,
+  calculateSolventVolume,
+  calculateSolventVolumeDetails,
+  calculateExtractYield,
+  generateExtractFractionId,
+} from "@/lib/extraction-catalog";
+import { LiteratureItem } from "@/components/researcher/formulation-rd/BotanicalStep1Section";
+
+export interface ExtractionState {
+  extractionMethod: string;
+  plantMaterialMass: string;
+  extractionSolvent: string;
+  solventConcentration: string;
+  solventRatio: string;
+  extractionTemperature: string;
+  extractionDuration: string;
+  extractYieldPercent: string;
+  extractFractionName: string;
+  extractionReferences: string;
+  recoveredDryMass?: string;
+}
+
+interface Props {
+  project: {
+    id: number;
+    title: string;
+    plantName: string;
+    plantScientificName?: string;
+  };
+  productSelection?: {
+    productType?: string;
+    deliveryFormat?: string;
+  };
+  extraction: ExtractionState;
+  onChange: (updated: ExtractionState) => void;
+  onSave: () => Promise<boolean | void>;
+  isSaving: boolean;
+  scientificLiterature?: LiteratureItem[];
+  linkedLiterature?: any[];
+  onToggleLiteratureReference?: (lit: LiteratureItem) => Promise<void> | void;
+}
+
+export default function ExtractionStep3Section({
+  project,
+  productSelection,
+  extraction,
+  onChange,
+  onSave,
+  isSaving,
+  scientificLiterature = [],
+  linkedLiterature = [],
+  onToggleLiteratureReference,
+}: Props) {
+  // Method Dropdown & Search State
+  const [isMethodDropdownOpen, setIsMethodDropdownOpen] = useState(false);
+  const [methodSearch, setMethodSearch] = useState("");
+  const methodDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Solvent Dropdown & Search State
+  const [isSolventDropdownOpen, setIsSolventDropdownOpen] = useState(false);
+  const [solventSearch, setSolventSearch] = useState("");
+  const solventDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Ratio Dropdown & Custom State
+  const [isRatioDropdownOpen, setIsRatioDropdownOpen] = useState(false);
+  const ratioDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Concentration Dropdown & Custom State
+  const [isConcDropdownOpen, setIsConcDropdownOpen] = useState(false);
+  const concDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Literature Abstract Modal
+  const [selectedLitModal, setSelectedLitModal] = useState<LiteratureItem | null>(null);
+  const [litSearch, setLitSearch] = useState("");
+
+  // Overwrite Confirmation Modal
+  const [pendingMethod, setPendingMethod] = useState<ExtractionMethodPreset | null>(null);
+
+  // Field change tracking to avoid overwriting user edits without confirmation
+  const [modifiedFields, setModifiedFields] = useState<Record<string, boolean>>({
+    extractionMethod: false,
+    plantMaterialMass: false,
+    extractionSolvent: false,
+    solventConcentration: false,
+    solventRatio: false,
+    extractionTemperature: false,
+    extractionDuration: false,
+    extractYieldPercent: false,
+    extractFractionName: false,
+    recoveredDryMass: false,
+  });
+
+  const [isDirty, setIsDirty] = useState(false);
+
+  // Close dropdowns on outside click
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (methodDropdownRef.current && !methodDropdownRef.current.contains(event.target as Node)) {
+        setIsMethodDropdownOpen(false);
+      }
+      if (solventDropdownRef.current && !solventDropdownRef.current.contains(event.target as Node)) {
+        setIsSolventDropdownOpen(false);
+      }
+      if (ratioDropdownRef.current && !ratioDropdownRef.current.contains(event.target as Node)) {
+        setIsRatioDropdownOpen(false);
+      }
+      if (concDropdownRef.current && !concDropdownRef.current.contains(event.target as Node)) {
+        setIsConcDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Matched current method preset
+  const currentMethodPreset = useMemo(() => {
+    if (!extraction.extractionMethod) return null;
+    const m = extraction.extractionMethod.toLowerCase();

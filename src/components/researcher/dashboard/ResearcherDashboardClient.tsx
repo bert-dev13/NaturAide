@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   FlaskConical,
   ClipboardCheck,
@@ -15,8 +16,12 @@ import {
   Sprout,
   Network,
   Plus,
+  Layers,
+  MessageSquareWarning,
+  Award,
 } from "lucide-react";
 import { getStageUrl } from "@/lib/workflow-stages";
+import { useLiveDisplayName } from "@/hooks/useLiveDisplayName";
 
 export interface ProjectData {
   id: number;
@@ -168,17 +173,17 @@ export function getStatusBadge(status: string) {
   const norm = (status || "").toUpperCase();
   if (norm === "COMPLETED" || status === "Completed") {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-medium bg-teal-50 text-teal-800 border border-teal-200/80">
-        <CheckCircle2 className="w-3 h-3 text-teal-700" />
+      <span className="inline-flex items-center gap-1 rounded-md border border-teal-200 bg-teal-50 px-2 py-0.5 text-[10px] font-bold text-teal-900">
+        <CheckCircle2 className="h-3 w-3 text-teal-700" />
         Completed
       </span>
     );
   }
   if (norm === "APPROVED" || status === "Fully Approved — Ready to Complete") {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200/80">
-        <CheckCircle2 className="w-3 h-3 text-emerald-700" />
-        Fully Approved — Ready to Complete
+      <span className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-900">
+        <CheckCircle2 className="h-3 w-3 text-emerald-700" />
+        Fully Approved
       </span>
     );
   }
@@ -188,8 +193,8 @@ export function getStatusBadge(status: string) {
     status === "Revisions Required"
   ) {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-medium bg-rose-50 text-rose-800 border border-rose-200/80">
-        <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+      <span className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-bold text-rose-900">
+        <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
         Revisions Required
       </span>
     );
@@ -200,28 +205,28 @@ export function getStatusBadge(status: string) {
     status.startsWith("Under Professional Review")
   ) {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-medium bg-indigo-50 text-indigo-800 border border-indigo-200/80">
-        <Clock className="w-3 h-3 text-indigo-700" />
-        {status.startsWith("Under Professional Review")
-          ? status
-          : "Under Professional Review"}
+      <span className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-900">
+        <Clock className="h-3 w-3 text-amber-700" />
+        {status.startsWith("Under Professional Review") ? status : "Under Review"}
       </span>
     );
   }
   if (norm === "IN_PROGRESS" || norm === "DRAFT") {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium bg-emerald-50 text-emerald-800 border border-emerald-200/80">
-        <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
+      <span className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-900">
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-600" />
         Active
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
+    <span className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-bold text-slate-600">
       {status}
     </span>
   );
 }
+
+const easeOut = [0.22, 1, 0.36, 1] as const;
 
 export default function ResearcherDashboardClient({
   firstName,
@@ -234,368 +239,451 @@ export default function ResearcherDashboardClient({
   activeProjects: ProjectData[];
   completedProjects?: ProjectData[];
 }) {
+  const { firstName: liveFirstName } = useLiveDisplayName("", firstName);
   const [selectedActiveIndex, setSelectedActiveIndex] = useState(0);
-
   const featuredProject = activeProjects[selectedActiveIndex] || activeProjects[0] || null;
 
+  const kpiCards = [
+    {
+      key: "active",
+      label: "Active Research",
+      value: stats.activeCount,
+      hint: "In pipeline stages",
+      href: "/researcher/projects?status=ACTIVE",
+      icon: FlaskConical,
+      surface: "bg-[linear-gradient(145deg,#ecfdf5_0%,#ffffff_45%,#f0fdfa_100%)]",
+      bar: "from-emerald-500 to-teal-300",
+      valueClass: "text-emerald-800",
+      iconWrap: "bg-gradient-to-br from-emerald-500 to-teal-600 text-white",
+      glow: "bg-emerald-400/25",
+    },
+    {
+      key: "review",
+      label: "Awaiting Review",
+      value: stats.reviewCount,
+      hint: "Submitted dossiers",
+      href: "/researcher/projects?status=UNDER_REVIEW",
+      icon: ClipboardCheck,
+      surface: "bg-[linear-gradient(145deg,#fffbeb_0%,#ffffff_45%,#fff7ed_100%)]",
+      bar: "from-amber-500 to-orange-300",
+      valueClass: "text-amber-900",
+      iconWrap: "bg-gradient-to-br from-amber-500 to-orange-500 text-white",
+      glow: "bg-amber-400/25",
+    },
+    {
+      key: "revision",
+      label: "Needs Revision",
+      value: stats.revisionCount,
+      hint: "Feedback to resolve",
+      href: "/researcher/revisions",
+      icon: MessageSquareWarning,
+      surface: "bg-[linear-gradient(145deg,#fff1f2_0%,#ffffff_45%,#fff7ed_100%)]",
+      bar: "from-rose-500 to-orange-300",
+      valueClass: "text-rose-900",
+      iconWrap: "bg-gradient-to-br from-rose-500 to-rose-600 text-white",
+      glow: "bg-rose-400/25",
+    },
+    {
+      key: "completed",
+      label: "Completed",
+      value: stats.completedCount,
+      hint: "Validated dossiers",
+      href: "/researcher/completed",
+      icon: CheckCircle2,
+      surface: "bg-[linear-gradient(145deg,#f0fdfa_0%,#ffffff_45%,#ecfeff_100%)]",
+      bar: "from-teal-500 to-cyan-300",
+      valueClass: "text-teal-900",
+      iconWrap: "bg-gradient-to-br from-teal-500 to-cyan-600 text-white",
+      glow: "bg-teal-400/25",
+    },
+  ];
+
+  const quickActions = [
+    {
+      href: "/researcher/projects?new=true",
+      label: "New Research Project",
+      icon: Plus,
+      wrap: "bg-emerald-50 text-emerald-800 border-emerald-100",
+    },
+    {
+      href: "/researcher/projects",
+      label: "All Projects",
+      icon: FolderGit2,
+      wrap: "bg-[#edf5f0] text-[#0f2c20] border-[#d7e4dc]",
+    },
+    {
+      href: "/researcher/revisions",
+      label: "Review & Revisions",
+      icon: ClipboardCheck,
+      wrap: "bg-amber-50 text-amber-800 border-amber-100",
+    },
+    {
+      href: "/researcher/completed",
+      label: "Completed Archive",
+      icon: Award,
+      wrap: "bg-teal-50 text-teal-800 border-teal-100",
+    },
+  ];
+
   return (
-    <div className="w-full max-w-none space-y-6 pb-12">
-      {/* 1. TOP WORKBENCH HEADER */}
-      <div className="w-full bg-[#0f2c20] rounded-xl border border-emerald-900/60 p-6 sm:p-7 shadow-sm text-white">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="space-y-1.5 max-w-3xl">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-medium tracking-wider uppercase text-emerald-300 bg-emerald-950/80 border border-emerald-500/30 rounded px-2.5 py-0.5">
+    <div className="w-full max-w-none space-y-6 pb-12 text-slate-800">
+      {/* 1. Compact header */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="relative w-full overflow-hidden rounded-2xl border border-[#0f2c20]/15 bg-[linear-gradient(120deg,#0f2c20_0%,#134032_48%,#0b271b_100%)] px-4 py-3.5 text-white shadow-[0_12px_28px_-18px_rgba(15,44,32,0.55)] sm:px-5"
+      >
+        <div className="pointer-events-none absolute -right-10 -top-12 h-36 w-36 rounded-full bg-emerald-400/15 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-14 left-1/4 h-28 w-28 rounded-full bg-teal-300/10 blur-3xl" />
+        <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-emerald-200">
+                <Layers className="h-3 w-3 text-emerald-300" />
                 Scientific Workbench
               </span>
+              <span className="rounded-full border border-white/15 bg-white/5 px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-emerald-100/80">
+                6-stage pipeline
+              </span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-semibold text-white tracking-tight">
-              Welcome back, {firstName}
+            <h1 className="mt-1.5 text-lg font-semibold tracking-tight text-white sm:text-xl">
+              Welcome back, {liveFirstName || firstName}
             </h1>
-            <p className="text-sm text-emerald-100/80 leading-relaxed">
-              Orchestrate botanical investigations, in-silico computational screening, molecular docking, and peer validation across the standardized 6-stage NatureAide pipeline.
+            <p className="mt-0.5 max-w-xl text-xs leading-relaxed text-emerald-100/75">
+              Orchestrate botanical studies across literature, docking, and peer validation.
             </p>
           </div>
 
-          <div className="flex items-center gap-2.5 shrink-0">
+          <div className="flex shrink-0 items-center gap-2">
             <Link
               href="/researcher/projects"
-              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg border border-emerald-700/60 bg-emerald-950/60 hover:bg-emerald-900/60 text-emerald-100 text-xs sm:text-sm font-medium transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/20"
             >
-              <FolderGit2 className="w-4 h-4 text-emerald-400" />
-              <span>View All Projects</span>
+              <FolderGit2 className="h-3.5 w-3.5" />
+              Projects
             </Link>
-
             <Link
               href="/researcher/projects?new=true"
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-[#091a13] text-xs sm:text-sm font-semibold shadow-xs transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-400 px-3.5 py-2 text-xs font-semibold text-[#091a13] shadow-sm transition hover:bg-emerald-300 active:bg-emerald-500"
             >
-              <Plus className="w-4 h-4 stroke-[2.5]" />
-              <span>New Research</span>
+              <Plus className="h-3.5 w-3.5 stroke-[2.5]" />
+              New Research
             </Link>
           </div>
         </div>
+      </motion.div>
+
+      {/* 2. KPI metrics */}
+      <div className="grid w-full grid-cols-2 gap-3 sm:gap-3.5 lg:grid-cols-4">
+        {kpiCards.map((stat, index) => {
+          const Icon = stat.icon;
+          return (
+            <motion.div
+              key={stat.key}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.32, delay: 0.04 + index * 0.05, ease: easeOut }}
+            >
+              <Link
+                href={stat.href}
+                className={`group relative block overflow-hidden rounded-2xl border border-[#d7e4dc]/90 ${stat.surface} p-3.5 shadow-[0_1px_2px_rgba(15,44,32,0.04)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_14px_28px_-18px_rgba(15,44,32,0.35)]`}
+              >
+                <div className={`absolute inset-x-0 top-0 h-[2.5px] bg-gradient-to-r ${stat.bar}`} />
+                <div className={`pointer-events-none absolute -right-8 -top-10 h-24 w-24 rounded-full blur-2xl ${stat.glow}`} />
+                <div className="relative flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#6d7f76]">
+                      {stat.label}
+                    </p>
+                    <p className={`mt-1.5 text-2xl font-semibold tabular-nums leading-none tracking-tight sm:text-[1.7rem] ${stat.valueClass}`}>
+                      {stat.value}
+                    </p>
+                    <p className="mt-1.5 text-[11px] font-medium text-[#8aa094]">{stat.hint}</p>
+                  </div>
+                  <span className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg shadow-sm ${stat.iconWrap}`}>
+                    <Icon className="h-3.5 w-3.5" strokeWidth={2.2} />
+                  </span>
+                </div>
+              </Link>
+            </motion.div>
+          );
+        })}
       </div>
 
-      {/* 2. KPI CONTAINERS (4 COMPACT FULL-WIDTH CARDS) */}
-      <section className="w-full grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        {/* KPI 1: Active Research */}
-        <div className="p-4 sm:p-5 rounded-xl bg-white border border-slate-200/90 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between text-emerald-800">
-            <span className="text-xs font-medium uppercase tracking-wider">Active Research</span>
-            <FlaskConical className="w-4 h-4 text-emerald-600" />
-          </div>
-          <div className="mt-3">
-            <div className="text-2xl sm:text-3xl font-semibold text-slate-900 tracking-tight">
-              {stats.activeCount}
-            </div>
-            <span className="text-xs text-slate-400">studies in active stages</span>
-          </div>
-        </div>
-
-        {/* KPI 2: Awaiting Review */}
-        <div className="p-4 sm:p-5 rounded-xl bg-white border border-slate-200/90 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between text-amber-800">
-            <span className="text-xs font-medium uppercase tracking-wider">Awaiting Review</span>
-            <ClipboardCheck className="w-4 h-4 text-amber-600" />
-          </div>
-          <div className="mt-3">
-            <div className="text-2xl sm:text-3xl font-semibold text-slate-900 tracking-tight">
-              {stats.reviewCount}
-            </div>
-            <span className="text-xs text-slate-400">submitted dossiers</span>
-          </div>
-        </div>
-
-        {/* KPI 3: Needs Revision */}
-        <div className={`p-4 sm:p-5 rounded-xl bg-white border shadow-xs flex flex-col justify-between ${
-          stats.revisionCount > 0 ? "border-rose-200 bg-rose-50/20" : "border-slate-200/90"
-        }`}>
-          <div className="flex items-center justify-between text-rose-700">
-            <span className="text-xs font-medium uppercase tracking-wider">Needs Revision</span>
-            <RefreshCw className="w-4 h-4 text-rose-600" />
-          </div>
-          <div className="mt-3">
-            <div className="text-2xl sm:text-3xl font-semibold text-slate-900 tracking-tight">
-              {stats.revisionCount}
-            </div>
-            <span className="text-xs text-slate-400">feedback requiring action</span>
-          </div>
-        </div>
-
-        {/* KPI 4: Completed */}
-        <div className="p-4 sm:p-5 rounded-xl bg-white border border-slate-200/90 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between text-teal-800">
-            <span className="text-xs font-medium uppercase tracking-wider">Completed</span>
-            <CheckCircle2 className="w-4 h-4 text-teal-600" />
-          </div>
-          <div className="mt-3">
-            <div className="text-2xl sm:text-3xl font-semibold text-slate-900 tracking-tight">
-              {stats.completedCount}
-            </div>
-            <span className="text-xs text-slate-400">validated monographs</span>
-          </div>
-        </div>
-      </section>
-
-      {/* 3. MAIN DASHBOARD ROW: CONTINUE RESEARCH & ACTIONS */}
-      <section className="w-full grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 items-stretch">
-        {/* LEFT COLUMN: CONTINUE RESEARCH (approx 70%) */}
-        <div className="lg:col-span-8 flex flex-col space-y-3">
-          <div className="flex items-center justify-between px-0.5">
+      {/* 3. Continue + Quick Actions */}
+      <div className="grid w-full grid-cols-1 gap-3.5 lg:grid-cols-12 lg:gap-4">
+        <motion.section
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, delay: 0.14, ease: easeOut }}
+          className="flex flex-col gap-3 lg:col-span-8"
+        >
+          <div className="flex items-center justify-between gap-2 px-0.5">
             <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse" />
-              <h2 className="text-xs font-semibold tracking-wider uppercase text-slate-800">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-600" />
+              <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#52645d]">
                 Continue Research
               </h2>
             </div>
-
             {activeProjects.length > 1 && (
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1">
                 {activeProjects.map((proj, idx) => (
                   <button
                     key={proj.id}
+                    type="button"
                     onClick={() => setSelectedActiveIndex(idx)}
-                    className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
+                    className={`rounded-lg px-2 py-1 font-mono text-[10px] font-bold transition ${
                       selectedActiveIndex === idx
-                        ? "bg-[#0f2c20] text-white shadow-xs"
-                        : "bg-white text-slate-600 border border-slate-200 hover:text-slate-900 hover:bg-slate-50"
+                        ? "bg-[#0f2c20] text-white"
+                        : "border border-[#d7e4dc] bg-white text-[#6d7f76] hover:bg-[#edf5f0]"
                     }`}
                   >
-                    Project #{proj.id}
+                    #{proj.id}
                   </button>
                 ))}
               </div>
             )}
           </div>
 
-          {featuredProject ? (
-            <div
-              key={featuredProject.id}
-              className="flex-1 flex flex-col justify-between p-6 rounded-xl bg-white border border-slate-200/90 shadow-xs relative overflow-hidden space-y-5"
-            >
-              {/* Top metadata tags */}
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
-                <div className="flex items-center gap-2">
-                  {getStatusBadge(featuredProject.status)}
-                  <span className="text-xs font-mono font-medium text-slate-600 bg-slate-100 px-2 py-0.5 rounded">
-                    Project #{featuredProject.id}
-                  </span>
-                </div>
+          <AnimatePresence mode="wait">
+            {featuredProject ? (
+              <motion.article
+                key={featuredProject.id}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.28, ease: easeOut }}
+                className="relative flex flex-1 flex-col overflow-hidden rounded-2xl border border-[#d7e4dc]/90 bg-[linear-gradient(165deg,#ffffff_0%,#f8fbf9_100%)] shadow-[0_1px_2px_rgba(15,44,32,0.04)]"
+              >
+                <div className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-emerald-600 via-teal-400 to-cyan-300" />
 
-                <div className="flex items-center gap-1.5 text-xs text-slate-400">
-                  <Clock className="w-3.5 h-3.5" />
-                  <span suppressHydrationWarning>Updated {formatRelativeTime(featuredProject.updatedAt)}</span>
-                </div>
-              </div>
-
-              {/* Title & Plant Specimen */}
-              <div className="space-y-1.5">
-                <h3 className="text-lg font-semibold text-slate-900 tracking-tight leading-snug">
-                  {featuredProject.title}
-                </h3>
-                <div className="flex items-center gap-2 text-xs sm:text-sm text-slate-700">
-                  <Leaf className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span className="font-medium text-slate-900">{featuredProject.plantName}</span>
-                  {featuredProject.plantScientificName && (
-                    <span className="italic text-slate-500 font-normal">
-                      ({featuredProject.plantScientificName})
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Stage Progress Block */}
-              <div className="p-4 rounded-lg bg-slate-50/80 border border-slate-200/80 space-y-3">
-                <div className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="text-emerald-800 font-medium uppercase tracking-wider text-[11px]">
-                      Stage {getStageNumber(featuredProject.currentStage)} of 6
-                    </span>
-                    <span className="text-slate-300">·</span>
-                    <span className="font-medium text-slate-800">
-                      {getHumanStageName(featuredProject.currentStage)}
+                <div className="flex flex-1 flex-col gap-3.5 p-4 sm:p-5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {getStatusBadge(featuredProject.status)}
+                      <span className="rounded-md border border-[#d7e4dc] bg-white px-2 py-0.5 font-mono text-[10px] font-semibold text-[#5f7468]">
+                        Project #{featuredProject.id}
+                      </span>
+                    </div>
+                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[#8aa094]">
+                      <Clock className="h-3 w-3" />
+                      <span suppressHydrationWarning>
+                        Updated {formatRelativeTime(featuredProject.updatedAt)}
+                      </span>
                     </span>
                   </div>
-                  <span className="font-mono font-medium text-slate-700">
-                    {featuredProject.progressPercent}%
-                  </span>
-                </div>
 
-                {/* Progress bar */}
-                <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
-                  <div
-                    className="bg-emerald-600 h-full rounded-full transition-all duration-500"
-                    style={{ width: `${featuredProject.progressPercent}%` }}
-                  />
-                </div>
+                  <div>
+                    <h3 className="text-[15px] font-semibold leading-snug tracking-tight text-[#0f2c20] sm:text-base">
+                      {featuredProject.title}
+                    </h3>
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px]">
+                      <span className="inline-flex max-w-full items-center gap-1 truncate rounded-lg border border-emerald-200/80 bg-emerald-50/80 px-2 py-1 font-semibold text-emerald-900">
+                        <Leaf className="h-3 w-3 shrink-0 text-emerald-700" />
+                        <span className="truncate">
+                          {featuredProject.plantName}
+                          {featuredProject.plantScientificName ? (
+                            <span className="font-medium italic text-emerald-800/80">
+                              {" "}
+                              ({featuredProject.plantScientificName})
+                            </span>
+                          ) : null}
+                        </span>
+                      </span>
+                    </div>
+                  </div>
 
-                <div className="pt-1 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                  <span className="text-slate-500 text-xs truncate max-w-md">
-                    {getNextStepText(featuredProject.currentStage, featuredProject.status)}
-                  </span>
+                  <div className="mt-auto space-y-3 rounded-xl border border-[#e8f0eb] bg-white/80 p-3.5">
+                    <div className="flex items-center justify-between gap-2 text-[11px]">
+                      <div className="min-w-0">
+                        <p className="font-bold uppercase tracking-[0.12em] text-emerald-800">
+                          Stage {getStageNumber(featuredProject.currentStage)} of 6
+                        </p>
+                        <p className="mt-0.5 truncate font-medium text-[#52645d]">
+                          {getHumanStageName(featuredProject.currentStage)}
+                        </p>
+                      </div>
+                      <span className="shrink-0 font-mono text-sm font-semibold tabular-nums text-[#0f2c20]">
+                        {featuredProject.progressPercent}%
+                      </span>
+                    </div>
 
-                  <Link
-                    href={
-                      featuredProject.continueRoute ||
-                      getStageUrl(featuredProject.id, featuredProject.currentStage || "plant-literature")
-                    }
-                    className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[#0f2c20] hover:bg-[#164533] text-white text-xs font-medium transition-colors shadow-xs shrink-0"
-                  >
-                    <span>Continue Research</span>
-                    <ArrowRight className="w-3.5 h-3.5 text-emerald-300" />
-                  </Link>
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#e8f0eb]">
+                      <motion.div
+                        className="h-full rounded-full bg-gradient-to-r from-emerald-600 to-teal-400"
+                        initial={{ width: 0 }}
+                        animate={{ width: `${featuredProject.progressPercent}%` }}
+                        transition={{ duration: 0.7, ease: easeOut, delay: 0.15 }}
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="line-clamp-2 text-[11px] leading-relaxed text-[#6d7f76]">
+                        {getNextStepText(featuredProject.currentStage, featuredProject.status)}
+                      </p>
+                      <Link
+                        href={
+                          featuredProject.continueRoute ||
+                          getStageUrl(
+                            featuredProject.id,
+                            featuredProject.currentStage || "plant-literature"
+                          )
+                        }
+                        className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-[#0f2c20] px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-[#164533]"
+                      >
+                        Continue Research
+                        <ArrowRight className="h-3.5 w-3.5 text-emerald-300" />
+                      </Link>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-          ) : (
-            <div className="flex-1 flex flex-col items-center justify-center p-6 sm:p-7 rounded-xl bg-white border border-slate-200/90 text-center space-y-3 shadow-xs">
-              <div className="w-10 h-10 rounded-lg bg-slate-100 text-slate-500 flex items-center justify-center mx-auto border border-slate-200">
-                <FlaskConical className="w-5 h-5" />
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-base font-semibold text-slate-900">
-                  No active research
-                </h3>
-                <p className="text-xs text-slate-500 max-w-sm mx-auto">
+              </motion.article>
+            ) : (
+              <motion.div
+                key="empty-active"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.28 }}
+                className="flex flex-1 flex-col items-center justify-center rounded-2xl border border-[#d7e4dc] bg-white px-6 py-10 text-center shadow-xs"
+              >
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-[#d7e4dc] bg-[#f4f8f5] text-emerald-800">
+                  <FlaskConical className="h-5 w-5" />
+                </div>
+                <h3 className="mt-3 text-sm font-semibold text-[#0f2c20]">No active research</h3>
+                <p className="mt-1 max-w-sm text-xs leading-relaxed text-[#6d7f76]">
                   Start a research project to begin the scientific workflow.
                 </p>
-              </div>
-              <Link
-                href="/researcher/projects?new=true"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#0f2c20] hover:bg-[#164533] text-white text-xs font-medium transition-colors shadow-xs"
-              >
-                <Plus className="w-3.5 h-3.5 text-emerald-300" />
-                <span>Start Research</span>
-              </Link>
-            </div>
-          )}
-        </div>
+                <Link
+                  href="/researcher/projects?new=true"
+                  className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-[#0f2c20] px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-[#164533]"
+                >
+                  <Plus className="h-3.5 w-3.5 text-emerald-300" />
+                  Start Research
+                </Link>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.section>
 
-        {/* RIGHT COLUMN: QUICK ACTIONS (approx 30%) */}
-        <div className="lg:col-span-4 flex flex-col space-y-3">
-          <div className="flex items-center justify-between px-0.5">
-            <h2 className="text-xs font-semibold tracking-wider uppercase text-slate-800">
-              Quick Actions
-            </h2>
+        <motion.section
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, delay: 0.18, ease: easeOut }}
+          className="flex flex-col gap-3 lg:col-span-4"
+        >
+          <h2 className="px-0.5 text-[11px] font-bold uppercase tracking-[0.14em] text-[#52645d]">
+            Quick Actions
+          </h2>
+          <div className="flex flex-1 flex-col gap-2 rounded-2xl border border-[#d7e4dc]/90 bg-[linear-gradient(180deg,#ffffff_0%,#f7faf8_100%)] p-3 shadow-[0_1px_2px_rgba(15,44,32,0.04)]">
+            {quickActions.map((action, index) => {
+              const Icon = action.icon;
+              return (
+                <motion.div
+                  key={action.href}
+                  initial={{ opacity: 0, x: 8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.28, delay: 0.2 + index * 0.04, ease: easeOut }}
+                >
+                  <Link
+                    href={action.href}
+                    className="group flex items-center justify-between gap-2 rounded-xl border border-[#e8f0eb] bg-white/90 px-3 py-2.5 transition hover:border-emerald-200 hover:bg-emerald-50/40"
+                  >
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <span
+                        className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border ${action.wrap}`}
+                      >
+                        <Icon className="h-3.5 w-3.5" />
+                      </span>
+                      <span className="truncate text-xs font-semibold text-[#0f2c20]">
+                        {action.label}
+                      </span>
+                    </div>
+                    <ArrowRight className="h-3.5 w-3.5 shrink-0 text-[#8aa094] transition group-hover:translate-x-0.5 group-hover:text-emerald-700" />
+                  </Link>
+                </motion.div>
+              );
+            })}
           </div>
+        </motion.section>
+      </div>
 
-          <div className="flex-1 flex flex-col justify-between p-4 rounded-xl bg-white border border-slate-200/90 shadow-xs gap-2">
-            <Link
-              href="/researcher/projects?new=true"
-              className="flex-1 flex items-center justify-between p-3 rounded-lg bg-slate-50 hover:bg-slate-100/80 border border-slate-200/70 text-slate-800 transition-colors group"
-            >
-              <div className="flex items-center gap-2.5">
-                <div className="w-7 h-7 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-100 flex items-center justify-center shrink-0">
-                  <Plus className="w-3.5 h-3.5" />
-                </div>
-                <span className="text-xs font-medium">New Research Project</span>
-              </div>
-              <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-700 transition-colors" />
-            </Link>
-
-            <Link
-              href="/researcher/projects"
-              className="flex-1 flex items-center justify-between p-3 rounded-lg bg-slate-50 hover:bg-slate-100/80 border border-slate-200/70 text-slate-800 transition-colors group"
-            >
-              <div className="flex items-center gap-2.5">
-                <div className="w-7 h-7 rounded-md bg-slate-100 text-slate-700 border border-slate-200 flex items-center justify-center shrink-0">
-                  <FolderGit2 className="w-3.5 h-3.5" />
-                </div>
-                <span className="text-xs font-medium">All Projects</span>
-              </div>
-              <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-700 transition-colors" />
-            </Link>
-
-            <Link
-              href="/researcher/projects?status=UNDER_REVIEW"
-              className="flex-1 flex items-center justify-between p-3 rounded-lg bg-slate-50 hover:bg-slate-100/80 border border-slate-200/70 text-slate-800 transition-colors group"
-            >
-              <div className="flex items-center gap-2.5">
-                <div className="w-7 h-7 rounded-md bg-amber-50 text-amber-700 border border-amber-100 flex items-center justify-center shrink-0">
-                  <ClipboardCheck className="w-3.5 h-3.5" />
-                </div>
-                <span className="text-xs font-medium">Review &amp; Evaluation</span>
-              </div>
-              <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-700 transition-colors" />
-            </Link>
-
-            <Link
-              href="/researcher/projects?status=COMPLETED"
-              className="flex-1 flex items-center justify-between p-3 rounded-lg bg-slate-50 hover:bg-slate-100/80 border border-slate-200/70 text-slate-800 transition-colors group"
-            >
-              <div className="flex items-center gap-2.5">
-                <div className="w-7 h-7 rounded-md bg-teal-50 text-teal-700 border border-teal-100 flex items-center justify-center shrink-0">
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                </div>
-                <span className="text-xs font-medium">Completed Studies</span>
-              </div>
-              <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-700 transition-colors" />
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* 4. RECENT COMPLETED RESEARCH (FULL WIDTH) */}
+      {/* 4. Recent completed */}
       {completedProjects.length > 0 && (
-        <section className="w-full space-y-3">
-          <div className="flex items-center justify-between px-0.5">
+        <motion.section
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, delay: 0.22, ease: easeOut }}
+          className="space-y-3"
+        >
+          <div className="flex items-center justify-between gap-2 px-0.5">
             <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-teal-700" />
-              <h2 className="text-xs font-semibold tracking-wider uppercase text-slate-800">
+              <CheckCircle2 className="h-3.5 w-3.5 text-teal-700" />
+              <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#52645d]">
                 Recent Completed Dossiers
               </h2>
             </div>
             <Link
-              href="/researcher/projects?status=COMPLETED"
-              className="text-xs font-medium text-emerald-800 hover:text-emerald-950 transition-colors"
+              href="/researcher/completed"
+              className="text-[11px] font-semibold text-emerald-800 transition hover:text-emerald-950"
             >
               View All ({stats.completedCount})
             </Link>
           </div>
 
-          <div className="w-full space-y-2.5">
-            {completedProjects.map((p) => (
-              <div
+          <div className="grid w-full grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {completedProjects.map((p, index) => (
+              <motion.article
                 key={p.id}
-                className="w-full p-4 sm:p-5 rounded-xl bg-white border border-slate-200/90 shadow-xs hover:border-slate-300 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-4"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: 0.24 + index * 0.05, ease: easeOut }}
+                whileHover={{ y: -2 }}
+                className="group relative flex flex-col overflow-hidden rounded-2xl border border-teal-200/70 bg-[linear-gradient(165deg,#ffffff_0%,#f8fbf9_100%)] shadow-[0_1px_2px_rgba(15,44,32,0.04)] transition-all duration-300 hover:border-emerald-300/80 hover:shadow-[0_18px_34px_-22px_rgba(15,44,32,0.3)]"
               >
-                <div className="space-y-1 min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-semibold text-sm text-slate-900">
-                      {p.plantName}
-                    </span>
-                    {p.plantScientificName && (
-                      <span className="text-xs italic text-slate-500">
-                        ({p.plantScientificName})
-                      </span>
-                    )}
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-teal-50 text-teal-800 border border-teal-200/80 shrink-0">
-                      <CheckCircle2 className="w-3 h-3 text-teal-700" />
+                <div className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-teal-600 via-teal-400 to-cyan-300" />
+                <div className="flex flex-1 flex-col gap-3 p-4">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="inline-flex items-center gap-1 rounded-md border border-teal-200 bg-teal-50 px-2 py-0.5 text-[10px] font-bold text-teal-900">
+                      <CheckCircle2 className="h-3 w-3" />
                       Completed
                     </span>
+                    <span className="rounded-md border border-[#d7e4dc] bg-white px-2 py-0.5 font-mono text-[10px] font-semibold text-[#5f7468]">
+                      Stage 6/6
+                    </span>
                   </div>
-                  <p className="text-xs text-slate-600 line-clamp-1 leading-relaxed">
-                    {p.title}
-                  </p>
+
+                  <div>
+                    <p className="text-[11px] font-semibold text-emerald-900">
+                      {p.plantName}
+                      {p.plantScientificName ? (
+                        <span className="font-medium italic text-emerald-800/75">
+                          {" "}
+                          ({p.plantScientificName})
+                        </span>
+                      ) : null}
+                    </p>
+                    <h3 className="mt-1 line-clamp-2 text-[14px] font-semibold leading-snug text-[#0f2c20]">
+                      {p.title}
+                    </h3>
+                  </div>
                 </div>
 
-                <div className="flex items-center gap-2.5 shrink-0 pt-2 md:pt-0 border-t md:border-t-0 border-slate-100">
-                  <span className="text-xs font-mono font-medium text-slate-600 bg-slate-100 px-2 py-1 rounded">
-                    Stage 6/6
-                  </span>
+                <div className="flex items-center justify-between gap-2 border-t border-[#e8f0eb] bg-[#f7faf8]/90 px-4 py-3">
+                  <span className="text-[11px] font-medium text-[#8aa094]">Archive dossier</span>
                   <Link
-                    href={getStageUrl(p.id, "completion-integration")}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[#0f2c20] hover:bg-[#164533] text-white text-xs font-medium transition-colors"
+                    href={`/researcher/completed/${p.id}`}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-teal-700 to-cyan-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:brightness-110"
                   >
-                    <span>View Final Dossier</span>
-                    <ArrowRight className="w-3 h-3 text-emerald-300" />
+                    View Dossier
+                    <ArrowRight className="h-3.5 w-3.5 text-teal-100" />
                   </Link>
                 </div>
-              </div>
+              </motion.article>
             ))}
           </div>
-        </section>
+        </motion.section>
       )}
     </div>
   );

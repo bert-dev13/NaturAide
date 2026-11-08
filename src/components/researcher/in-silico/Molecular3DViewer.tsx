@@ -32,7 +32,6 @@ export default function Molecular3DViewer({
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [showProtein, setShowProtein] = useState<boolean>(true);
   const [showLigand, setShowLigand] = useState<boolean>(true);
-  const [activePose, setActivePose] = useState<number>(1);
   const [colorScheme, setColorScheme] = useState<"spectrum" | "chain" | "secondary">("spectrum");
 
   // Load 3Dmol.js script from CDN
@@ -169,104 +168,91 @@ export default function Molecular3DViewer({
         isFullscreen ? "fixed inset-0 z-50 rounded-none w-screen h-screen" : "w-full h-[520px]"
       }`}
     >
-      {/* Top Overlay Controls */}
-      <div className="absolute top-3 left-3 z-10 flex items-center gap-2">
-        <div className="px-3 py-1.5 rounded-lg bg-slate-900/90 backdrop-blur-sm border border-slate-700/80 text-white text-xs space-y-0.5">
-          <div className="flex items-center gap-2">
-            <span className="font-bold text-emerald-400">{ligandName}</span>
-            <span className="text-slate-400">in complex with</span>
-            <span className="font-bold text-teal-300">{proteinName}</span>
-          </div>
-          {bindingAffinity !== undefined && bindingAffinity !== null && (
-            <div className="text-[11px] font-mono text-emerald-300">
-              Predicted Vina Score (ΔG): <span className="font-bold">{bindingAffinity} kcal/mol</span>
-            </div>
-          )}
-        </div>
+      {/* Compact overlay */}
+      <div className="absolute left-2.5 top-2.5 z-10 max-w-[min(100%,18rem)] rounded-lg border border-white/10 bg-[#0b1f16]/90 px-2.5 py-1.5 text-[11px] text-white backdrop-blur-sm">
+        <p className="truncate font-semibold text-emerald-300">
+          {ligandName}{" "}
+          <span className="font-normal text-white/50">→</span>{" "}
+          <span className="text-teal-200">{proteinName}</span>
+        </p>
+        {bindingAffinity != null && (
+          <p className="font-mono text-[10px] text-emerald-200/90">
+            {Number(bindingAffinity).toFixed(2)} kcal/mol
+          </p>
+        )}
       </div>
 
-      <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5">
+      <div className="absolute right-2.5 top-2.5 z-10 flex flex-wrap items-center justify-end gap-1">
         <button
           type="button"
           onClick={() => setShowProtein(!showProtein)}
-          className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 border transition-colors ${
+          className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[10px] font-semibold transition ${
             showProtein
-              ? "bg-slate-800/90 text-white border-slate-600 hover:bg-slate-700"
-              : "bg-slate-900/60 text-slate-500 border-slate-800"
+              ? "border-white/20 bg-[#0b1f16]/90 text-white"
+              : "border-white/10 bg-black/40 text-white/40"
           }`}
-          title="Toggle Receptor Protein"
+          title="Toggle receptor"
         >
-          {showProtein ? <Eye className="w-3.5 h-3.5 text-teal-400" /> : <EyeOff className="w-3.5 h-3.5" />}
-          <span>Receptor</span>
+          {showProtein ? <Eye className="h-3 w-3 text-teal-300" /> : <EyeOff className="h-3 w-3" />}
+          Protein
         </button>
-
         <button
           type="button"
           onClick={() => setShowLigand(!showLigand)}
-          className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 border transition-colors ${
+          className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[10px] font-semibold transition ${
             showLigand
-              ? "bg-slate-800/90 text-white border-slate-600 hover:bg-slate-700"
-              : "bg-slate-900/60 text-slate-500 border-slate-800"
+              ? "border-white/20 bg-[#0b1f16]/90 text-white"
+              : "border-white/10 bg-black/40 text-white/40"
           }`}
-          title="Toggle Docked Ligand"
+          title="Toggle ligand"
         >
-          {showLigand ? <Eye className="w-3.5 h-3.5 text-emerald-400" /> : <EyeOff className="w-3.5 h-3.5" />}
-          <span>Ligand</span>
+          {showLigand ? <Eye className="h-3 w-3 text-emerald-300" /> : <EyeOff className="h-3 w-3" />}
+          Ligand
         </button>
-
         <select
           value={colorScheme}
-          onChange={(e) => setColorScheme(e.target.value as any)}
-          className="px-2.5 py-1.5 rounded-lg bg-slate-900/90 border border-slate-700 text-slate-200 text-xs font-medium cursor-pointer"
+          onChange={(e) => setColorScheme(e.target.value as typeof colorScheme)}
+          className="rounded-lg border border-white/20 bg-[#0b1f16]/90 px-1.5 py-1 text-[10px] font-medium text-white"
+          title="Color scheme"
         >
           <option value="spectrum">Spectrum</option>
-          <option value="chain">Chain Color</option>
-          <option value="secondary">Teal Theme</option>
+          <option value="chain">Chain</option>
+          <option value="secondary">Teal</option>
         </select>
-
         <button
           type="button"
           onClick={handleResetView}
-          className="p-1.5 rounded-lg bg-slate-900/90 border border-slate-700 text-slate-200 hover:text-white hover:bg-slate-800 transition-colors"
-          title="Reset View"
+          className="rounded-lg border border-white/20 bg-[#0b1f16]/90 p-1.5 text-white/80 hover:text-white"
+          title="Reset view"
         >
-          <RotateCcw className="w-4 h-4" />
+          <RotateCcw className="h-3.5 w-3.5" />
         </button>
-
         <button
           type="button"
           onClick={handleExportScreenshot}
-          className="p-1.5 rounded-lg bg-slate-900/90 border border-slate-700 text-slate-200 hover:text-white hover:bg-slate-800 transition-colors"
-          title="Export Screenshot"
+          className="rounded-lg border border-white/20 bg-[#0b1f16]/90 p-1.5 text-white/80 hover:text-white"
+          title="Screenshot"
         >
-          <Camera className="w-4 h-4" />
+          <Camera className="h-3.5 w-3.5" />
         </button>
-
         <button
           type="button"
           onClick={() => setIsFullscreen(!isFullscreen)}
-          className="p-1.5 rounded-lg bg-slate-900/90 border border-slate-700 text-slate-200 hover:text-white hover:bg-slate-800 transition-colors"
-          title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+          className="rounded-lg border border-white/20 bg-[#0b1f16]/90 p-1.5 text-white/80 hover:text-white"
+          title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
         >
-          {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+          {isFullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
         </button>
       </div>
 
-      {/* 3D Canvas Container */}
-      <div ref={containerRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
+      <div ref={containerRef} className="h-full w-full cursor-grab active:cursor-grabbing" />
 
-      {/* Loading state */}
       {isLoadingScript && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/80 text-white gap-2">
-          <Loader2 className="w-6 h-6 animate-spin text-emerald-500" />
-          <span className="text-xs font-medium">Initializing 3D Molecular Graphics Engine...</span>
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[#0b1f16]/85 text-white">
+          <Loader2 className="h-6 w-6 animate-spin text-emerald-400" />
+          <span className="text-xs font-medium">Loading graphics…</span>
         </div>
       )}
-
-      {/* Bottom Hint */}
-      <div className="absolute bottom-2 left-3 z-10 text-[10px] text-slate-500 select-none pointer-events-none">
-        Left-click + Drag to rotate • Right-click + Drag to pan • Scroll to zoom
-      </div>
     </div>
   );
 }

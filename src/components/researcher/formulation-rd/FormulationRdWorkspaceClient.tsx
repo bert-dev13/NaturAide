@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Layers,
   Sprout,
@@ -10,24 +11,9 @@ import {
   Boxes,
   FlaskConical,
   Activity,
-  CheckCircle2,
-  Clock,
   ArrowRight,
   ArrowLeft,
-  Save,
-  Plus,
-  Trash2,
-  Edit2,
-  Sparkles,
-  AlertTriangle,
-  Info,
-  BookOpen,
-  Scale,
-  Calculator,
-  RefreshCw,
-  ExternalLink,
-  ChevronRight,
-  Dna,
+  X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import BotanicalStep1Section, {
@@ -270,17 +256,32 @@ export default function FormulationRdWorkspaceClient({
   // ---------------------------------------------------------------------------
   // STEP 2: PRODUCT SELECTION & TARGET SPECIFICATIONS
   // ---------------------------------------------------------------------------
-  const [productSelection, setProductSelection] = useState(
-    initialProductSelection || {
+  const [productSelection, setProductSelection] = useState(() => {
+    const defaults = {
       productType: "Herbal Formulation",
       deliveryFormat: "Topical Hydrogel",
-      targetIndications: "Topical anti-inflammatory, localized muscular comfort and barrier protection",
+      targetIndications:
+        "Topical anti-inflammatory, localized muscular comfort and barrier protection",
       intendedPopulation: "Adults aged 18-65 without open dermatological lesions",
       packagingType: "Airless pump dispenser, UV-protected 50g container",
       rationale:
         "Hydrogel vehicle maximizes transdermal hydration, bio-adhesion, and active secondary metabolite partitioning without greasy residue.",
-    }
-  );
+    };
+    if (!initialProductSelection) return defaults;
+    return {
+      ...defaults,
+      ...initialProductSelection,
+      // DB nulls must not reach controlled inputs/textareas
+      productType: initialProductSelection.productType ?? defaults.productType,
+      deliveryFormat: initialProductSelection.deliveryFormat ?? defaults.deliveryFormat,
+      targetIndications:
+        initialProductSelection.targetIndications ?? defaults.targetIndications,
+      intendedPopulation:
+        initialProductSelection.intendedPopulation ?? defaults.intendedPopulation,
+      packagingType: initialProductSelection.packagingType ?? defaults.packagingType,
+      rationale: initialProductSelection.rationale ?? "",
+    };
+  });
 
   // ---------------------------------------------------------------------------
   // STEP 3: STANDARDIZED EXTRACTION PARAMETERS
@@ -300,8 +301,9 @@ export default function FormulationRdWorkspaceClient({
       initialPlantData?.extractFractionName ||
       "Standardized Polyphenolic / Terpenoid Hydroethanolic Fraction",
     extractionReferences:
-      initialPlantData?.extractionReferences ||
+      initialPlantData?.extractionReferences ??
       "Philippine Herbal Pharmacopeia (2024); WHO Guidelines on Good Agricultural and Collection Practices (GACP).",
+    recoveredDryMass: initialPlantData?.recoveredDryMass ?? "",
   });
 
   // Extraction calculation helpers
@@ -716,264 +718,263 @@ export default function FormulationRdWorkspaceClient({
     }
   };
 
+  const ActiveIcon = STEPS[activeStep - 1]?.icon || Layers;
+
   return (
-    <div className="min-h-screen bg-slate-50/50 pb-32">
-      {/* 1. TOP HEADER & COMPACT STEP NAVIGATION */}
-      <div className="bg-white border-b border-slate-200 sticky top-0 z-20 shadow-xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2 text-xs">
+    <div className="w-full max-w-none space-y-5 pb-32 text-slate-800">
+      {/* Compact workspace header */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="relative w-full overflow-hidden rounded-2xl border border-[#0f2c20]/15 bg-[linear-gradient(120deg,#0f2c20_0%,#134032_48%,#0b271b_100%)] px-4 py-3.5 text-white shadow-[0_12px_28px_-18px_rgba(15,44,32,0.55)] sm:px-5"
+      >
+        <div className="pointer-events-none absolute -right-10 -top-12 h-36 w-36 rounded-full bg-emerald-400/15 blur-3xl" />
+        <div className="relative space-y-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium text-emerald-200/80">
                 <Link
                   href={`/researcher/projects/${project.id}`}
-                  className="text-slate-500 hover:text-emerald-700 flex items-center gap-1 font-medium"
+                  className="inline-flex items-center gap-1.5 transition hover:text-white"
                 >
-                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <ArrowLeft className="h-3.5 w-3.5" />
                   Workspace Hub
                 </Link>
-                <span className="text-slate-300">/</span>
-                <span className="text-slate-500 font-semibold uppercase tracking-wider text-[11px]">
-                  Section 1 / Step 0{activeStep} of 06
+                <span className="text-emerald-700">/</span>
+                <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-emerald-200">
+                  Section 1 · Step {String(activeStep).padStart(2, "0")} / 06
                 </span>
-                <span className="text-slate-300">•</span>
-                {/* Small Saved / Unsaved indicator */}
-                <div className="flex items-center gap-1.5 text-[11px]">
-                  {isSaving ? (
-                    <span className="flex items-center gap-1 text-amber-700 font-medium">
-                      <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                      Saving...
-                    </span>
-                  ) : message?.type === "success" ? (
-                    <span className="flex items-center gap-1 text-emerald-700 font-semibold">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                      Saved
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-1 text-slate-500">
-                      <span className="w-2 h-2 rounded-full bg-slate-300" />
-                      Draft
-                    </span>
-                  )}
-                </div>
+                <span
+                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                    isSaving
+                      ? "border-amber-400/40 bg-amber-500/15 text-amber-100"
+                      : message?.type === "success"
+                        ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-100"
+                        : "border-white/15 bg-white/5 text-emerald-100/80"
+                  }`}
+                >
+                  <span
+                    className={`h-1.5 w-1.5 rounded-full ${
+                      isSaving
+                        ? "animate-pulse bg-amber-300"
+                        : message?.type === "success"
+                          ? "bg-emerald-300"
+                          : "bg-slate-300"
+                    }`}
+                  />
+                  {isSaving ? "Saving..." : message?.type === "success" ? "Saved" : "Draft"}
+                </span>
               </div>
-
-              <h1 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-                <Layers className="w-5 h-5 text-emerald-600" />
-                {STEPS[activeStep - 1].title}
-              </h1>
-
-              {/* Compact 6-segment progress bar */}
-              <div className="flex items-center gap-1.5 pt-0.5 max-w-xs">
-                {STEPS.map((step) => {
-                  const isFilled = step.number <= activeStep;
-                  return (
-                    <div
-                      key={step.number}
-                      className={`h-1.5 flex-1 rounded-full transition-colors ${
-                        isFilled ? "bg-emerald-600" : "bg-slate-200"
-                      }`}
-                      title={`Step ${step.number}: ${step.title}`}
-                    />
-                  );
-                })}
+              <div className="mt-1.5 flex items-center gap-2">
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-200">
+                  <ActiveIcon className="h-4 w-4" />
+                </span>
+                <h1 className="text-lg font-semibold tracking-tight text-white sm:text-xl">
+                  {STEPS[activeStep - 1].title}
+                </h1>
+              </div>
+              <div className="mt-2 flex max-w-md items-center gap-1">
+                {STEPS.map((step) => (
+                  <button
+                    key={step.number}
+                    type="button"
+                    onClick={() => setActiveStep(step.number)}
+                    title={`Step ${step.number}: ${step.title}`}
+                    className={`h-1.5 flex-1 rounded-full transition ${
+                      step.number <= activeStep ? "bg-emerald-400" : "bg-white/15 hover:bg-white/25"
+                    }`}
+                  />
+                ))}
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <Link
-                href={`/researcher/projects/${project.id}/in-silico`}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors"
-              >
-                <span>Proceed to Section 2</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </Link>
-            </div>
+            <Link
+              href={`/researcher/projects/${project.id}/in-silico`}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-emerald-400 px-3.5 py-2 text-xs font-semibold text-[#091a13] shadow-sm transition hover:bg-emerald-300"
+            >
+              Proceed to Section 2
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
           </div>
 
-          {/* 6 Step Switcher */}
-          <div className="mt-2.5 flex items-center gap-1.5 overflow-x-auto pb-1 border-t border-slate-100 pt-2">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
             {STEPS.map((step) => {
               const Icon = step.icon;
               const isCurrent = activeStep === step.number;
+              const isDone = step.number < activeStep;
               return (
                 <button
                   key={step.number}
                   type="button"
                   onClick={() => setActiveStep(step.number)}
-                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium shrink-0 transition-all cursor-pointer ${
+                  className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-[11px] font-semibold transition ${
                     isCurrent
-                      ? "bg-emerald-700 text-white font-semibold shadow-xs"
-                      : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
+                      ? "bg-emerald-400 text-[#091a13] shadow-sm"
+                      : isDone
+                        ? "border border-emerald-400/30 bg-emerald-500/15 text-emerald-100 hover:bg-emerald-500/25"
+                        : "border border-white/10 bg-white/5 text-emerald-100/70 hover:bg-white/10 hover:text-white"
                   }`}
                 >
-                  <Icon className="w-3.5 h-3.5" />
-                  <span>
-                    {step.number}. {step.title}
-                  </span>
+                  <Icon className="h-3.5 w-3.5" />
+                  <span className="font-mono text-[10px] opacity-80">{step.number}</span>
+                  <span className="hidden sm:inline">{step.title}</span>
                 </button>
               );
             })}
           </div>
         </div>
-      </div>
+      </motion.div>
 
-      {/* 2. MAIN BODY */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-32">
-        {/* Alerts / Feedback Banner */}
+      <AnimatePresence>
         {message && (
-          <div
-            className={`mb-6 p-3.5 rounded-xl text-xs font-medium flex items-center justify-between ${
+          <motion.div
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-xs font-medium ${
               message.type === "success"
-                ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
-                : "bg-rose-50 text-rose-800 border border-rose-200"
+                ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                : "border-rose-200 bg-rose-50 text-rose-900"
             }`}
           >
             <span>{message.text}</span>
             <button
               type="button"
               onClick={() => setMessage(null)}
-              className="text-slate-400 hover:text-slate-600"
+              className="rounded-md p-1 text-current/60 hover:bg-black/5 hover:text-current"
+              aria-label="Dismiss"
             >
-              ✕
+              <X className="h-3.5 w-3.5" />
             </button>
-          </div>
+          </motion.div>
         )}
+      </AnimatePresence>
 
-        {/* Active Step Reviewer Revision Banner */}
-        <ResearcherStepRevisionBanner
-          projectId={project.id}
-          sectionKey="section1"
-          sectionTitle="Section 1: Formulation R&D"
-          stepNumber={activeStep}
-          stepTitle={STEPS[activeStep - 1]?.title || `Step ${activeStep}`}
-        />
+      <ResearcherStepRevisionBanner
+        projectId={project.id}
+        sectionKey="section1"
+        sectionTitle="Section 1: Formulation R&D"
+        stepNumber={activeStep}
+        stepTitle={STEPS[activeStep - 1]?.title || `Step ${activeStep}`}
+      />
 
-        {/* ================================================================ */}
-        {/* STEP 1: PLANT INFORMATION, TAXONOMY & SPECIMEN AUTHENTICATION    */}
-        {/* ================================================================ */}
-        {activeStep === 1 && (
-          <BotanicalStep1Section
-            project={currentProject}
-            allPlants={allPlants}
-            verifiedPlant={verifiedPlant}
-            plantData={plantData}
-            onUpdatePlantData={setPlantData}
-            verifiedPhytochemicals={verifiedCompounds}
-            studyCompoundNames={studyCompoundNames}
-            onToggleStudyCompound={handleToggleStudyCompound}
-            scientificLiterature={literatureList}
-            linkedLiteratureIds={linkedLiteratureIds}
-            onToggleLiteratureReference={handleToggleLiteratureReference}
-            isSaving={isSaving}
-            onSave={handleSaveStep1}
-            onSelectPlant={handleSelectPlant}
-          />
-        )}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={activeStep}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -6 }}
+          transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+        >
+          {activeStep === 1 && (
+            <BotanicalStep1Section
+              project={currentProject}
+              allPlants={allPlants}
+              verifiedPlant={verifiedPlant}
+              plantData={plantData}
+              onUpdatePlantData={setPlantData}
+              verifiedPhytochemicals={verifiedCompounds}
+              studyCompoundNames={studyCompoundNames}
+              onToggleStudyCompound={handleToggleStudyCompound}
+              scientificLiterature={literatureList}
+              linkedLiteratureIds={linkedLiteratureIds}
+              onToggleLiteratureReference={handleToggleLiteratureReference}
+              isSaving={isSaving}
+              onSave={handleSaveStep1}
+              onSelectPlant={handleSelectPlant}
+            />
+          )}
 
-        {/* ================================================================ */}
-        {/* STEP 2: PRODUCT SELECTION & TARGET SPECIFICATIONS                 */}
-        {/* ================================================================ */}
-        {activeStep === 2 && (
-          <ProductSelectionStep2Section
-            project={currentProject}
-            plantData={plantData}
-            verifiedPlant={verifiedPlant}
-            linkedLiterature={literatureList}
-            productSelection={productSelection}
-            onChange={setProductSelection}
-            onSave={handleSaveStep2}
-            isSaving={isSaving}
-          />
-        )}
+          {activeStep === 2 && (
+            <ProductSelectionStep2Section
+              project={currentProject}
+              plantData={plantData}
+              verifiedPlant={verifiedPlant}
+              linkedLiterature={literatureList}
+              productSelection={productSelection}
+              onChange={setProductSelection}
+              onSave={handleSaveStep2}
+              isSaving={isSaving}
+            />
+          )}
 
-        {/* ================================================================ */}
-        {/* STEP 3: STANDARDIZED EXTRACTION METHODOLOGY & YIELD CALCULATIONS */}
-        {/* ================================================================ */}
-        {activeStep === 3 && (
-          <ExtractionStep3Section
-            project={currentProject}
-            productSelection={productSelection}
-            extraction={extraction}
-            onChange={setExtraction}
-            onSave={handleSaveStep3}
-            isSaving={isSaving}
-            scientificLiterature={scientificLiterature}
-            linkedLiterature={linkedLiterature}
-            onToggleLiteratureReference={handleToggleLiteratureReference}
-          />
-        )}
+          {activeStep === 3 && (
+            <ExtractionStep3Section
+              project={currentProject}
+              productSelection={productSelection}
+              extraction={extraction}
+              onChange={setExtraction}
+              onSave={handleSaveStep3}
+              isSaving={isSaving}
+              scientificLiterature={scientificLiterature}
+              linkedLiterature={linkedLiterature}
+              onToggleLiteratureReference={handleToggleLiteratureReference}
+            />
+          )}
 
-        {/* ================================================================ */}
-        {/* STEP 4: SMART MATERIALS INVENTORY                                */}
-        {/* ================================================================ */}
-        {activeStep === 4 && (
-          <MaterialsStep4Section
-            project={currentProject}
-            productSelection={productSelection}
-            extraction={extraction}
-            verifiedPhytochemicals={verifiedCompounds}
-            materials={materials}
-            onSaveMaterial={handleSaveMaterial}
-            onDeleteMaterial={handleDeleteMaterial}
-            onRefreshMaterials={handleRefreshMaterials}
-            isSaving={isSaving}
-          />
-        )}
+          {activeStep === 4 && (
+            <MaterialsStep4Section
+              project={currentProject}
+              productSelection={productSelection}
+              extraction={extraction}
+              verifiedPhytochemicals={verifiedCompounds}
+              materials={materials}
+              onSaveMaterial={handleSaveMaterial}
+              onDeleteMaterial={handleDeleteMaterial}
+              onRefreshMaterials={handleRefreshMaterials}
+              isSaving={isSaving}
+            />
+          )}
 
-        {/* ================================================================ */}
-        {/* STEP 5: SMART FORMULATION BUILDER                                */}
-        {/* ================================================================ */}
-        {activeStep === 5 && (
-          <FormulationStep5Section
-            project={currentProject}
-            productSelection={productSelection}
-            extraction={extraction}
-            materials={materials}
-            scientificLiterature={scientificLiterature}
-            linkedLiterature={linkedLiterature}
-            formulation={formulationState}
-            onChange={handleFormulationChange}
-            onSave={handleSaveStep5}
-            onRefreshMaterials={handleRefreshMaterials}
-            isSaving={isSaving}
-          />
-        )}
+          {activeStep === 5 && (
+            <FormulationStep5Section
+              project={currentProject}
+              productSelection={productSelection}
+              extraction={extraction}
+              materials={materials}
+              scientificLiterature={scientificLiterature}
+              linkedLiterature={linkedLiterature}
+              formulation={formulationState}
+              onChange={handleFormulationChange}
+              onSave={handleSaveStep5}
+              onRefreshMaterials={handleRefreshMaterials}
+              isSaving={isSaving}
+            />
+          )}
 
-        {/* ================================================================ */}
-        {/* STEP 6: BATCH ANALYSIS (SMART GENERATOR & QUALITY CONTROL)       */}
-        {/* ================================================================ */}
-        {activeStep === 6 && (
-          <BatchAnalysisStep6Section
-            projectId={project.id}
-            plantName={project.plantName}
-            plantScientificName={project.plantScientificName}
-            formulationCode={formulationCode || "EXP-GEL"}
-            formulationName={formulationName}
-            dosageFormType={dosageFormType || productSelection.deliveryFormat || "Topical Hydrogel"}
-            targetBatchSize={targetBatchSize}
-            versionNumber={versionNumber}
-            components={components}
-            materials={materials}
-            batches={batches}
-            onBatchesChange={setBatches}
-            literatureReferences={scientificLiterature}
-            isSaving={isSaving}
-            onSaveDraft={handleSaveActiveStep}
-            saveStatus={
-              isSaving
-                ? "saving"
-                : message?.type === "success"
-                ? "saved"
-                : message?.type === "error"
-                ? "error"
-                : "idle"
-            }
-            onProceedToInSilico={() => router.push(`/researcher/projects/${project.id}/in-silico`)}
-          />
-        )}
-      </div>
+          {activeStep === 6 && (
+            <BatchAnalysisStep6Section
+              projectId={project.id}
+              plantName={project.plantName}
+              plantScientificName={project.plantScientificName}
+              formulationCode={formulationCode || "EXP-GEL"}
+              formulationName={formulationName}
+              dosageFormType={dosageFormType || productSelection.deliveryFormat || "Topical Hydrogel"}
+              targetBatchSize={targetBatchSize}
+              versionNumber={versionNumber}
+              components={components}
+              materials={materials}
+              batches={batches}
+              onBatchesChange={setBatches}
+              literatureReferences={scientificLiterature}
+              isSaving={isSaving}
+              onSaveDraft={handleSaveActiveStep}
+              saveStatus={
+                isSaving
+                  ? "saving"
+                  : message?.type === "success"
+                    ? "saved"
+                    : message?.type === "error"
+                      ? "error"
+                      : "idle"
+              }
+              onProceedToInSilico={() => router.push(`/researcher/projects/${project.id}/in-silico`)}
+            />
+          )}
+        </motion.div>
+      </AnimatePresence>
 
-      {/* Centralized Sticky Footer Step Navigation */}
       <ResearchStepFooterNav
         projectId={project.id}
         sectionNumber={1}
@@ -987,10 +988,10 @@ export default function FormulationRdWorkspaceClient({
           isSaving
             ? "saving"
             : message?.type === "success"
-            ? "saved"
-            : message?.type === "error"
-            ? "error"
-            : "idle"
+              ? "saved"
+              : message?.type === "error"
+                ? "error"
+                : "idle"
         }
       />
     </div>

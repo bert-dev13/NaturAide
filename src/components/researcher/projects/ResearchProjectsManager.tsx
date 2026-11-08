@@ -421,116 +421,180 @@ export default function ResearchProjectsManager() {
   return (
     <div className="w-full max-w-none space-y-6 pb-12">
       {/* 1. TOP HEADER WORKSPACE BANNER */}
-      <div className="w-full bg-[#0f2c20] rounded-xl border border-emerald-900/60 p-6 sm:p-7 shadow-sm text-white">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="space-y-1.5 max-w-3xl">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-medium tracking-wider uppercase text-emerald-300 bg-emerald-950/80 border border-emerald-500/30 rounded px-2.5 py-0.5">
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="relative w-full overflow-hidden rounded-2xl border border-[#0f2c20]/15 bg-[linear-gradient(120deg,#0f2c20_0%,#134032_48%,#0b271b_100%)] px-4 py-3.5 text-white shadow-[0_12px_28px_-18px_rgba(15,44,32,0.55)] sm:px-5"
+      >
+        <div className="pointer-events-none absolute -right-10 -top-12 h-36 w-36 rounded-full bg-emerald-400/15 blur-3xl" />
+        <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-emerald-200">
+                <Layers className="h-3 w-3 text-emerald-300" />
                 Research Workspace
               </span>
+              <span className="rounded-full border border-white/15 bg-white/5 px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-emerald-100/80">
+                6-stage pipeline
+              </span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-semibold text-white tracking-tight">
+            <h1 className="mt-1.5 text-lg font-semibold tracking-tight text-white sm:text-xl">
               My Research Projects
             </h1>
-            <p className="text-sm text-emerald-100/80 leading-relaxed">
-              Manage botanical investigations, in-silico computational screening, molecular docking,
-              and peer validation dossiers across the 6-stage scientific pipeline.
+            <p className="mt-0.5 text-xs text-emerald-100/75">
+              Track botanical studies from literature to professional review.
             </p>
           </div>
 
           <button
             type="button"
             onClick={() => setShowNewModal(true)}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-[#091a13] text-sm font-semibold shadow-xs transition-colors cursor-pointer shrink-0"
+            className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-xl bg-emerald-400 px-3.5 py-2 text-xs font-semibold text-[#091a13] shadow-sm transition hover:bg-emerald-300 active:bg-emerald-500"
           >
-            <Plus className="w-4 h-4 stroke-[2.5]" />
-            <span>New Research Project</span>
+            <Plus className="h-3.5 w-3.5 stroke-[2.5]" />
+            <span>New Project</span>
           </button>
         </div>
-      </div>
+      </motion.div>
 
       {/* 2. STATS & KPI METRICS CARDS */}
-      <div className="w-full grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        {/* Total Studies */}
-        <div className="bg-white rounded-xl border border-slate-200/90 p-4 sm:p-5 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between text-slate-500">
-            <span className="text-xs font-medium uppercase tracking-wider">Total Studies</span>
-            <FolderGit2 className="w-4 h-4 text-slate-400" />
-          </div>
-          <div className="mt-3">
-            <div className="text-2xl sm:text-3xl font-semibold text-slate-900 tracking-tight">
-              {tabCounts.ALL}
-            </div>
-            <span className="text-xs text-slate-400">investigations enrolled</span>
-          </div>
-        </div>
-
-        {/* Active Pipeline */}
-        <div className="bg-white rounded-xl border border-slate-200/90 p-4 sm:p-5 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between text-emerald-800">
-            <span className="text-xs font-medium uppercase tracking-wider">Active Pipeline</span>
-            <FlaskConical className="w-4 h-4 text-emerald-600" />
-          </div>
-          <div className="mt-3">
-            <div className="text-2xl sm:text-3xl font-semibold text-emerald-800 tracking-tight">
-              {tabCounts.ACTIVE}
-            </div>
-            <span className="text-xs text-slate-400">in execution</span>
-          </div>
-        </div>
-
-        {/* Under Review */}
-        <div className="bg-white rounded-xl border border-slate-200/90 p-4 sm:p-5 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between text-amber-800">
-            <span className="text-xs font-medium uppercase tracking-wider">Under Review</span>
-            <ClipboardCheck className="w-4 h-4 text-amber-600" />
-          </div>
-          <div className="mt-3">
-            <div className="text-2xl sm:text-3xl font-semibold text-amber-800 tracking-tight">
-              {tabCounts.UNDER_REVIEW + tabCounts.REVISION_REQUIRED}
-            </div>
-            <span className="text-xs text-slate-400">evaluating &amp; revisions</span>
-          </div>
-        </div>
-
-        {/* Completed */}
-        <div className="bg-white rounded-xl border border-slate-200/90 p-4 sm:p-5 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between text-teal-800">
-            <span className="text-xs font-medium uppercase tracking-wider">Completed</span>
-            <CheckCircle2 className="w-4 h-4 text-teal-600" />
-          </div>
-          <div className="mt-3">
-            <div className="text-2xl sm:text-3xl font-semibold text-teal-800 tracking-tight">
-              {tabCounts.COMPLETED}
-            </div>
-            <span className="text-xs text-slate-400">dossiers finalized</span>
-          </div>
-        </div>
+      <div className="grid w-full grid-cols-2 gap-3 sm:gap-3.5 lg:grid-cols-4">
+        {[
+          {
+            key: "ALL",
+            label: "Total Studies",
+            value: tabCounts.ALL,
+            hint: "All projects",
+            icon: FolderGit2,
+            accent: "#0f2c20",
+            surface: "bg-[linear-gradient(145deg,#f4f8f5_0%,#ffffff_45%,#eef5f1_100%)]",
+            iconWrap: "bg-[#0f2c20] text-emerald-200",
+            valueClass: "text-[#0f2c20]",
+            bar: "from-[#0f2c20] to-emerald-400",
+            glow: "bg-emerald-400/20",
+          },
+          {
+            key: "ACTIVE",
+            label: "Active Pipeline",
+            value: tabCounts.ACTIVE,
+            hint: "In execution",
+            icon: FlaskConical,
+            accent: "#059669",
+            surface: "bg-[linear-gradient(145deg,#ecfdf5_0%,#ffffff_45%,#f0fdfa_100%)]",
+            iconWrap: "bg-gradient-to-br from-emerald-500 to-teal-600 text-white",
+            valueClass: "text-emerald-800",
+            bar: "from-emerald-500 to-teal-300",
+            glow: "bg-emerald-400/25",
+          },
+          {
+            key: "UNDER_REVIEW",
+            label: "Under Review",
+            value: tabCounts.UNDER_REVIEW + tabCounts.REVISION_REQUIRED,
+            hint: "Needs attention",
+            icon: ClipboardCheck,
+            accent: "#d97706",
+            surface: "bg-[linear-gradient(145deg,#fffbeb_0%,#ffffff_45%,#fff7ed_100%)]",
+            iconWrap: "bg-gradient-to-br from-amber-500 to-orange-500 text-white",
+            valueClass: "text-amber-900",
+            bar: "from-amber-500 to-orange-300",
+            glow: "bg-amber-400/25",
+          },
+          {
+            key: "COMPLETED",
+            label: "Completed",
+            value: tabCounts.COMPLETED,
+            hint: "Dossiers finalized",
+            icon: CheckCircle2,
+            accent: "#0f766e",
+            surface: "bg-[linear-gradient(145deg,#f0fdfa_0%,#ffffff_45%,#ecfeff_100%)]",
+            iconWrap: "bg-gradient-to-br from-teal-500 to-cyan-600 text-white",
+            valueClass: "text-teal-900",
+            bar: "from-teal-500 to-cyan-300",
+            glow: "bg-teal-400/25",
+          },
+        ].map((stat, index) => {
+          const Icon = stat.icon;
+          const isActive = activeTab === stat.key;
+          return (
+            <motion.button
+              key={stat.key}
+              type="button"
+              onClick={() => setActiveTab(stat.key)}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.32, delay: 0.04 + index * 0.05, ease: [0.22, 1, 0.36, 1] }}
+              whileHover={{ y: -2 }}
+              whileTap={{ scale: 0.985 }}
+              aria-pressed={isActive}
+              className={`group relative overflow-hidden rounded-2xl border p-3.5 text-left shadow-[0_1px_2px_rgba(15,44,32,0.04)] transition-all duration-300 cursor-pointer ${stat.surface} ${
+                isActive
+                  ? "border-transparent"
+                  : "border-[#d7e4dc]/90 hover:shadow-[0_14px_28px_-18px_rgba(15,44,32,0.35)]"
+              }`}
+              style={
+                isActive
+                  ? { boxShadow: `0 0 0 1.5px ${stat.accent}, 0 12px 24px -16px ${stat.accent}55` }
+                  : undefined
+              }
+            >
+              <div className={`absolute inset-x-0 top-0 h-[2.5px] bg-gradient-to-r ${stat.bar}`} />
+              <div className={`pointer-events-none absolute -right-8 -top-10 h-24 w-24 rounded-full blur-2xl ${stat.glow}`} />
+              <div className="relative flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#6d7f76]">
+                    {stat.label}
+                  </p>
+                  <p className={`mt-1.5 text-2xl font-semibold tabular-nums leading-none tracking-tight sm:text-[1.7rem] ${stat.valueClass}`}>
+                    {stat.value}
+                  </p>
+                  <p className="mt-1.5 text-[11px] font-medium text-[#8aa094]">{stat.hint}</p>
+                </div>
+                <span className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg shadow-sm ${stat.iconWrap}`}>
+                  <Icon className="h-3.5 w-3.5" strokeWidth={2.2} />
+                </span>
+              </div>
+            </motion.button>
+          );
+        })}
       </div>
 
       {/* 3. CONTROLS STRIP (FILTERS, SEARCH & SORT) */}
-      <div className="w-full bg-white rounded-xl border border-slate-200/90 p-3.5 sm:p-4 shadow-xs space-y-3">
-        {/* Status Filter Tabs */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, delay: 0.12 }}
+        className="w-full overflow-hidden rounded-2xl border border-[#d7e4dc]/90 bg-[linear-gradient(180deg,#ffffff_0%,#f7faf8_100%)] shadow-[0_1px_2px_rgba(15,44,32,0.04)]"
+      >
+        <div className="flex items-center gap-1.5 overflow-x-auto px-3 py-2.5 sm:px-3.5 scrollbar-none">
           {FILTER_TABS.map((tab) => {
             const count = tabCounts[tab.value as keyof TabCounts] ?? 0;
             const isActive = activeTab === tab.value;
+            const tone =
+              tab.value === "ACTIVE"
+                ? { active: "bg-emerald-700 text-white shadow-emerald-700/20", pill: "bg-white/20 text-white", idle: "hover:bg-emerald-50 hover:text-emerald-900" }
+                : tab.value === "UNDER_REVIEW"
+                  ? { active: "bg-amber-600 text-white shadow-amber-600/20", pill: "bg-white/20 text-white", idle: "hover:bg-amber-50 hover:text-amber-900" }
+                  : tab.value === "REVISION_REQUIRED"
+                    ? { active: "bg-rose-600 text-white shadow-rose-600/20", pill: "bg-white/20 text-white", idle: "hover:bg-rose-50 hover:text-rose-900" }
+                    : tab.value === "COMPLETED"
+                      ? { active: "bg-teal-700 text-white shadow-teal-700/20", pill: "bg-white/20 text-white", idle: "hover:bg-teal-50 hover:text-teal-900" }
+                      : tab.value === "ARCHIVED"
+                        ? { active: "bg-slate-600 text-white shadow-slate-600/20", pill: "bg-white/20 text-white", idle: "hover:bg-slate-100 hover:text-slate-800" }
+                        : { active: "bg-[#0f2c20] text-white shadow-[#0f2c20]/25", pill: "bg-white/20 text-white", idle: "hover:bg-[#edf5f0] hover:text-[#0f2c20]" };
             return (
               <button
                 key={tab.value}
+                type="button"
                 onClick={() => setActiveTab(tab.value)}
-                className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors cursor-pointer ${
-                  isActive
-                    ? "bg-[#0f2c20] text-white"
-                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold whitespace-nowrap transition-all duration-200 cursor-pointer ${
+                  isActive ? `${tone.active} shadow-md` : `text-[#52645d] ${tone.idle}`
                 }`}
               >
                 <span>{tab.label}</span>
                 <span
-                  className={`px-1.5 py-0.2 rounded text-[10px] font-mono font-medium ${
-                    isActive
-                      ? "bg-white/20 text-white"
-                      : "bg-slate-100 text-slate-500"
+                  className={`min-w-[1.35rem] rounded-md px-1.5 py-0.5 text-center font-mono text-[10px] font-bold tabular-nums ${
+                    isActive ? tone.pill : "bg-[#e8f0eb] text-[#5f7468]"
                   }`}
                 >
                   {count}
@@ -540,76 +604,70 @@ export default function ResearchProjectsManager() {
           })}
         </div>
 
-        {/* Search & Sort Controls */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2.5 border-t border-slate-100">
-          {/* Search Box */}
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+        <div className="flex flex-col gap-3 border-t border-[#e4eee8] bg-white/70 px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-3.5">
+          <div className="relative min-w-0 flex-1 sm:max-w-lg">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-emerald-700/70" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search by title, medicinal plant, or objective..."
-              className="w-full h-10 pl-9 pr-8 text-xs sm:text-sm bg-white border border-slate-300 rounded-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15 transition-colors"
+              className="h-11 w-full rounded-xl border border-[#d5e3da] bg-[#fbfdfb] pl-10 pr-9 text-sm text-[#0f2c20] placeholder:text-[#8aa094] outline-none transition focus:border-emerald-600 focus:bg-white focus:ring-2 focus:ring-emerald-600/15"
             />
             {searchQuery && (
               <button
                 type="button"
                 onClick={() => setSearchQuery("")}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-1 text-[#8aa094] hover:bg-[#edf5f0] hover:text-[#0f2c20] cursor-pointer"
+                aria-label="Clear search"
               >
-                <X className="w-3.5 h-3.5" />
+                <X className="h-3.5 w-3.5" />
               </button>
             )}
           </div>
 
-          {/* Sort Selector */}
-          <div className="flex items-center gap-2 shrink-0">
-            <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
-            <span className="text-xs font-medium text-slate-600">Sort:</span>
+          <label className="inline-flex h-11 shrink-0 items-center gap-2 rounded-xl border border-[#d5e3da] bg-[#fbfdfb] px-3 text-xs font-semibold text-[#52645d]">
+            <ArrowUpDown className="h-3.5 w-3.5 text-emerald-700" />
+            <span className="hidden sm:inline">Sort</span>
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
-              className="h-10 px-3 bg-white border border-slate-300 rounded-lg text-xs sm:text-sm font-medium text-slate-800 focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15 cursor-pointer transition-colors"
+              className="cursor-pointer bg-transparent text-sm font-semibold text-[#0f2c20] outline-none"
             >
               <option value="updatedAt">Recently Updated</option>
               <option value="progress">Highest Progress</option>
               <option value="title">Project Title (A-Z)</option>
               <option value="createdAt">Creation Date</option>
             </select>
-          </div>
+          </label>
         </div>
-      </div>
+      </motion.div>
 
       {/* 4. MAIN PROJECT LIST / CARDS */}
       {loading ? (
-        <div className="w-full py-20 flex flex-col items-center justify-center space-y-3 bg-white rounded-xl border border-slate-200/90 p-8 shadow-xs">
-          <Loader2 className="w-7 h-7 text-emerald-700 animate-spin" />
-          <p className="text-xs text-slate-500 font-medium">
-            Synchronizing research projects database...
-          </p>
+        <div className="flex w-full flex-col items-center justify-center space-y-3 rounded-2xl border border-[#d7e4dc] bg-white px-8 py-20 shadow-xs">
+          <Loader2 className="h-7 w-7 animate-spin text-emerald-700" />
+          <p className="text-xs font-medium text-[#6d7f76]">Synchronizing research projects database...</p>
         </div>
       ) : error ? (
-        <div className="w-full p-6 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-center space-y-2">
-          <AlertCircle className="w-5 h-5 mx-auto text-rose-600" />
+        <div className="w-full space-y-2 rounded-2xl border border-rose-200 bg-rose-50 p-6 text-center text-rose-800">
+          <AlertCircle className="mx-auto h-5 w-5 text-rose-600" />
           <p className="text-sm font-medium">{error}</p>
           <button
             onClick={fetchProjects}
-            className="px-3.5 py-1.5 rounded-lg bg-rose-700 hover:bg-rose-800 text-white text-xs font-medium cursor-pointer transition-colors"
+            className="cursor-pointer rounded-lg bg-rose-700 px-3.5 py-1.5 text-xs font-medium text-white transition-colors hover:bg-rose-800"
           >
             Retry
           </button>
         </div>
       ) : displayedProjects.length === 0 ? (
-        <div className="w-full bg-white rounded-xl border border-slate-200/90 p-12 text-center space-y-3 shadow-xs">
-          <div className="w-12 h-12 rounded-lg bg-slate-100 text-slate-500 flex items-center justify-center mx-auto border border-slate-200/80">
-            <FolderGit2 className="w-6 h-6" />
+        <div className="w-full space-y-3 rounded-2xl border border-[#d7e4dc] bg-white p-12 text-center shadow-xs">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl border border-[#d7e4dc] bg-[#f4f8f5] text-emerald-800">
+            <FolderGit2 className="h-6 w-6" />
           </div>
-          <div className="space-y-1 max-w-md mx-auto">
-            <h3 className="text-base font-semibold text-slate-900">
-              No research projects found
-            </h3>
-            <p className="text-xs text-slate-500 leading-relaxed">
+          <div className="mx-auto max-w-md space-y-1">
+            <h3 className="text-base font-semibold text-[#0f2c20]">No research projects found</h3>
+            <p className="text-xs leading-relaxed text-[#6d7f76]">
               {searchQuery
                 ? `No investigations found matching "${searchQuery}". Try clearing search keywords.`
                 : "No projects in this category yet. Begin a new botanical study to initiate the 6-stage workflow."}
@@ -621,21 +679,21 @@ export default function ResearchProjectsManager() {
               if (searchQuery) setSearchQuery("");
               else setShowNewModal(true);
             }}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#0f2c20] hover:bg-[#164533] text-white text-xs font-medium shadow-xs cursor-pointer transition-colors"
+            className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl bg-[#0f2c20] px-4 py-2 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-[#164533]"
           >
             {searchQuery ? (
               <span>Clear Search Filter</span>
             ) : (
               <>
-                <Plus className="w-3.5 h-3.5" />
+                <Plus className="h-3.5 w-3.5" />
                 <span>Start New Investigation</span>
               </>
             )}
           </button>
         </div>
       ) : (
-        <div className="w-full grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5">
-          {displayedProjects.map((project) => {
+        <div className="grid w-full grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 sm:gap-4">
+          {displayedProjects.map((project, index) => {
             const activeStageName =
               project.currentSectionTitle ||
               STAGE_DISPLAY_NAMES[project.currentStage] ||
@@ -644,70 +702,70 @@ export default function ResearchProjectsManager() {
               project.status === "COMPLETED" ||
               (completedProject?.id && String(project.id) === String(completedProject.id));
             const isPitahc = isPitahcSpecimen(project.plantName, project.plantScientificName);
+            const stageDots = isDone ? 6 : Math.min(6, Math.max(0, project.completedStagesCount || 0));
 
             return (
-              <div
+              <motion.article
                 key={project.id}
-                className={`bg-white rounded-xl border border-slate-200/90 hover:border-slate-300 shadow-xs hover:shadow-md transition-all flex flex-col justify-between group relative ${
-                  activeMenuId === project.id ? "z-20 overflow-visible" : "overflow-hidden"
-                }`}
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.35, delay: Math.min(index * 0.05, 0.25), ease: [0.22, 1, 0.36, 1] }}
+                whileHover={{ y: -3 }}
+                className={`group relative flex flex-col justify-between rounded-2xl border bg-[linear-gradient(165deg,#ffffff_0%,#f8fbf9_100%)] shadow-[0_1px_2px_rgba(15,44,32,0.04)] transition-all duration-300 hover:border-emerald-300/70 hover:shadow-[0_18px_34px_-22px_rgba(15,44,32,0.35)] ${
+                  isDone ? "border-teal-200/80" : "border-[#d7e4dc]/95"
+                } ${activeMenuId === project.id ? "z-20 overflow-visible" : "overflow-hidden"}`}
               >
-                {/* Card Content Area */}
-                <div className="p-5 space-y-3.5">
-                  {/* Header: Status, Timestamp & Actions Menu */}
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
+                <div className={`absolute inset-x-0 top-0 h-[3px] ${isDone ? "bg-gradient-to-r from-teal-600 via-teal-400 to-cyan-300" : "bg-gradient-to-r from-[#0f2c20] via-emerald-600 to-emerald-300"}`} />
+
+                <div className="space-y-3.5 p-4 sm:p-5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
                       {getStatusBadge(
                         isDone ? "COMPLETED" : project.status,
                         project.statusLabel,
                         project.approvedSpecialtiesCount
                       )}
-                      <span className="text-xs text-slate-400 flex items-center gap-1">
-                        <Clock className="w-3 h-3 text-slate-400" />
-                        <span>{formatRelativeTime(project.updatedAt)}</span>
+                      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[#8aa094]">
+                        <Clock className="h-3 w-3" />
+                        {formatRelativeTime(project.updatedAt)}
                       </span>
                     </div>
 
-                    {/* Actions Menu */}
-                    <div className="relative">
+                    <div className="relative shrink-0">
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           setActiveMenuId(activeMenuId === project.id ? null : project.id);
                         }}
-                        className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                        className="cursor-pointer rounded-lg p-1.5 text-[#8aa094] transition-colors hover:bg-[#edf5f0] hover:text-[#0f2c20]"
                         aria-label="Project options"
                       >
-                        <MoreVertical className="w-4 h-4" />
+                        <MoreVertical className="h-4 w-4" />
                       </button>
 
-                      {/* Dropdown Menu */}
                       {activeMenuId === project.id && (
                         <div
-                          className="absolute right-0 top-full mt-1.5 w-48 rounded-lg bg-white border border-slate-200 shadow-xl py-1.5 z-30"
+                          className="absolute right-0 top-full z-30 mt-1.5 w-48 rounded-xl border border-[#d7e4dc] bg-white py-1.5 shadow-xl"
                           onClick={(e) => e.stopPropagation()}
                         >
                           <Link
                             href={`/researcher/projects/${project.id}`}
-                            className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+                            className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-[#234237] transition-colors hover:bg-[#f4f8f5]"
                             onClick={() => setActiveMenuId(null)}
                           >
-                            <FolderGit2 className="w-3.5 h-3.5 text-slate-500" />
+                            <FolderGit2 className="h-3.5 w-3.5 text-emerald-700" />
                             <span>Open Workspace</span>
                           </Link>
-
                           <Link
                             href={`/researcher/projects/${project.id}/completion-integration`}
-                            className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+                            className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-[#234237] transition-colors hover:bg-[#f4f8f5]"
                             onClick={() => setActiveMenuId(null)}
                           >
-                            <FileText className="w-3.5 h-3.5 text-slate-500" />
+                            <FileText className="h-3.5 w-3.5 text-emerald-700" />
                             <span>View Dossier</span>
                           </Link>
-
-                          <div className="my-1 border-t border-slate-100" />
-
+                          <div className="my-1 border-t border-[#e8f0eb]" />
                           <button
                             type="button"
                             onClick={() => {
@@ -716,9 +774,9 @@ export default function ResearchProjectsManager() {
                               setDeleteConfirmText("");
                               setDeleteError(null);
                             }}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer text-left"
+                            className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-xs font-medium text-rose-600 transition-colors hover:bg-rose-50"
                           >
-                            <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                            <Trash2 className="h-3.5 w-3.5 text-rose-600" />
                             <span>Delete Project</span>
                           </button>
                         </div>
@@ -726,104 +784,98 @@ export default function ResearchProjectsManager() {
                     </div>
                   </div>
 
-                  {/* Plant Specimen Strip */}
-                  <div className="flex items-center gap-2.5 p-2.5 rounded-lg bg-slate-50/80 border border-slate-100">
+                  <div className="flex items-center gap-3 rounded-xl border border-[#e4eee8] bg-[linear-gradient(135deg,#f4f8f5_0%,#ffffff_100%)] p-2.5">
                     {project.plantImageUrl ? (
-                      <div className="w-9 h-9 rounded-md overflow-hidden relative shrink-0 border border-slate-200/80">
-                        <Image
-                          src={project.plantImageUrl}
-                          alt={project.plantName}
-                          fill
-                          className="object-cover"
-                        />
+                      <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-[#d7e4dc] shadow-sm">
+                        <Image src={project.plantImageUrl} alt={project.plantName} fill className="object-cover transition-transform duration-500 group-hover:scale-105" />
                       </div>
                     ) : (
-                      <div className="w-9 h-9 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-100 flex items-center justify-center shrink-0">
-                        <Leaf className="w-4 h-4" />
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700">
+                        <Leaf className="h-5 w-5" />
                       </div>
                     )}
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-semibold text-xs text-slate-900 truncate">
-                          {project.plantName}
-                        </span>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="truncate text-sm font-semibold text-[#0f2c20]">{project.plantName}</span>
                         {isPitahc ? (
-                          <span className="text-[10px] font-medium text-emerald-800 bg-emerald-50 border border-emerald-200/80 rounded px-1.5 py-0.2 shrink-0">
+                          <span className="shrink-0 rounded-md border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-800">
                             PITAHC
                           </span>
                         ) : project.plantCategory ? (
-                          <span className="text-[10px] font-medium text-slate-500 bg-slate-200/60 rounded px-1.5 py-0.2 shrink-0 truncate max-w-[140px]">
+                          <span className="max-w-[140px] shrink-0 truncate rounded-md bg-[#e8f0eb] px-1.5 py-0.5 text-[10px] font-semibold text-[#5f7468]">
                             {project.plantCategory}
                           </span>
                         ) : null}
                       </div>
                       {project.plantScientificName && (
-                        <p className="text-[11px] italic text-slate-500 truncate">
-                          {project.plantScientificName}
-                        </p>
+                        <p className="truncate text-[12px] italic text-[#6d7f76]">{project.plantScientificName}</p>
                       )}
                     </div>
                   </div>
 
-                  {/* Project Title & Objective */}
-                  <div className="space-y-1">
+                  <div className="space-y-1.5">
                     <Link
                       href={`/researcher/projects/${project.id}`}
-                      className="font-semibold text-sm text-slate-900 hover:text-emerald-800 transition-colors line-clamp-2 leading-snug block"
+                      className="block text-[15px] font-semibold leading-snug text-[#0f2c20] transition-colors line-clamp-2 hover:text-emerald-800"
                       title={project.title}
                     >
                       {project.title}
                     </Link>
-                    <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
+                    <p className="line-clamp-2 text-xs leading-relaxed text-[#6d7f76]">
                       {project.researchObjective ||
                         project.shortDescription ||
                         "Botanical investigation advancing through NatureAide computational and benchtop screening stages."}
                     </p>
                   </div>
 
-                  {/* 6-Stage Progress Indicator */}
-                  <div className="space-y-1.5 pt-1">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-medium text-slate-700 text-xs flex items-center gap-1.5">
-                        <Layers className="w-3.5 h-3.5 text-slate-400" />
-                        <span>{activeStageName}</span>
+                  <div className="space-y-2 rounded-xl border border-[#e8f0eb] bg-white/70 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="inline-flex min-w-0 items-center gap-1.5 text-xs font-semibold text-[#234237]">
+                        <Layers className="h-3.5 w-3.5 shrink-0 text-emerald-700" />
+                        <span className="truncate">{activeStageName}</span>
                       </span>
-                      <span className="font-mono font-medium text-slate-700 text-xs">
+                      <span className={`font-mono text-xs font-bold tabular-nums ${isDone ? "text-teal-800" : "text-emerald-800"}`}>
                         {project.progressPercent}%
                       </span>
                     </div>
-                    <div className="w-full h-1.5 rounded-full bg-slate-100 overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all duration-300 ${
-                          isDone ? "bg-teal-600" : "bg-emerald-600"
-                        }`}
-                        style={{ width: `${project.progressPercent}%` }}
+                    <div className="h-2 overflow-hidden rounded-full bg-[#e8f0eb]">
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${project.progressPercent}%` }}
+                        transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+                        className={`h-full rounded-full ${isDone ? "bg-gradient-to-r from-teal-600 to-cyan-400" : "bg-gradient-to-r from-[#0f2c20] to-emerald-500"}`}
                       />
                     </div>
-                    <div className="flex items-center justify-between text-[11px] text-slate-400">
-                      <span>Stage {project.completedStagesCount} of 6 Completed</span>
-                      {project.feedbackCount > 0 && (
-                        <span className="text-amber-700 font-medium flex items-center gap-1">
-                          <FileText className="w-3 h-3" />
-                          <span>
-                            {project.feedbackCount} Reviewer Note{project.feedbackCount > 1 ? "s" : ""}
-                          </span>
-                        </span>
-                      )}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: 6 }).map((_, i) => (
+                          <span
+                            key={i}
+                            className={`h-1.5 w-3 rounded-full ${i < stageDots ? (isDone ? "bg-teal-500" : "bg-emerald-500") : "bg-[#dce8e1]"}`}
+                          />
+                        ))}
+                      </div>
+                      <span className="text-[11px] font-medium text-[#8aa094]">
+                        {isDone ? "All 6 stages complete" : `Stage ${project.completedStagesCount} of 6`}
+                      </span>
                     </div>
+                    {project.feedbackCount > 0 && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-800">
+                        <FileText className="h-3 w-3" />
+                        {project.feedbackCount} Reviewer Note{project.feedbackCount > 1 ? "s" : ""}
+                      </span>
+                    )}
                   </div>
                 </div>
 
-                {/* Card Actions Footer */}
-                <div className="px-5 py-3 bg-slate-50/60 border-t border-slate-100 flex items-center justify-between gap-2">
+                <div className="flex items-center justify-between gap-2 border-t border-[#e8f0eb] bg-[#f7faf8]/90 px-4 py-3 sm:px-5">
                   <Link
                     href={`/researcher/projects/${project.id}`}
-                    className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors"
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-[#52645d] transition-colors hover:text-[#0f2c20]"
                   >
                     <span>Workspace</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
+                    <ChevronRight className="h-3.5 w-3.5" />
                   </Link>
-
                   <Link
                     href={
                       project.continueRoute ||
@@ -831,13 +883,15 @@ export default function ResearchProjectsManager() {
                         ? `/researcher/projects/${project.id}/completion`
                         : getStageUrl(project.id, project.currentStage))
                     }
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[#0f2c20] hover:bg-[#164533] text-white text-xs font-medium transition-colors"
+                    className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition-all hover:brightness-110 ${
+                      isDone ? "bg-gradient-to-r from-teal-700 to-cyan-600" : "bg-gradient-to-r from-[#0f2c20] to-emerald-700"
+                    }`}
                   >
                     <span>{isDone ? "View Final Dossier" : "Continue Stage"}</span>
-                    <ArrowRight className="w-3 h-3 text-emerald-300" />
+                    <ArrowRight className="h-3.5 w-3.5 text-emerald-200" />
                   </Link>
                 </div>
-              </div>
+              </motion.article>
             );
           })}
         </div>

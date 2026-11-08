@@ -307,6 +307,11 @@ export interface CompiledResearchOverview {
   compiledSummaryText: string;
 }
 
+export {
+  isIncompleteResearchSummary,
+  resolveResearchSummaryText,
+} from "@/lib/research-summary-utils";
+
 function formatAffinityScore(val: number): string {
   if (!Number.isFinite(val)) return "—";
   const fixed2 = val.toFixed(2);
@@ -412,13 +417,17 @@ export async function getSection3CompiledContext(
     prod.deliveryFormat ||
     "Topical Hydrogel";
   const formulationName = form.formulationName || `${commonName} ${dosageForm}`;
-  const ingredientsList: { name: string; concentration: string; role: string }[] = compItems.map((c: any) => ({
+  const ingredientsRaw: { name: string; concentration: string; role: string }[] = compItems.map((c: any) => ({
     name: c.componentName || "Ingredient",
     concentration:
       c.concentration ||
       (c.concentrationValue ? `${Number(c.concentrationValue)}% ${c.concentrationUnit || "w/w"}` : c.quantity || ""),
     role: c.roleInFormulation || c.roleOrFunction || "Excipient",
   }));
+  // Deduplicate repeated formulation rows (same name) while keeping first occurrence
+  const ingredientsList = Array.from(
+    new Map(ingredientsRaw.map((ing) => [ing.name.trim().toLowerCase(), ing])).values()
+  );
   const componentsCount = ingredientsList.length;
 
   // Determine accurate QC status from actual recorded batch measurements (never auto-label as Passed if simulated or unverified)
@@ -467,8 +476,20 @@ export async function getSection3CompiledContext(
 
   // 3. In-Silico Screening
   const selectedCompounds = compRows.filter((c: any) => c.selectedForDocking !== 0);
-  const activeCompounds = selectedCompounds.length > 0 ? selectedCompounds : compRows;
-  const compoundNames = activeCompounds.map((c: any) => c.compoundName).filter(Boolean);
+  const activeCompoundsRaw = selectedCompounds.length > 0 ? selectedCompounds : compRows;
+  const activeCompounds = Array.from(
+    new Map(
+      activeCompoundsRaw.map((c: any) => [
+        String(c.compoundName || c.id || "")
+          .trim()
+          .toLowerCase(),
+        c,
+      ])
+    ).values()
+  );
+  const compoundNames = Array.from(
+    new Set(activeCompounds.map((c: any) => c.compoundName).filter(Boolean))
+  );
 
   // Deduplicate screening results by compound name/id
   const screenByCompound = new Map<string, any>();
@@ -501,8 +522,18 @@ export async function getSection3CompiledContext(
     }
   }
 
-  // 4. Molecular Docking
-  const targetNames = targetRows
+  // 4. Molecular Docking — unique targets by PDB / name
+  const uniqueTargets = Array.from(
+    new Map(
+      targetRows.map((t: any) => [
+        String(t.pdbId || t.targetName || t.id || "")
+          .trim()
+          .toUpperCase(),
+        t,
+      ])
+    ).values()
+  );
+  const targetNames = uniqueTargets
     .map((t: any) => `${t.targetName}${t.pdbId ? ` (PDB: ${t.pdbId})` : ""}`)
     .filter(Boolean);
 
@@ -566,7 +597,7 @@ export async function getSection3CompiledContext(
     screeningLines,
     ``,
     `5. Molecular Docking Results (AutoDock Vina)`,
-    `Completed ${uniqueRuns.length} molecular docking run(s) across ${targetRows.length} target receptor(s): ${targetNames.join("; ") || "None"}.`,
+    `Completed ${uniqueRuns.length} molecular docking run(s) across ${uniqueTargets.length} target receptor(s): ${targetNames.join("; ") || "None"}.`,
     bestComplex
       ? `Best Predicted Binding Affinity: ${bestComplex.affinityFormatted} for ${bestComplex.ligandName} bound to ${bestComplex.targetProtein} (PDB: ${bestComplex.pdbId}).`
       : `Best Predicted Binding Affinity: Pending completed docking runs.`,
@@ -612,7 +643,7 @@ export async function getSection3CompiledContext(
       compoundSummaries,
     },
     docking: {
-      targetsCount: targetRows.length,
+      targetsCount: uniqueTargets.length,
       targetNames,
       completedRunsCount: uniqueRuns.length,
       bestComplex,

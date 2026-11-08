@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Beaker,
   Search,
@@ -13,14 +14,13 @@ import {
   Info,
   Clock,
   Scale,
-  ShieldCheck,
   ShieldAlert,
   ExternalLink,
   BookOpen,
   X,
   Calculator,
-  Flame,
   Thermometer,
+  ChevronRight,
 } from "lucide-react";
 import {
   EXTRACTION_METHODS,
@@ -31,6 +31,9 @@ import {
   SOLVENT_RATIO_OPTIONS,
   SOLVENT_RATIO_PRESETS,
   SolventRatioPreset,
+  EXTRACTION_DURATION_PRESETS,
+  matchExtractionDurationPreset,
+  formatMethodDefaultDuration,
   parseSolventRatio,
   isSolventConcentrationMeaningful,
   checkSolventCompatibility,
@@ -104,9 +107,14 @@ export default function ExtractionStep3Section({
   const [isConcDropdownOpen, setIsConcDropdownOpen] = useState(false);
   const concDropdownRef = useRef<HTMLDivElement>(null);
 
+  // Duration Dropdown & Custom State
+  const [isDurationDropdownOpen, setIsDurationDropdownOpen] = useState(false);
+  const durationDropdownRef = useRef<HTMLDivElement>(null);
+
   // Literature Abstract Modal
   const [selectedLitModal, setSelectedLitModal] = useState<LiteratureItem | null>(null);
   const [litSearch, setLitSearch] = useState("");
+  const [litVisibleCount, setLitVisibleCount] = useState(6);
 
   // Overwrite Confirmation Modal
   const [pendingMethod, setPendingMethod] = useState<ExtractionMethodPreset | null>(null);
@@ -141,6 +149,9 @@ export default function ExtractionStep3Section({
       }
       if (concDropdownRef.current && !concDropdownRef.current.contains(event.target as Node)) {
         setIsConcDropdownOpen(false);
+      }
+      if (durationDropdownRef.current && !durationDropdownRef.current.contains(event.target as Node)) {
+        setIsDurationDropdownOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -259,6 +270,18 @@ export default function ExtractionStep3Section({
     if (raw.toLowerCase().startsWith("custom")) return true;
     return currentRatioPreset === null;
   }, [extraction.solventRatio, currentRatioPreset]);
+
+  const currentDurationPreset = useMemo(
+    () => matchExtractionDurationPreset(extraction.extractionDuration || ""),
+    [extraction.extractionDuration]
+  );
+
+  const isCustomDuration = useMemo(() => {
+    const raw = (extraction.extractionDuration || "").trim();
+    if (!raw) return false;
+    if (raw.toLowerCase().startsWith("custom")) return true;
+    return currentDurationPreset === null;
+  }, [extraction.extractionDuration, currentDurationPreset]);
 
   // Automatic Crude Extract Yield Calculation
   const yieldResult = useMemo(() => {
@@ -379,7 +402,7 @@ export default function ExtractionStep3Section({
       solventConcentration: preset.defaultConcentration,
       solventRatio: preset.defaultRatio,
       extractionTemperature: `${preset.defaultTemperature}°C`,
-      extractionDuration: `${preset.defaultDuration} ${preset.durationUnit}`,
+      extractionDuration: formatMethodDefaultDuration(preset),
     };
 
     setModifiedFields({
@@ -426,69 +449,73 @@ export default function ExtractionStep3Section({
     );
   }, [scientificLiterature, litSearch]);
 
+  useEffect(() => {
+    setLitVisibleCount(6);
+  }, [litSearch]);
+
+  const visibleLitList = filteredLitList.slice(0, litVisibleCount);
+
   const isConcentrationVisible = isSolventConcentrationMeaningful(extraction.extractionSolvent);
 
   return (
     <div className="space-y-4">
-      {/* ===================================================================== */}
-      {/* 1. MINIMAL PAGE HEADER (Step 03 of 06, Saved Status, Progress Bar)    */}
-      {/* ===================================================================== */}
-      <div className="bg-white rounded-xl border border-slate-200 px-4 py-3 shadow-2xs">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700 shrink-0">
-              <Beaker className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 text-[11px] font-semibold tracking-wider uppercase text-slate-400">
-                <span>Section 1</span>
-                <span>/</span>
-                <span>Step 03 of 06</span>
-              </div>
-              <h1 className="text-sm sm:text-base font-bold text-slate-900 leading-tight">
-                Extraction Methodology &amp; Yield Validation
-              </h1>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3 self-end sm:self-center">
-            {/* 6-segment compact progress bar */}
-            <div className="flex items-center gap-1" title="Step 3 of 6: Extraction">
-              <div className="w-6 h-1.5 rounded-full bg-emerald-600" />
-              <div className="w-6 h-1.5 rounded-full bg-emerald-600" />
-              <div className="w-6 h-1.5 rounded-full bg-emerald-600 ring-2 ring-emerald-200" />
-              <div className="w-6 h-1.5 rounded-full bg-slate-200" />
-              <div className="w-6 h-1.5 rounded-full bg-slate-200" />
-              <div className="w-6 h-1.5 rounded-full bg-slate-200" />
-            </div>
-
-            {/* Saved / Unsaved indicator */}
-            <div className="flex items-center gap-1 text-[11px] font-medium">
-              {isSaving ? (
-                <span className="text-emerald-600 flex items-center gap-1 font-semibold">
-                  <span className="w-2 h-2 rounded-full bg-emerald-600 animate-ping inline-block" />
-                  Saving...
-                </span>
-              ) : isDirty ? (
-                <span className="text-amber-600 flex items-center gap-1 font-semibold" title="Unsaved changes in extraction parameters">
-                  <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />
-                  Unsaved changes
-                </span>
-              ) : (
-                <span className="text-emerald-700 flex items-center gap-1" title="Saved to project dossier">
-                  <Check className="w-3.5 h-3.5 text-emerald-600 stroke-[2.5]" />
-                  Saved
-                </span>
-              )}
-            </div>
-          </div>
+      {/* Compact status strip — step chrome lives in parent workspace header */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.28 }}
+        className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[#d7e4dc]/90 bg-white px-4 py-2.5 shadow-[0_1px_2px_rgba(15,44,32,0.04)]"
+      >
+        <div className="flex items-center gap-2 text-[11px] text-[#6d7f76]">
+          <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-800">
+            <Beaker className="h-3.5 w-3.5" />
+          </span>
+          <span className="font-semibold text-[#0f2c20]">Extraction Methodology &amp; Yield</span>
+          {currentMethodPreset && (
+            <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-900">
+              {currentMethodPreset.typicalYieldRange} typical
+            </span>
+          )}
         </div>
-      </div>
+        <div className="flex items-center gap-2 text-[11px] font-semibold">
+          {isSaving ? (
+            <span className="inline-flex items-center gap-1 text-amber-700">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
+              Saving...
+            </span>
+          ) : isDirty ? (
+            <span className="inline-flex items-center gap-1 text-amber-700">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+              Unsaved
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-emerald-800">
+              <Check className="h-3.5 w-3.5" />
+              Saved
+            </span>
+          )}
+          {currentMethodPreset && (
+            <button
+              type="button"
+              onClick={handleRestorePresetDefaults}
+              className="inline-flex items-center gap-1 rounded-xl border border-[#d7e4dc] bg-[#f7faf8] px-2.5 py-1 text-[11px] font-semibold text-[#52645d] hover:border-emerald-400 hover:bg-emerald-50"
+            >
+              <RotateCcw className="h-3 w-3" />
+              Reset Defaults
+            </button>
+          )}
+        </div>
+      </motion.div>
 
       {/* ===================================================================== */}
       {/* 2. EXTRACTION METHOD SELECTOR (SEARCHABLE DROPDOWN & PRESET ADVISORY)  */}
       {/* ===================================================================== */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-2xs space-y-3">
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.04 }}
+        className="space-y-3 rounded-2xl border border-[#d7e4dc]/90 bg-white p-4 shadow-[0_1px_2px_rgba(15,44,32,0.04)] sm:p-5"
+      >
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <label className="block font-bold text-slate-800 text-xs sm:text-sm">
@@ -500,22 +527,10 @@ export default function ExtractionStep3Section({
           </div>
 
           {currentMethodPreset && (
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11px] font-medium">
-                <Sparkles className="w-3 h-3 text-emerald-600" />
-                {currentMethodPreset.typicalYieldRange} typical yield
-              </span>
-
-              <button
-                type="button"
-                onClick={handleRestorePresetDefaults}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-100 text-[11px] font-medium cursor-pointer"
-                title="Reset parameters to catalog baseline"
-              >
-                <RotateCcw className="w-3 h-3 text-slate-400" />
-                <span>Reset Defaults</span>
-              </button>
-            </div>
+            <span className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-800">
+              <Sparkles className="h-3 w-3 text-emerald-600" />
+              {currentMethodPreset.typicalYieldRange} typical yield
+            </span>
           )}
         </div>
 
@@ -570,7 +585,7 @@ export default function ExtractionStep3Section({
                             {preset.name}
                           </span>
                           <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 font-medium">
-                            {preset.defaultTemperature}°C • {preset.defaultDuration} {preset.durationUnit}
+                            {preset.defaultTemperature}°C • {formatMethodDefaultDuration(preset)}
                           </span>
                         </div>
                         <p className="text-[11px] text-slate-500 line-clamp-1">{preset.description}</p>
@@ -587,29 +602,34 @@ export default function ExtractionStep3Section({
 
         {/* Method Principle & Scientific Advisory Note */}
         {currentMethodPreset && (
-          <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 text-xs space-y-1">
-            <div className="flex items-center gap-1.5 font-semibold text-slate-800 text-[11px]">
-              <Info className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Scientific Mechanism:</span>
+          <div className="space-y-1 rounded-xl border border-[#e8f0eb] bg-[linear-gradient(145deg,#f4f8f5_0%,#ffffff_55%)] p-3 text-xs text-[#52645d]">
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[#0f2c20]">
+              <Info className="h-3.5 w-3.5 text-emerald-700" />
+              <span>Scientific Mechanism</span>
             </div>
-            <p className="text-[11px] text-slate-600 leading-relaxed">{currentMethodPreset.principles}</p>
-            <div className="pt-1 text-[10px] text-slate-400 italic">
-              * Note: Operating parameters shown below are literature-derived suggestions and must be verified experimentally in the laboratory.
-            </div>
+            <p className="text-[11px] leading-relaxed text-[#52645d]">{currentMethodPreset.principles}</p>
+            <p className="pt-1 text-[10px] italic text-[#8aa094]">
+              Operating parameters below are literature-derived suggestions and must be verified experimentally.
+            </p>
           </div>
         )}
-      </div>
+      </motion.div>
 
       {/* ===================================================================== */}
       {/* 3. TWO-COLUMN PARAMETER FIELDS (SOLVENT, RATIO, CONDITIONS, YIELD)    */}
       {/* ===================================================================== */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* COLUMN 1: SOLVENT SYSTEM & MATERIAL RATIO */}
-        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-2xs space-y-3.5">
-          <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
-            <FlaskConical className="w-4 h-4 text-emerald-600" />
-            <h2 className="text-xs sm:text-sm font-bold text-slate-800">
-              Menstruum &amp; Solvent-to-Material Ratio
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.08 }}
+          className="space-y-3.5 rounded-2xl border border-[#d7e4dc]/90 bg-white p-4 shadow-[0_1px_2px_rgba(15,44,32,0.04)] sm:p-5"
+        >
+          <div className="flex items-center gap-2 border-b border-[#e8f0eb] pb-2">
+            <FlaskConical className="h-4 w-4 text-emerald-700" />
+            <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#52645d]">
+              Menstruum &amp; Solvent Ratio
             </h2>
           </div>
 
@@ -921,14 +941,19 @@ export default function ExtractionStep3Section({
               </span>
             </div>
           </div>
-        </div>
+        </motion.div>
 
         {/* COLUMN 2: OPERATING CONDITIONS & YIELD VALIDATION */}
-        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-2xs space-y-3.5">
-          <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
-            <Scale className="w-4 h-4 text-emerald-600" />
-            <h2 className="text-xs sm:text-sm font-bold text-slate-800">
-              Operating Parameters &amp; Yield Calculations
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.12 }}
+          className="space-y-3.5 rounded-2xl border border-[#d7e4dc]/90 bg-white p-4 shadow-[0_1px_2px_rgba(15,44,32,0.04)] sm:p-5"
+        >
+          <div className="flex items-center gap-2 border-b border-[#e8f0eb] pb-2">
+            <Scale className="h-4 w-4 text-teal-700" />
+            <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#52645d]">
+              Operating Parameters &amp; Yield
             </h2>
           </div>
 
@@ -955,16 +980,108 @@ export default function ExtractionStep3Section({
               <label className="block font-semibold text-slate-700 text-xs">
                 Extraction Duration <span className="text-rose-500">*</span>
               </label>
-              <div className="relative">
-                <Clock className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
-                <input
-                  type="text"
-                  value={extraction.extractionDuration}
-                  onChange={(e) => handleFieldChange("extractionDuration", e.target.value)}
-                  placeholder="e.g. 48 hours"
-                  className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-slate-300 text-xs font-mono focus:outline-none focus:border-emerald-500"
-                />
+              <div className="relative" ref={durationDropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setIsDurationDropdownOpen(!isDurationDropdownOpen)}
+                  className="w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-slate-800 cursor-pointer shadow-2xs"
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    <Clock className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                    <span className="truncate font-mono">
+                      {currentDurationPreset
+                        ? currentDurationPreset.label
+                        : extraction.extractionDuration
+                          ? isCustomDuration
+                            ? `Custom (${extraction.extractionDuration})`
+                            : extraction.extractionDuration
+                          : "Select duration"}
+                    </span>
+                  </span>
+                  <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                </button>
+
+                {isDurationDropdownOpen && (
+                  <div className="absolute top-full left-0 right-0 z-30 mt-1 max-h-64 overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-xl">
+                    {EXTRACTION_DURATION_PRESETS.map((preset) => {
+                      const isSelected = currentDurationPreset?.id === preset.id;
+                      return (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          onClick={() => {
+                            handleFieldChange("extractionDuration", preset.value);
+                            setIsDurationDropdownOpen(false);
+                          }}
+                          className={`flex w-full cursor-pointer items-center justify-between px-3 py-1.5 text-left text-xs transition-colors ${
+                            isSelected
+                              ? "bg-emerald-50 font-bold text-emerald-800"
+                              : "text-slate-700 hover:bg-slate-50"
+                          }`}
+                        >
+                          <div>
+                            <span className="block font-semibold font-mono">{preset.label}</span>
+                            <span className="block text-[10px] font-normal text-slate-400">
+                              {preset.description}
+                            </span>
+                          </div>
+                          {isSelected && (
+                            <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                          )}
+                        </button>
+                      );
+                    })}
+
+                    <div className="my-1 border-t border-slate-100" />
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleFieldChange(
+                          "extractionDuration",
+                          isCustomDuration && extraction.extractionDuration
+                            ? extraction.extractionDuration
+                            : "Custom"
+                        );
+                        setIsDurationDropdownOpen(false);
+                      }}
+                      className={`flex w-full cursor-pointer items-center justify-between px-3 py-1.5 text-left text-xs transition-colors ${
+                        isCustomDuration
+                          ? "bg-emerald-50 font-bold text-emerald-800"
+                          : "text-slate-700 hover:bg-slate-50"
+                      }`}
+                    >
+                      <div>
+                        <span className="block font-semibold">Custom Duration</span>
+                        <span className="block text-[10px] font-normal text-slate-400">
+                          Specify experimental contact time
+                        </span>
+                      </div>
+                      {isCustomDuration && (
+                        <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                      )}
+                    </button>
+                  </div>
+                )}
               </div>
+
+              {isCustomDuration && (
+                <div className="mt-1 flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={
+                      extraction.extractionDuration === "Custom"
+                        ? ""
+                        : extraction.extractionDuration ?? ""
+                    }
+                    onChange={(e) => handleFieldChange("extractionDuration", e.target.value)}
+                    placeholder="e.g. 90 minutes or 3 hours"
+                    className="w-full rounded-lg border border-slate-300 px-2.5 py-1 font-mono text-xs focus:border-emerald-500 focus:outline-none"
+                  />
+                  <span className="shrink-0 font-mono text-[10px] text-slate-400">time</span>
+                </div>
+              )}
+
               <span className="text-[10px] text-slate-400">Total contact / cavitation duration</span>
             </div>
           </div>
@@ -1061,109 +1178,122 @@ export default function ExtractionStep3Section({
               placeholder="e.g. AKP-EXT-001"
               className="w-full px-3 py-1.5 rounded-lg border border-slate-300 font-mono text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-500"
             />
-            <span className="text-[10px] text-slate-400">
+            <span className="text-[10px] text-[#8aa094]">
               Unique standardized extract accession ID carried forward to materials compounding.
             </span>
           </div>
-        </div>
+        </motion.div>
       </div>
 
       {/* ===================================================================== */}
       {/* 4. SUPPORTING SCIENTIFIC REFERENCES (VISIBLE DIRECTLY ON PAGE)         */}
       {/* ===================================================================== */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-2xs space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.16 }}
+        className="space-y-3 rounded-2xl border border-[#d7e4dc]/90 bg-white p-4 shadow-[0_1px_2px_rgba(15,44,32,0.04)] sm:p-5"
+      >
+        <div className="flex flex-col gap-2 border-b border-[#e8f0eb] pb-2.5 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="flex items-center gap-2">
-              <BookOpen className="w-4 h-4 text-emerald-600" />
-              <h2 className="text-xs sm:text-sm font-bold text-slate-800">
-                Supporting Extraction Literature &amp; Pharmacopeial References
+              <BookOpen className="h-4 w-4 text-emerald-700" />
+              <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#52645d]">
+                Supporting Extraction Literature
               </h2>
             </div>
-            <p className="text-[11px] text-slate-500 mt-0.5">
-              Evidence citations validating solvent choice, temperature thresholds, and marker yield.
+            <p className="mt-0.5 text-[11px] text-[#8aa094]">
+              {scientificLiterature.length} references · showing {visibleLitList.length} of{" "}
+              {filteredLitList.length}
             </p>
           </div>
 
           <div className="relative sm:w-64">
-            <Search className="w-3 h-3 text-slate-400 absolute left-2.5 top-2.5" />
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#8aa094]" />
             <input
               type="text"
               value={litSearch}
               onChange={(e) => setLitSearch(e.target.value)}
               placeholder="Filter references..."
-              className="w-full pl-7 pr-2.5 py-1 text-xs rounded-lg border border-slate-200 focus:outline-none focus:border-emerald-500"
+              className="h-9 w-full rounded-xl border border-[#d5e3da] bg-[#fbfdfb] pl-8 pr-2.5 text-xs outline-none focus:border-emerald-600"
             />
           </div>
         </div>
 
-        {filteredLitList.length > 0 ? (
-          <div className="divide-y divide-slate-100 max-h-60 overflow-y-auto">
-            {filteredLitList.map((lit) => {
-              return (
-                <div
-                  key={lit.id}
-                  className="py-2.5 flex items-start justify-between gap-3 hover:bg-slate-50/70 rounded-lg px-2 transition-colors"
-                >
-                  <div className="space-y-0.5 min-w-0">
-                    <p className="text-xs font-semibold text-slate-800 line-clamp-1 leading-snug">
-                      {lit.title}
-                    </p>
-                    <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-500">
-                      <span>{lit.authors || "Botanical Research Group"}</span>
-                      <span>•</span>
-                      <span>{lit.journalOrPublisher || "Scientific Source"}</span>
-                      {lit.publicationYear && (
-                        <>
-                          <span>•</span>
-                          <span>{lit.publicationYear}</span>
-                        </>
-                      )}
-                      {lit.doi && (
-                        <a
-                          href={`https://doi.org/${lit.doi}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-emerald-700 hover:underline inline-flex items-center gap-0.5"
-                        >
-                          <span>DOI</span>
-                          <ExternalLink className="w-2.5 h-2.5" />
-                        </a>
-                      )}
-                    </div>
+        {visibleLitList.length > 0 ? (
+          <div className="space-y-2">
+            {visibleLitList.map((lit) => (
+              <div
+                key={lit.id}
+                className="flex items-start justify-between gap-3 rounded-xl border border-[#e8f0eb] bg-[linear-gradient(180deg,#ffffff_0%,#fbfdfb_100%)] p-3 transition hover:border-emerald-300"
+              >
+                <div className="min-w-0 space-y-0.5">
+                  <p className="line-clamp-2 text-xs font-semibold leading-snug text-[#0f2c20]">
+                    {lit.title}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2 text-[10px] text-[#8aa094]">
+                    <span>{lit.authors || "Botanical Research Group"}</span>
+                    <span>·</span>
+                    <span>{lit.journalOrPublisher || "Scientific Source"}</span>
+                    {lit.publicationYear && (
+                      <>
+                        <span>·</span>
+                        <span>{lit.publicationYear}</span>
+                      </>
+                    )}
+                    {lit.doi && (
+                      <a
+                        href={`https://doi.org/${lit.doi}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-0.5 font-semibold text-emerald-800 hover:underline"
+                      >
+                        DOI
+                        <ExternalLink className="h-2.5 w-2.5" />
+                      </a>
+                    )}
                   </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setSelectedLitModal(lit)}
-                    className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 hover:underline shrink-0 cursor-pointer"
-                  >
-                    View Details →
-                  </button>
                 </div>
-              );
-            })}
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedLitModal(lit)}
+                  className="inline-flex shrink-0 items-center gap-0.5 text-[11px] font-semibold text-emerald-800 hover:underline"
+                >
+                  Details
+                  <ChevronRight className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+            {litVisibleCount < filteredLitList.length && (
+              <button
+                type="button"
+                onClick={() => setLitVisibleCount((n) => n + 6)}
+                className="w-full rounded-xl border border-[#d7e4dc] bg-[#f7faf8] py-2.5 text-xs font-semibold text-[#0f2c20] hover:border-emerald-400 hover:bg-emerald-50"
+              >
+                Show more ({filteredLitList.length - litVisibleCount} remaining)
+              </button>
+            )}
           </div>
         ) : (
-          <div className="p-4 text-center text-xs text-slate-400 bg-slate-50 rounded-lg">
+          <div className="rounded-xl border border-dashed border-[#d7e4dc] bg-[#f7faf8] p-6 text-center text-xs text-[#8aa094]">
             No scientific references found matching &ldquo;{litSearch}&rdquo;.
           </div>
         )}
 
-        {/* Free-text extraction references summary */}
-        <div className="pt-2 border-t border-slate-100">
-          <label className="block font-semibold text-slate-700 text-xs mb-1">
+        <div className="border-t border-[#e8f0eb] pt-3">
+          <label className="mb-1.5 block text-[11px] font-semibold text-[#52645d]">
             Compendial Reference Summary Note
           </label>
           <input
             type="text"
-            value={extraction.extractionReferences}
+            value={extraction.extractionReferences ?? ""}
             onChange={(e) => handleFieldChange("extractionReferences", e.target.value)}
             placeholder="e.g. Philippine Herbal Pharmacopeia (2024); WHO Guidelines on Good Agricultural and Collection Practices (GACP)."
-            className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs text-slate-700 focus:outline-none focus:border-emerald-500"
+            className="h-10 w-full rounded-xl border border-[#d5e3da] bg-[#fbfdfb] px-3 text-xs text-[#0f2c20] outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15"
           />
         </div>
-      </div>
+      </motion.div>
 
       {/* ===================================================================== */}
       {/* 5. OVERWRITE CONFIRMATION MODAL                                       */}
@@ -1196,7 +1326,7 @@ export default function ExtractionStep3Section({
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Duration:</span>
-                <span className="font-semibold text-slate-800">{pendingMethod.defaultDuration} {pendingMethod.durationUnit}</span>
+                <span className="font-semibold text-slate-800">{formatMethodDefaultDuration(pendingMethod)}</span>
               </div>
             </div>
 

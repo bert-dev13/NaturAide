@@ -2,16 +2,18 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Activity,
   Layers,
   CheckCircle2,
   AlertCircle,
   FlaskConical,
-  ChevronDown,
-  ChevronUp,
   RotateCcw,
   Sparkles,
+  Leaf,
+  Beaker,
+  ChevronRight,
 } from "lucide-react";
 import {
   BatchQcMeasurement,
@@ -262,7 +264,7 @@ export default function BatchAnalysisStep6Section({
       }
     });
 
-    return activeComponents.map((c, idx) => {
+    const mapped = activeComponents.map((c, idx) => {
       const name = c.componentName || c.ingredientName || c.name || `Ingredient ${idx + 1}`;
       const role = c.roleOrFunction || c.roleInFormulation || c.role || "Compounding Excipient";
       const type = c.componentType || c.type || "EXCIPIENT";
@@ -291,6 +293,9 @@ export default function BatchAnalysisStep6Section({
         status: "Planned",
       };
     });
+
+    // Drop empty / duplicate zero rows so the recipe stays readable
+    return mapped.filter((ing) => ing.targetPercentage > 0.001 || ing.targetMassGrams > 0.001);
   }, [activeComponents, currentActivePct, batchSizeGrams]);
 
   // Mass balance validation sums
@@ -343,7 +348,6 @@ export default function BatchAnalysisStep6Section({
   const [isSampleMode, setIsSampleMode] = useState<boolean>(false);
   const [sampleNotification, setSampleNotification] = useState<string | null>(null);
 
-  const [isAddingLabResults, setIsAddingLabResults] = useState<boolean>(false);
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [analysisResult, setAnalysisResult] = useState<string | null>(null);
   const [analysisIsSimulated, setAnalysisIsSimulated] = useState<boolean>(false);
@@ -506,394 +510,418 @@ export default function BatchAnalysisStep6Section({
     }
   };
 
+  const easeOut = [0.22, 1, 0.36, 1] as const;
+
   return (
-    <div className="space-y-3.5">
-      {/* ===================================================================== */}
-      {/* 1. TOP HEADER & SAVE STATUS                                           */}
-      {/* ===================================================================== */}
-      <div className="bg-white rounded-xl border border-slate-200 px-4 py-2.5 shadow-2xs">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-xs">
-            <span className="font-semibold text-slate-500 uppercase tracking-wider text-[11px]">
-              Step 06
-            </span>
-            <span className="text-slate-300">•</span>
-            <span className="font-bold text-slate-900 flex items-center gap-1.5">
-              <Activity className="w-4 h-4 text-emerald-600" />
-              Batch Analysis
-            </span>
-          </div>
-
-          <div className="text-[11px] font-medium text-slate-500">
-            {saveStatus === "saving" ? (
-              <span className="text-amber-700 flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                Saving...
-              </span>
-            ) : saveStatus === "saved" ? (
-              <span className="text-emerald-700 flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                Saved
-              </span>
-            ) : (
-              <span className="text-slate-400">Draft</span>
-            )}
-          </div>
+    <div className="space-y-4">
+      {/* Compact status strip */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.28, ease: easeOut }}
+        className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[#d7e4dc]/90 bg-white px-4 py-2.5 shadow-[0_1px_2px_rgba(15,44,32,0.04)]"
+      >
+        <div className="flex items-center gap-2 text-[11px] text-[#6d7f76]">
+          <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-800">
+            <Activity className="h-3.5 w-3.5" />
+          </span>
+          <span className="font-semibold text-[#0f2c20]">Batch Analysis</span>
+          <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-mono text-[10px] font-bold text-emerald-900">
+            {currentActivePct}% · {batchSizeGrams} g
+          </span>
         </div>
-      </div>
-
-      {/* ===================================================================== */}
-      {/* 2. BATCH SUMMARY (ZERO MISMATCH, BATCH SWITCHER)                      */}
-      {/* ===================================================================== */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-2xs">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h1 className="text-base font-bold text-slate-900">
-              {currentActivePct}% {plantName} {displayDosageForm} · {batchSizeGrams} g
-            </h1>
-            <div className="flex items-center gap-2 text-xs text-slate-500 font-medium mt-1 flex-wrap">
-              <span>Batch ID:</span>
-              {batches.length > 1 ? (
-                <select
-                  value={selectedBatchId || ""}
-                  onChange={(e) => setSelectedBatchId(Number(e.target.value))}
-                  className="px-2 py-0.5 rounded border border-slate-300 text-xs font-mono font-semibold text-slate-800 bg-white cursor-pointer focus:ring-1 focus:ring-emerald-500 focus:outline-hidden"
-                >
-                  {batches.map((b) => {
-                    const conc = b.activeConcentrationPercent || b.batchNumber.match(/(\d+)PCT/i)?.[1] || "5";
-                    return (
-                      <option key={b.id} value={b.id}>
-                        {b.batchNumber} ({conc}% active · {b.batchSizeGrams} g)
-                      </option>
-                    );
-                  })}
-                </select>
-              ) : (
-                <span className="font-mono font-semibold text-slate-800">{batchNumber}</span>
-              )}
-              <span className="text-slate-300">•</span>
-              <span>Version {formVersion}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Error notification banner */}
-        {errorMessage && (
-          <div className="mt-3 p-2.5 rounded-lg text-xs flex items-center justify-between bg-rose-50 text-rose-900 border border-rose-200">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-              <span>{errorMessage}</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setErrorMessage(null)}
-              className="text-slate-400 hover:text-slate-600 text-xs ml-2 cursor-pointer"
-            >
-              ×
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* ===================================================================== */}
-      {/* 3. AUTOMATICALLY CALCULATED BATCH RECIPE                              */}
-      {/* ===================================================================== */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-2xs space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div>
-            <h2 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
-              <Layers className="w-4 h-4 text-emerald-600" />
-              Batch Recipe
-            </h2>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Exact ingredient quantities automatically calculated for {batchSizeGrams} g batch.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-              Mass Balance: 100.0% Verified
+        <div className="text-[11px] font-semibold">
+          {saveStatus === "saving" || isSaving ? (
+            <span className="inline-flex items-center gap-1 text-amber-700">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
+              Saving...
             </span>
-          </div>
-        </div>
-
-        {normalizedIngredients.length > 0 ? (
-          <div className="overflow-x-auto border border-slate-200 rounded-lg">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 text-slate-600 border-b border-slate-200 text-[10px] uppercase font-semibold">
-                <tr>
-                  <th className="py-2.5 px-3">Ingredient</th>
-                  <th className="py-2.5 px-3 text-right">Required Amount</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 font-mono">
-                {normalizedIngredients.map((ing) => (
-                  <tr key={ing.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="py-2.5 px-3 font-sans">
-                      <span className="font-semibold text-slate-800">{ing.name}</span>
-                      <span className="text-slate-500 text-[11px] font-normal ml-2">
-                        ({ing.targetPercentage.toFixed(2)}% · {ing.role})
-                      </span>
-                    </td>
-                    <td className="py-2.5 px-3 text-right text-emerald-700 font-bold">
-                      {ing.targetMassGrams.toFixed(2)} g
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot className="bg-slate-50/70 border-t border-slate-200 font-mono text-xs font-bold text-slate-900">
-                <tr>
-                  <td className="py-2.5 px-3 font-sans">Total Batch Mass</td>
-                  <td className="py-2.5 px-3 text-right text-slate-900">
-                    {totalRecipeMass.toFixed(2)} g (100.0%)
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        ) : (
-          <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-            <span>
-              No formulation ingredients found in Step 5. Please complete and save Step 5 Formulation Builder first.
+          ) : saveStatus === "saved" ? (
+            <span className="inline-flex items-center gap-1 text-emerald-800">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Saved
             </span>
-          </div>
-        )}
-      </div>
-
-      {/* ===================================================================== */}
-      {/* 4. MAIN ACTION: ANALYZE MY BATCH & OPTIONAL LAB RESULTS               */}
-      {/* ===================================================================== */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-2xs space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
-              <FlaskConical className="w-4 h-4 text-emerald-600" />
-              Analyze My Batch
-            </h2>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Validate formulation composition, mass balance, and assess laboratory testing readiness.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleAnalyzeMyBatch}
-              disabled={isAnalyzing || normalizedIngredients.length === 0}
-              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-2xs transition-all shrink-0 cursor-pointer disabled:opacity-50"
-            >
-              <FlaskConical className={`w-4 h-4 ${isAnalyzing ? "animate-spin text-emerald-400" : ""}`} />
-              <span>{isAnalyzing ? "Analyzing..." : "Analyze My Batch"}</span>
-            </button>
-          </div>
+          ) : (
+            <span className="text-[#8aa094]">Draft</span>
+          )}
         </div>
+      </motion.div>
 
-        {/* AI ANALYSIS RESULT DISPLAY (MAX 3 SENTENCES + METRICS) */}
-        {analysisResult && (
-          <div className="pt-3 border-t border-slate-100 space-y-2.5">
-            <div
-              className={`p-3.5 rounded-lg border text-xs space-y-2.5 ${
-                analysisIsSimulated
-                  ? "bg-amber-50/70 border-amber-200 text-amber-950"
-                  : "bg-slate-50 border-slate-200 text-slate-700"
-              }`}
-            >
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <span
-                  className={`font-bold text-xs flex items-center gap-1.5 ${
-                    analysisIsSimulated ? "text-amber-900" : "text-slate-800"
-                  }`}
-                >
-                  {analysisIsSimulated ? (
-                    <>
-                      <FlaskConical className="w-4 h-4 text-amber-600" />
-                      Sample Analysis — For Demonstration Only
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                      AI Batch Analysis
-                    </>
-                  )}
-                </span>
-                <span
-                  className={`text-[11px] font-mono px-2 py-0.5 rounded ${
-                    analysisIsSimulated
-                      ? "bg-amber-100 text-amber-800 border border-amber-200"
-                      : "text-slate-500 bg-white border border-slate-200"
-                  }`}
-                >
-                  {analysisIsSimulated
-                    ? `Simulated Trial Data (${activeTestedCount}/${totalCount})`
-                    : activeTestedCount > 0
-                    ? `${activeTestedCount} of ${totalCount} Empirical Tests Recorded`
-                    : "0 Physical Tests Recorded"}
-                </span>
+      {/* Context + how-to */}
+      <motion.section
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, ease: easeOut }}
+        className="relative overflow-hidden rounded-2xl border border-[#d7e4dc]/90 bg-[linear-gradient(165deg,#ffffff_0%,#f8fbf9_100%)] p-4 shadow-[0_1px_2px_rgba(15,44,32,0.04)]"
+      >
+        <div className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-emerald-600 via-teal-400 to-cyan-300" />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-start gap-2.5">
+            <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-800">
+              <Leaf className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold text-[#0f2c20]">
+                {currentActivePct}% {plantName} {displayDosageForm}
+              </h2>
+              <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-[#8aa094]">
+                {batches.length > 1 ? (
+                  <select
+                    value={selectedBatchId || ""}
+                    onChange={(e) => setSelectedBatchId(Number(e.target.value))}
+                    className="rounded-md border border-[#d5e3da] bg-white px-1.5 py-0.5 font-mono text-[11px] font-semibold text-[#0f2c20] outline-none focus:border-emerald-600"
+                  >
+                    {batches.map((b) => {
+                      const conc =
+                        b.activeConcentrationPercent ||
+                        b.batchNumber.match(/(\d+)PCT/i)?.[1] ||
+                        "5";
+                      return (
+                        <option key={b.id} value={b.id}>
+                          {b.batchNumber} ({conc}% · {b.batchSizeGrams} g)
+                        </option>
+                      );
+                    })}
+                  </select>
+                ) : (
+                  <span className="font-mono font-semibold text-[#52645d]">{batchNumber}</span>
+                )}
+                <span className="text-[#d7e4dc]">·</span>
+                <span>{formVersion}</span>
+                <span className="text-[#d7e4dc]">·</span>
+                <span>{batchSizeGrams} g master batch</span>
               </div>
-
-              <p className="leading-relaxed font-sans text-xs">
-                {analysisResult}
-              </p>
-
-              {/* Formulation & Mass Balance Details */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono text-[11px] p-2.5 rounded bg-white border border-slate-200">
-                <div>
-                  <span className="text-slate-400 block text-[10px]">Batch Size</span>
-                  <span className="font-semibold text-slate-800">{batchSizeGrams} g</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 block text-[10px]">Active Constituent</span>
-                  <span className="font-semibold text-emerald-700">{currentActivePct.toFixed(1)}% w/w</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 block text-[10px]">Active Mass</span>
-                  <span className="font-semibold text-slate-800">{activeMass.toFixed(2)} g</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 block text-[10px]">Mass Balance</span>
-                  <span className="font-semibold text-emerald-700">100.0%</span>
-                </div>
-              </div>
-
-              <p className="text-[11px] text-slate-400 italic">
-                {analysisIsSimulated
-                  ? "Demonstration Scenario: These figures are illustrative simulations for workflow preview and cannot be used for official pharmaceutical release or regulatory dossiers."
-                  : "Scientific Safeguard: AI interpretation is based on calculated formulation composition. Empirical testing remains pending prior to physical release."}
-              </p>
             </div>
           </div>
-        )}
-
-        {/* ===================================================================== */}
-        {/* 5. OPTIONAL LABORATORY RESULTS ENTRY & GENERATE SAMPLE RESULTS        */}
-        {/* ===================================================================== */}
-        <div className="pt-2 border-t border-slate-100 space-y-2.5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs text-slate-600 font-medium">
-                {isSampleMode
-                  ? `Sample Data Active (${sampleTestedCount} of ${totalCount} simulated)`
-                  : `Optional Physical Laboratory Testing (${realTestedCount} of ${totalCount} entered)`}
-              </span>
-
-              {isSampleMode && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-300">
-                  <FlaskConical className="w-3 h-3 text-amber-600" />
-                  Sample Data (Simulated)
-                </span>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2">
-              {/* Generate / Clear Sample Results buttons */}
-              {isSampleMode ? (
-                <button
-                  type="button"
-                  onClick={handleClearSampleResults}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-colors cursor-pointer"
-                  title="Clear simulated demonstration values and restore actual laboratory form"
-                >
-                  <RotateCcw className="w-3 h-3 text-rose-500" />
-                  <span>Clear Sample Results</span>
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleGenerateSampleResults}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 transition-colors cursor-pointer"
-                  title="Populate illustrative demonstration values for all 8 QC tests"
-                >
-                  <FlaskConical className="w-3 h-3 text-emerald-600" />
-                  <span>Generate Sample Results</span>
-                </button>
-              )}
-
-              {/* Show / Hide Lab Results toggle */}
-              <button
-                type="button"
-                onClick={() => setIsAddingLabResults(!isAddingLabResults)}
-                className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:text-emerald-800 underline cursor-pointer"
+          <div className="flex flex-wrap gap-1.5">
+            {[
+              { n: "1", label: "Review recipe" },
+              { n: "2", label: "Enter lab QC" },
+              { n: "3", label: "Analyze" },
+            ].map((step, idx) => (
+              <span
+                key={step.n}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-[#d7e4dc] bg-white px-2.5 py-1 text-[10px] font-semibold text-[#52645d]"
               >
-                <span>{isAddingLabResults ? "Hide Lab Results" : "Show Lab Results"}</span>
-                {isAddingLabResults ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-              </button>
-            </div>
+                <span className="inline-flex h-4 w-4 items-center justify-center rounded-md bg-emerald-600 text-[9px] font-bold text-white">
+                  {step.n}
+                </span>
+                {step.label}
+                {idx < 2 && <ChevronRight className="h-3 w-3 text-[#c5d4cb]" />}
+              </span>
+            ))}
           </div>
+        </div>
 
-          {/* Inline confirmation banner when sample mode is active */}
-          {sampleNotification && isSampleMode && (
-            <div className="p-2 rounded bg-amber-50 border border-amber-200 text-[11px] text-amber-900 flex items-center justify-between">
+        <AnimatePresence>
+          {errorMessage && (
+            <motion.div
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="mt-3 flex items-center justify-between gap-2 rounded-xl border border-rose-200 bg-rose-50 px-2.5 py-2 text-[11px] text-rose-900"
+            >
               <div className="flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                <span>{sampleNotification}</span>
+                <AlertCircle className="h-3.5 w-3.5 shrink-0 text-rose-600" />
+                {errorMessage}
               </div>
               <button
                 type="button"
-                onClick={() => setSampleNotification(null)}
-                className="text-amber-600 hover:text-amber-800 ml-2 cursor-pointer"
+                onClick={() => setErrorMessage(null)}
+                className="text-rose-500 hover:text-rose-800"
               >
                 ×
               </button>
-            </div>
+            </motion.div>
           )}
+        </AnimatePresence>
+      </motion.section>
 
-          {/* Laboratory Testing Table */}
-          {isAddingLabResults && (
-            <div className="overflow-x-auto border border-slate-200 rounded-lg text-xs">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 text-slate-600 border-b border-slate-200 text-[10px] uppercase font-semibold">
-                  <tr>
-                    <th className="py-2 px-3">Quality Check</th>
-                    <th className="py-2 px-3">What We're Checking</th>
-                    <th className="py-2 px-3">
-                      {isSampleMode ? "Sample Result (Editable)" : "Laboratory Result"}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {displayedQcTests.map((t) => (
-                    <tr
-                      key={t.id}
-                      className={`hover:bg-slate-50/50 transition-colors ${
-                        isSampleMode ? "bg-amber-50/20" : ""
-                      }`}
-                    >
-                      <td className="py-2 px-3 font-semibold text-slate-800">
-                        {t.testName}
-                      </td>
-                      <td className="py-2 px-3 text-slate-600 text-xs">
-                        {t.acceptanceCriteria}
-                      </td>
-                      <td className="py-2 px-3">
-                        <div className="relative">
-                          <input
-                            type="text"
-                            placeholder={LAB_RESULT_PLACEHOLDERS[t.id] || "Enter result"}
-                            value={t.measuredValue}
-                            onChange={(e) => handleUpdateTestValue(t.id, e.target.value)}
-                            className={`w-full px-2 py-1 rounded border text-xs font-mono bg-white focus:ring-1 focus:outline-hidden ${
-                              isSampleMode
-                                ? "border-amber-300 pr-14 focus:ring-amber-500 bg-amber-50/20"
-                                : "border-slate-300 focus:ring-emerald-500"
-                            }`}
-                          />
-                          {isSampleMode && (
-                            <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-amber-700 bg-amber-100 px-1 py-0.5 rounded pointer-events-none">
-                              Sample
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+      {/* 1. Recipe */}
+      <motion.section
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.04, ease: easeOut }}
+        className="space-y-2 rounded-2xl border border-[#d7e4dc]/90 bg-white p-3 shadow-[0_1px_2px_rgba(15,44,32,0.04)] sm:p-4"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#e8f0eb] pb-2.5">
+          <h3 className="inline-flex flex-wrap items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-[#52645d]">
+            <span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-emerald-600 text-[10px] font-bold text-white">
+              1
+            </span>
+            <Layers className="h-3.5 w-3.5 text-emerald-700" />
+            Batch recipe
+            <span className="font-medium normal-case tracking-normal text-[#8aa094]">
+              · {normalizedIngredients.length}{" "}
+              {normalizedIngredients.length === 1 ? "ingredient" : "ingredients"} ·{" "}
+              {batchSizeGrams} g
+            </span>
+          </h3>
+          {Math.abs(totalRecipePercentage - 100) < 0.05 ? (
+            <span className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-900">
+              <CheckCircle2 className="h-3 w-3" />
+              100% balanced
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-900">
+              <AlertCircle className="h-3 w-3" />
+              {totalRecipePercentage.toFixed(1)}% of batch
+            </span>
           )}
         </div>
-      </div>
+
+        {normalizedIngredients.length > 0 ? (
+          <div className="overflow-hidden rounded-xl border border-[#d7e4dc]/90">
+            <div className="grid grid-cols-[minmax(0,1fr)_6.5rem] gap-2 border-b border-[#e8f0eb] bg-[#f7faf8] px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-wider text-[#8aa094]">
+              <span>Ingredient</span>
+              <span className="text-right">Amount</span>
+            </div>
+            <div className="divide-y divide-[#e8f0eb]">
+              {normalizedIngredients.map((ing) => (
+                <div
+                  key={ing.id}
+                  className="grid grid-cols-[minmax(0,1fr)_6.5rem] items-center gap-2 px-2.5 py-1.5 hover:bg-[#f7faf8]"
+                >
+                  <div className="min-w-0">
+                    <span className="block truncate text-xs font-semibold text-[#0f2c20]">
+                      {ing.name}
+                    </span>
+                    <span className="text-[10px] text-[#8aa094]">
+                      {ing.targetPercentage.toFixed(2)}% · {ing.role}
+                    </span>
+                  </div>
+                  <span className="text-right font-mono text-[11px] font-bold text-emerald-800">
+                    {ing.targetMassGrams.toFixed(2)} g
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-[minmax(0,1fr)_6.5rem] gap-2 border-t border-[#e8f0eb] bg-[#f7faf8] px-2.5 py-2 text-xs font-bold text-[#0f2c20]">
+              <span>Total</span>
+              <span className="text-right font-mono">
+                {totalRecipeMass.toFixed(2)} g
+              </span>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11px] text-amber-900">
+            <AlertCircle className="h-3.5 w-3.5 shrink-0 text-amber-600" />
+            No Step 5 ingredients yet — complete Formulation Development first.
+          </div>
+        )}
+      </motion.section>
+
+      {/* 2. Lab QC — always visible */}
+      <motion.section
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.08, ease: easeOut }}
+        className="space-y-2 rounded-2xl border border-[#d7e4dc]/90 bg-white p-3 shadow-[0_1px_2px_rgba(15,44,32,0.04)] sm:p-4"
+      >
+        <div className="flex flex-col gap-2 border-b border-[#e8f0eb] pb-2.5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="inline-flex flex-wrap items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-[#52645d]">
+              <span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-emerald-600 text-[10px] font-bold text-white">
+                2
+              </span>
+              <Beaker className="h-3.5 w-3.5 text-emerald-700" />
+              Laboratory QC
+              <span className="font-medium normal-case tracking-normal text-[#8aa094]">
+                · {isSampleMode ? sampleTestedCount : realTestedCount}/{totalCount} entered
+              </span>
+            </h3>
+            {isSampleMode && (
+              <span className="mt-1 inline-flex items-center gap-1 rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-semibold text-amber-800">
+                <FlaskConical className="h-2.5 w-2.5" />
+                Sample / simulated data
+              </span>
+            )}
+          </div>
+          {isSampleMode ? (
+            <button
+              type="button"
+              onClick={handleClearSampleResults}
+              className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-800 hover:bg-rose-100"
+            >
+              <RotateCcw className="h-3 w-3" />
+              Clear samples
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleGenerateSampleResults}
+              className="inline-flex items-center gap-1 rounded-lg border border-[#d7e4dc] bg-[#f7faf8] px-2.5 py-1 text-[11px] font-semibold text-[#52645d] hover:border-emerald-400 hover:bg-emerald-50"
+              title="Fill illustrative demo values for all QC tests"
+            >
+              <Sparkles className="h-3 w-3 text-emerald-700" />
+              Generate samples
+            </button>
+          )}
+        </div>
+
+        <AnimatePresence>
+          {sampleNotification && isSampleMode && (
+            <motion.div
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="flex items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-900"
+            >
+              <span className="flex items-center gap-1.5">
+                <Sparkles className="h-3 w-3 shrink-0 text-amber-600" />
+                {sampleNotification}
+              </span>
+              <button type="button" onClick={() => setSampleNotification(null)}>
+                ×
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <div className="overflow-hidden rounded-xl border border-[#d7e4dc]/90">
+          <div className="hidden grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1.1fr)] gap-2 border-b border-[#e8f0eb] bg-[#f7faf8] px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-wider text-[#8aa094] sm:grid">
+            <span>Test</span>
+            <span>Criteria</span>
+            <span>Result</span>
+          </div>
+          <div className="divide-y divide-[#e8f0eb]">
+            {displayedQcTests.map((t) => (
+              <div
+                key={t.id}
+                className={`grid grid-cols-1 gap-1.5 px-2.5 py-2 sm:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1.1fr)] sm:items-center sm:gap-2 ${
+                  isSampleMode ? "bg-amber-50/30" : "bg-white hover:bg-[#f7faf8]"
+                }`}
+              >
+                <div className="min-w-0">
+                  <span className="block truncate text-xs font-semibold text-[#0f2c20]">
+                    {t.testName}
+                  </span>
+                  <span className="text-[10px] text-[#8aa094] sm:hidden">
+                    {t.acceptanceCriteria}
+                  </span>
+                </div>
+                <p className="hidden truncate text-[11px] text-[#6d7f76] sm:block">
+                  {t.acceptanceCriteria}
+                </p>
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder={LAB_RESULT_PLACEHOLDERS[t.id] || "Enter result"}
+                    value={t.measuredValue}
+                    onChange={(e) => handleUpdateTestValue(t.id, e.target.value)}
+                    className={`w-full rounded-lg border px-2 py-1.5 font-mono text-[11px] outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15 ${
+                      isSampleMode
+                        ? "border-amber-300 bg-amber-50/40 pr-14"
+                        : "border-[#d5e3da] bg-[#fbfdfb]"
+                    }`}
+                  />
+                  {isSampleMode && (
+                    <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 rounded bg-amber-100 px-1 py-0.5 text-[9px] font-semibold text-amber-800">
+                      Sample
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </motion.section>
+
+      {/* 3. Analyze */}
+      <motion.section
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.12, ease: easeOut }}
+        className="space-y-3 rounded-2xl border border-[#d7e4dc]/90 bg-white p-3 shadow-[0_1px_2px_rgba(15,44,32,0.04)] sm:p-4"
+      >
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-[#52645d]">
+              <span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-emerald-600 text-[10px] font-bold text-white">
+                3
+              </span>
+              <FlaskConical className="h-3.5 w-3.5 text-emerald-700" />
+              Analyze batch
+            </h3>
+            <p className="mt-1 text-[11px] text-[#8aa094]">
+              Validate mass balance and review laboratory readiness.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleAnalyzeMyBatch}
+            disabled={isAnalyzing || normalizedIngredients.length === 0}
+            className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-700 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-800 disabled:opacity-50"
+          >
+            <FlaskConical className={`h-3.5 w-3.5 ${isAnalyzing ? "animate-spin" : ""}`} />
+            {isAnalyzing ? "Analyzing..." : "Analyze My Batch"}
+          </button>
+        </div>
+
+        <AnimatePresence>
+          {analysisResult && (
+            <motion.div
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className={`space-y-2.5 rounded-xl border p-3 text-xs ${
+                analysisIsSimulated
+                  ? "border-amber-200 bg-amber-50/70 text-amber-950"
+                  : "border-[#e8f0eb] bg-[#f7faf8] text-[#52645d]"
+              }`}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="inline-flex items-center gap-1.5 text-[11px] font-bold">
+                  {analysisIsSimulated ? (
+                    <>
+                      <FlaskConical className="h-3.5 w-3.5 text-amber-600" />
+                      Sample analysis
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                      Batch analysis
+                    </>
+                  )}
+                </span>
+                <span className="rounded-md border border-[#d7e4dc] bg-white px-2 py-0.5 font-mono text-[10px] text-[#6d7f76]">
+                  {analysisIsSimulated
+                    ? `Simulated ${activeTestedCount}/${totalCount}`
+                    : activeTestedCount > 0
+                      ? `${activeTestedCount}/${totalCount} tests`
+                      : "0 physical tests"}
+                </span>
+              </div>
+              <p className="leading-relaxed text-[11px] text-[#0f2c20]">{analysisResult}</p>
+              <div className="grid grid-cols-2 gap-2 rounded-lg border border-[#e8f0eb] bg-white p-2 font-mono text-[10px] sm:grid-cols-4">
+                <div>
+                  <span className="block text-[#8aa094]">Batch</span>
+                  <span className="font-bold text-[#0f2c20]">{batchSizeGrams} g</span>
+                </div>
+                <div>
+                  <span className="block text-[#8aa094]">Active</span>
+                  <span className="font-bold text-emerald-800">
+                    {currentActivePct.toFixed(1)}%
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[#8aa094]">Active mass</span>
+                  <span className="font-bold text-[#0f2c20]">{activeMass.toFixed(2)} g</span>
+                </div>
+                <div>
+                  <span className="block text-[#8aa094]">Balance</span>
+                  <span className="font-bold text-emerald-800">100%</span>
+                </div>
+              </div>
+              <p className="text-[10px] italic text-[#8aa094]">
+                {analysisIsSimulated
+                  ? "Illustrative simulation only — not for regulatory release."
+                  : "Based on calculated composition; confirm with bench QC before release."}
+              </p>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.section>
     </div>
   );
 }

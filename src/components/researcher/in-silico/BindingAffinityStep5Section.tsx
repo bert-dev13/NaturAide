@@ -2,20 +2,18 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Activity,
-  Layers,
-  Atom,
-  Eye,
-  Filter,
-  ArrowUpDown,
-  Download,
   Info,
-  CheckCircle2,
-  X,
-  ExternalLink,
-  ChevronRight,
   TrendingDown,
+  ExternalLink,
+  X,
+  Leaf,
+  ChevronRight,
+  Compass,
+  Box,
+  Medal,
 } from "lucide-react";
 import { DockingRunItem } from "./DockingExecutionStep4Section";
 
@@ -26,8 +24,43 @@ interface Step5Props {
   onSelectRunForVisuals: (runId: number, targetStep: 6 | 7) => void;
 }
 
+function fitLabel(score: number) {
+  if (score <= -8.0) return { label: "Strong", tone: "emerald" as const };
+  if (score <= -6.5) return { label: "Good", tone: "teal" as const };
+  if (score <= -5.0) return { label: "Moderate", tone: "amber" as const };
+  return { label: "Weak", tone: "slate" as const };
+}
+
+function toneClasses(tone: "emerald" | "teal" | "amber" | "slate") {
+  switch (tone) {
+    case "emerald":
+      return {
+        pill: "border-emerald-200 bg-emerald-50 text-emerald-900",
+        bar: "bg-emerald-600",
+        score: "text-emerald-800",
+      };
+    case "teal":
+      return {
+        pill: "border-teal-200 bg-teal-50 text-teal-900",
+        bar: "bg-teal-500",
+        score: "text-teal-800",
+      };
+    case "amber":
+      return {
+        pill: "border-amber-200 bg-amber-50 text-amber-900",
+        bar: "bg-amber-500",
+        score: "text-amber-900",
+      };
+    default:
+      return {
+        pill: "border-[#d7e4dc] bg-[#f7faf8] text-[#52645d]",
+        bar: "bg-[#8aa094]",
+        score: "text-[#52645d]",
+      };
+  }
+}
+
 export default function BindingAffinityStep5Section({
-  projectId,
   plantName,
   runs = [],
   onSelectRunForVisuals,
@@ -37,368 +70,497 @@ export default function BindingAffinityStep5Section({
   const [sortOrder, setSortOrder] = useState<"best" | "worst" | "name">("best");
   const [inspectedRun, setInspectedRun] = useState<DockingRunItem | null>(null);
 
-  // Distinct targets and ligands from runs
+  // Dedupe ligand×PDB — keep strongest (most negative) score
+  const uniqueCompleted = useMemo(() => {
+    const scored = runs.filter(
+      (r) => r.bindingAffinity !== null && r.bindingAffinity !== undefined
+    );
+    const map = new Map<string, DockingRunItem>();
+    for (const r of scored) {
+      const key = `${(r.ligandName || "").toLowerCase().trim()}::${String(r.pdbId || "").toUpperCase()}`;
+      const existing = map.get(key);
+      if (!existing) {
+        map.set(key, { ...r, pdbId: String(r.pdbId || "").toUpperCase() });
+        continue;
+      }
+      if (Number(r.bindingAffinity) < Number(existing.bindingAffinity)) {
+        map.set(key, { ...r, pdbId: String(r.pdbId || "").toUpperCase() });
+      }
+    }
+    return Array.from(map.values());
+  }, [runs]);
+
   const targetOptions = useMemo(() => {
     const map = new Map<string, string>();
-    runs.forEach((r) => map.set(r.pdbId, `${r.targetProtein} (${r.pdbId})`));
-    return Array.from(map.entries());
-  }, [runs]);
+    uniqueCompleted.forEach((r) =>
+      map.set(r.pdbId, `${r.targetProtein} (${r.pdbId})`)
+    );
+    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  }, [uniqueCompleted]);
 
   const ligandOptions = useMemo(() => {
     const set = new Set<string>();
-    runs.forEach((r) => set.add(r.ligandName));
+    uniqueCompleted.forEach((r) => set.add(r.ligandName));
     return Array.from(set).sort();
-  }, [runs]);
+  }, [uniqueCompleted]);
 
-  // Completed runs with actual binding affinity numbers
-  const completedRuns = useMemo(() => {
-    return runs.filter((r) => r.bindingAffinity !== null && r.bindingAffinity !== undefined);
-  }, [runs]);
-
-  // Filter & Sort
   const displayedRuns = useMemo(() => {
-    let result = completedRuns.filter((r) => {
+    let result = uniqueCompleted.filter((r) => {
       if (selectedTarget !== "ALL" && r.pdbId !== selectedTarget) return false;
       if (selectedLigand !== "ALL" && r.ligandName !== selectedLigand) return false;
       return true;
     });
 
     if (sortOrder === "best") {
-      result.sort((a, b) => Number(a.bindingAffinity) - Number(b.bindingAffinity));
+      result = [...result].sort(
+        (a, b) => Number(a.bindingAffinity) - Number(b.bindingAffinity)
+      );
     } else if (sortOrder === "worst") {
-      result.sort((a, b) => Number(b.bindingAffinity) - Number(a.bindingAffinity));
-    } else if (sortOrder === "name") {
-      result.sort((a, b) => a.ligandName.localeCompare(b.ligandName));
+      result = [...result].sort(
+        (a, b) => Number(b.bindingAffinity) - Number(a.bindingAffinity)
+      );
+    } else {
+      result = [...result].sort((a, b) => a.ligandName.localeCompare(b.ligandName));
     }
-
     return result;
-  }, [completedRuns, selectedTarget, selectedLigand, sortOrder]);
+  }, [uniqueCompleted, selectedTarget, selectedLigand, sortOrder]);
 
-  // Top complex
   const topRun = displayedRuns[0] || null;
+  const duplicateHidden = runs.filter(
+    (r) => r.bindingAffinity !== null && r.bindingAffinity !== undefined
+  ).length - uniqueCompleted.length;
+
+  // Relative bar scale from dataset min/max (more negative → longer)
+  const scoreExtent = useMemo(() => {
+    if (displayedRuns.length === 0) return { min: -12, max: -4 };
+    const vals = displayedRuns.map((r) => Number(r.bindingAffinity));
+    return { min: Math.min(...vals), max: Math.max(...vals) };
+  }, [displayedRuns]);
+
+  const barWidth = (score: number) => {
+    const span = Math.abs(scoreExtent.max - scoreExtent.min) || 1;
+    // Map most negative to ~100%, least negative to ~28%
+    const t = (scoreExtent.max - score) / span;
+    return Math.min(100, Math.max(28, 28 + t * 72));
+  };
+
+  const strongCount = displayedRuns.filter((r) => Number(r.bindingAffinity) <= -8).length;
+  const easeOut = [0.22, 1, 0.36, 1] as const;
 
   return (
     <div className="space-y-4">
-      {/* 1. Header Toolbar */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-bold text-teal-700 uppercase tracking-wider">
-                Section 2 / Step 05 of 08
-              </span>
-              <span className="text-slate-300">•</span>
-              <span className="text-xs font-semibold text-slate-700">Binding Affinity Results</span>
-              <span className="text-slate-300">•</span>
-              <span className="text-[11px] text-slate-500 font-mono">
-                {displayedRuns.length} Scored Complex{displayedRuns.length === 1 ? "" : "es"}
-              </span>
-            </div>
-            <h2 className="text-base font-bold text-slate-900 tracking-tight mt-0.5 flex items-center gap-2">
-              <Activity className="w-4 h-4 text-teal-600" />
-              Predicted Docking Scores &amp; Complex Ranking
-            </h2>
-          </div>
-
-          {topRun && (
-            <div className="p-2 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 flex items-center gap-2 self-start sm:self-auto">
-              <TrendingDown className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>
-                Top Candidate: <strong className="font-semibold">{topRun.ligandName}</strong> &rarr;{" "}
-                <strong className="font-mono">{topRun.pdbId}</strong> ({topRun.bindingAffinity} kcal/mol)
-              </span>
-            </div>
+      {/* Status strip */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.28, ease: easeOut }}
+        className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[#d7e4dc]/90 bg-white px-4 py-2.5 shadow-[0_1px_2px_rgba(15,44,32,0.04)]"
+      >
+        <div className="flex flex-wrap items-center gap-2 text-[11px] text-[#6d7f76]">
+          <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-800">
+            <Activity className="h-3.5 w-3.5" />
+          </span>
+          <span className="font-semibold text-[#0f2c20]">Binding Affinity</span>
+          <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-mono text-[10px] font-bold text-emerald-900">
+            {displayedRuns.length} complexes
+          </span>
+          {strongCount > 0 && (
+            <span className="hidden rounded-md border border-[#d7e4dc] bg-[#f7faf8] px-2 py-0.5 font-mono text-[10px] font-semibold text-[#52645d] sm:inline">
+              {strongCount} ≤ −8.0
+            </span>
           )}
         </div>
-      </div>
+        {topRun && (
+          <span className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-900">
+            <Medal className="h-3 w-3" />
+            <span className="truncate max-w-[14rem]">
+              {topRun.ligandName} → {topRun.pdbId}
+            </span>
+            <span className="font-mono font-bold">
+              {Number(topRun.bindingAffinity).toFixed(2)}
+            </span>
+          </span>
+        )}
+      </motion.div>
 
-      {/* 2. Visual Comparison Chart */}
+      {/* Context */}
+      <motion.section
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, ease: easeOut }}
+        className="relative overflow-hidden rounded-2xl border border-[#d7e4dc]/90 bg-[linear-gradient(165deg,#ffffff_0%,#f8fbf9_100%)] p-4 shadow-[0_1px_2px_rgba(15,44,32,0.04)]"
+      >
+        <div className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-emerald-600 via-teal-400 to-cyan-300" />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-start gap-2.5">
+            <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-800">
+              <Leaf className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold text-[#0f2c20]">{plantName}</h2>
+              <p className="mt-0.5 text-[11px] text-[#8aa094]">
+                <span className="font-semibold text-[#52645d]">Vina ΔG ranking</span>
+                <span className="mx-1.5 text-[#d7e4dc]">·</span>
+                more negative = stronger predicted affinity
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {[
+              { n: "1", label: "Compare scores" },
+              { n: "2", label: "Filter / rank" },
+              { n: "3", label: "Open 2D / 3D" },
+            ].map((step, idx) => (
+              <span
+                key={step.n}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-[#d7e4dc] bg-white px-2.5 py-1 text-[10px] font-semibold text-[#52645d]"
+              >
+                <span className="inline-flex h-4 w-4 items-center justify-center rounded-md bg-emerald-600 text-[9px] font-bold text-white">
+                  {step.n}
+                </span>
+                {step.label}
+                {idx < 2 && <ChevronRight className="h-3 w-3 text-[#c5d4cb]" />}
+              </span>
+            ))}
+          </div>
+        </div>
+      </motion.section>
+
+      {/* Score comparison viz */}
       {displayedRuns.length > 0 && (
-        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs space-y-3">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-            <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
-              <TrendingDown className="w-3.5 h-3.5 text-teal-600" />
-              Predicted Docking Score Comparison (kcal/mol)
+        <motion.section
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.04, ease: easeOut }}
+          className="space-y-2.5 rounded-2xl border border-[#d7e4dc]/90 bg-white p-3 shadow-[0_1px_2px_rgba(15,44,32,0.04)] sm:p-4"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#e8f0eb] pb-2.5">
+            <h3 className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-[#52645d]">
+              <span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-emerald-600 text-[10px] font-bold text-white">
+                1
+              </span>
+              <TrendingDown className="h-3.5 w-3.5 text-emerald-700" />
+              Score comparison
+              <span className="font-medium normal-case tracking-normal text-[#8aa094]">
+                · top {Math.min(8, displayedRuns.length)}
+              </span>
             </h3>
-            <span className="text-[10px] text-slate-500 font-mono">More negative = stronger predicted affinity</span>
+            <span className="font-mono text-[10px] text-[#8aa094]">kcal/mol</span>
           </div>
 
-          <div className="space-y-2 pt-1">
+          <div className="space-y-1.5">
             {displayedRuns.slice(0, 8).map((r, idx) => {
               const score = Number(r.bindingAffinity) || 0;
-              // Normalize width based on typical range (-12 to -4)
-              const percentage = Math.min(100, Math.max(15, (Math.abs(score) / 12) * 100));
-
+              const fit = fitLabel(score);
+              const tones = toneClasses(fit.tone);
               return (
-                <div key={r.id} className="space-y-0.5 text-xs">
-                  <div className="flex items-center justify-between text-[11px]">
-                    <span className="font-semibold text-slate-800">
-                      #{idx + 1}. {r.ligandName} &rarr; <span className="font-mono text-teal-700">{r.pdbId}</span>
+                <button
+                  key={`${r.id}-${r.pdbId}`}
+                  type="button"
+                  onClick={() => setInspectedRun(r)}
+                  className="group w-full rounded-xl border border-transparent px-1.5 py-1 text-left hover:border-[#d7e4dc] hover:bg-[#f7faf8]"
+                >
+                  <div className="mb-0.5 flex items-center justify-between gap-2 text-[11px]">
+                    <span className="min-w-0 truncate font-semibold text-[#0f2c20]">
+                      <span className="mr-1.5 font-mono text-[10px] text-[#8aa094]">
+                        #{idx + 1}
+                      </span>
+                      {r.ligandName}
+                      <span className="mx-1 text-[#c5d4cb]">→</span>
+                      <span className="font-mono text-emerald-800">{r.pdbId}</span>
                     </span>
-                    <span className="font-mono font-bold text-emerald-700">{score} kcal/mol</span>
+                    <span className={`shrink-0 font-mono text-xs font-bold ${tones.score}`}>
+                      {score.toFixed(2)}
+                    </span>
                   </div>
-                  <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-[#e8f0eb]">
                     <div
-                      className={`h-full rounded-full transition-all duration-500 ${
-                        score <= -8.0 ? "bg-emerald-600" : score <= -6.5 ? "bg-teal-600" : "bg-amber-500"
-                      }`}
-                      style={{ width: `${percentage}%` }}
+                      className={`h-full rounded-full transition-all duration-500 ${tones.bar}`}
+                      style={{ width: `${barWidth(score)}%` }}
                     />
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>
-        </div>
+        </motion.section>
       )}
 
-      {/* 3. Filter Toolbar */}
-      <div className="bg-white rounded-xl border border-slate-200 p-3 shadow-xs grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
-        {/* Filter by Target */}
-        <div>
-          <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Filter Target Protein</label>
+      {/* Ranked table */}
+      <motion.section
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.08, ease: easeOut }}
+        className="space-y-2.5 rounded-2xl border border-[#d7e4dc]/90 bg-white p-3 shadow-[0_1px_2px_rgba(15,44,32,0.04)] sm:p-4"
+      >
+        <div className="flex flex-col gap-2 border-b border-[#e8f0eb] pb-2.5 sm:flex-row sm:items-center sm:justify-between">
+          <h3 className="inline-flex flex-wrap items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-[#52645d]">
+            <span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-emerald-600 text-[10px] font-bold text-white">
+              2
+            </span>
+            Ranked complexes
+            <span className="font-medium normal-case tracking-normal text-[#8aa094]">
+              · {displayedRuns.length} shown
+            </span>
+          </h3>
+          {duplicateHidden > 0 && (
+            <span className="rounded-lg border border-[#d7e4dc] bg-[#f7faf8] px-2 py-0.5 text-[10px] font-semibold text-[#52645d]">
+              Hidden {duplicateHidden} duplicates
+            </span>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           <select
             value={selectedTarget}
             onChange={(e) => setSelectedTarget(e.target.value)}
-            className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white font-medium focus:ring-1 focus:ring-teal-500 focus:outline-hidden"
+            className="rounded-lg border border-[#d5e3da] bg-white px-2.5 py-1.5 text-xs font-medium outline-none focus:border-emerald-600"
           >
-            <option value="ALL">All Targets ({targetOptions.length})</option>
+            <option value="ALL">All targets ({targetOptions.length})</option>
             {targetOptions.map(([pdb, label]) => (
               <option key={pdb} value={pdb}>
                 {label}
               </option>
             ))}
           </select>
-        </div>
-
-        {/* Filter by Ligand */}
-        <div>
-          <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Filter Ligand Compound</label>
           <select
             value={selectedLigand}
             onChange={(e) => setSelectedLigand(e.target.value)}
-            className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white font-medium focus:ring-1 focus:ring-teal-500 focus:outline-hidden"
+            className="rounded-lg border border-[#d5e3da] bg-white px-2.5 py-1.5 text-xs font-medium outline-none focus:border-emerald-600"
           >
-            <option value="ALL">All Ligands ({ligandOptions.length})</option>
+            <option value="ALL">All ligands ({ligandOptions.length})</option>
             {ligandOptions.map((lig) => (
               <option key={lig} value={lig}>
                 {lig}
               </option>
             ))}
           </select>
-        </div>
-
-        {/* Sort Order */}
-        <div>
-          <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Sort Complexes</label>
           <select
             value={sortOrder}
-            onChange={(e: any) => setSortOrder(e.target.value)}
-            className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white font-medium focus:ring-1 focus:ring-teal-500 focus:outline-hidden"
+            onChange={(e) => setSortOrder(e.target.value as "best" | "worst" | "name")}
+            className="rounded-lg border border-[#d5e3da] bg-white px-2.5 py-1.5 text-xs font-medium outline-none focus:border-emerald-600"
           >
-            <option value="best">Best Predicted Score First (Most Negative ΔG)</option>
-            <option value="worst">Lowest Score First</option>
-            <option value="name">Ligand Name (A-Z)</option>
+            <option value="best">Best ΔG first</option>
+            <option value="worst">Weakest first</option>
+            <option value="name">Ligand A–Z</option>
           </select>
         </div>
-      </div>
 
-      {/* 4. Results Table */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
         {displayedRuns.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 text-slate-600 border-b border-slate-200 font-semibold uppercase text-[10px] tracking-wider">
-                <tr>
-                  <th className="py-2.5 px-3 w-12 text-center">Rank</th>
-                  <th className="py-2.5 px-3">Ligand Molecule</th>
-                  <th className="py-2.5 px-3">Target Receptor</th>
-                  <th className="py-2.5 px-3">PDB ID</th>
-                  <th className="py-2.5 px-3">Predicted Docking Score (kcal/mol)</th>
-                  <th className="py-2.5 px-3">Estimated Fit Status</th>
-                  <th className="py-2.5 px-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {displayedRuns.map((r, idx) => {
-                  const score = Number(r.bindingAffinity) || 0;
-                  const isStrong = score <= -7.0;
-                  const isModerate = score > -7.0 && score <= -5.0;
-
-                  return (
-                    <tr key={r.id} className="hover:bg-slate-50/70 transition-colors">
-                      <td className="py-2.5 px-3 text-center font-mono font-bold text-slate-500">
-                        #{idx + 1}
-                      </td>
-                      <td className="py-2.5 px-3 font-semibold text-slate-900">{r.ligandName}</td>
-                      <td className="py-2.5 px-3 text-slate-600">{r.targetProtein}</td>
-                      <td className="py-2.5 px-3 font-mono font-bold text-teal-700">
-                        <a
-                          href={`https://www.rcsb.org/structure/${r.pdbId}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="hover:underline inline-flex items-center gap-1"
-                        >
-                          <span>{r.pdbId}</span>
-                          <ExternalLink className="w-2.5 h-2.5" />
-                        </a>
-                      </td>
-                      <td className="py-2.5 px-3 font-mono font-bold text-emerald-700 text-sm">
-                        {r.bindingAffinity} kcal/mol
-                      </td>
-                      <td className="py-2.5 px-3">
-                        <span
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold border ${
-                            isStrong
-                              ? "bg-emerald-50 text-emerald-800 border-emerald-300"
-                              : isModerate
-                              ? "bg-teal-50 text-teal-800 border-teal-300"
-                              : "bg-amber-50 text-amber-800 border-amber-300"
-                          }`}
-                        >
-                          <span className="w-1.5 h-1.5 rounded-full bg-current" />
-                          {isStrong ? "High Affinity Candidate" : isModerate ? "Moderate Interaction" : "Weak Interaction"}
+          <div className="overflow-hidden rounded-xl border border-[#d7e4dc]/90">
+            <div className="hidden grid-cols-[2.25rem_minmax(0,1fr)_minmax(0,1.1fr)_3.5rem_5rem_5rem_7rem] gap-2 border-b border-[#e8f0eb] bg-[#f7faf8] px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-wider text-[#8aa094] lg:grid">
+              <span>#</span>
+              <span>Ligand</span>
+              <span>Receptor</span>
+              <span>PDB</span>
+              <span className="text-right">ΔG</span>
+              <span>Fit</span>
+              <span className="text-right">Open</span>
+            </div>
+            <div className="divide-y divide-[#e8f0eb]">
+              {displayedRuns.map((r, idx) => {
+                const score = Number(r.bindingAffinity) || 0;
+                const fit = fitLabel(score);
+                const tones = toneClasses(fit.tone);
+                return (
+                  <div
+                    key={`${r.id}-${r.pdbId}`}
+                    className={`grid grid-cols-1 gap-2 px-2.5 py-2 lg:grid-cols-[2.25rem_minmax(0,1fr)_minmax(0,1.1fr)_3.5rem_5rem_5rem_7rem] lg:items-center lg:gap-2 ${
+                      idx === 0 ? "bg-emerald-50/40" : "bg-white hover:bg-[#f7faf8]"
+                    }`}
+                  >
+                    <span className="hidden font-mono text-[10px] font-bold text-[#8aa094] lg:block">
+                      #{idx + 1}
+                    </span>
+                    <div className="min-w-0">
+                      <button
+                        type="button"
+                        onClick={() => setInspectedRun(r)}
+                        className="truncate text-left text-xs font-semibold text-[#0f2c20] hover:text-emerald-800 hover:underline"
+                      >
+                        <span className="mr-1 font-mono text-[10px] text-[#8aa094] lg:hidden">
+                          #{idx + 1}
                         </span>
-                      </td>
-                      <td className="py-2.5 px-3 text-right space-x-1 whitespace-nowrap">
-                        <button
-                          type="button"
-                          onClick={() => setInspectedRun(r)}
-                          className="px-2 py-1 rounded text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
-                        >
-                          Details
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onSelectRunForVisuals(r.id, 6)}
-                          className="px-2 py-1 rounded text-[11px] font-semibold bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 transition-colors"
-                        >
-                          2D Map
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onSelectRunForVisuals(r.id, 7)}
-                          className="px-2 py-1 rounded text-[11px] font-semibold bg-teal-600 hover:bg-teal-700 text-white transition-colors"
-                        >
-                          3D Model
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                        {r.ligandName}
+                      </button>
+                      <p className="truncate text-[10px] text-[#8aa094] lg:hidden">
+                        {r.targetProtein} · {r.pdbId}
+                      </p>
+                    </div>
+                    <span className="hidden truncate text-[11px] text-[#52645d] lg:block">
+                      {r.targetProtein}
+                    </span>
+                    <a
+                      href={`https://www.rcsb.org/structure/${r.pdbId}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="hidden items-center gap-0.5 font-mono text-[11px] font-bold text-emerald-800 hover:underline lg:inline-flex"
+                    >
+                      {r.pdbId}
+                      <ExternalLink className="h-2.5 w-2.5 opacity-60" />
+                    </a>
+                    <span
+                      className={`text-right font-mono text-xs font-bold ${tones.score} lg:text-right`}
+                    >
+                      {score.toFixed(2)}
+                    </span>
+                    <span
+                      className={`inline-flex w-fit items-center rounded border px-1.5 py-0.5 text-[9px] font-semibold ${tones.pill}`}
+                    >
+                      {fit.label}
+                    </span>
+                    <div className="flex flex-wrap items-center justify-end gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setInspectedRun(r)}
+                        className="rounded-lg border border-[#d7e4dc] bg-[#f7faf8] px-1.5 py-0.5 text-[9px] font-semibold text-[#52645d] hover:border-emerald-400"
+                      >
+                        Info
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onSelectRunForVisuals(r.id, 6)}
+                        className="inline-flex items-center gap-0.5 rounded-lg border border-[#d7e4dc] bg-[#f7faf8] px-1.5 py-0.5 text-[9px] font-semibold text-[#52645d] hover:border-emerald-400"
+                      >
+                        <Compass className="h-2.5 w-2.5" />
+                        2D
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onSelectRunForVisuals(r.id, 7)}
+                        className="inline-flex items-center gap-0.5 rounded-lg bg-emerald-700 px-1.5 py-0.5 text-[9px] font-semibold text-white hover:bg-emerald-800"
+                      >
+                        <Box className="h-2.5 w-2.5" />
+                        3D
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         ) : (
-          <div className="p-8 text-center bg-slate-50/50 space-y-2">
-            <Activity className="w-8 h-8 text-slate-400 mx-auto" />
-            <p className="text-xs font-semibold text-slate-700">No completed docking results to display</p>
-            <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
-              Run molecular docking simulations in Step 4 to calculate predicted binding energetics and populate the
-              results comparison dashboard.
+          <div className="rounded-xl border border-dashed border-[#d7e4dc] bg-[#f7faf8] px-4 py-8 text-center">
+            <Activity className="mx-auto h-7 w-7 text-[#8aa094]" />
+            <p className="mt-2 text-xs font-semibold text-[#0f2c20]">No scored complexes yet</p>
+            <p className="mt-1 text-[11px] text-[#8aa094]">
+              Finish docking in Step 4 to populate rankings.
             </p>
           </div>
         )}
-      </div>
+      </motion.section>
 
-      {/* 5. Scientific Interpretation Advisory Note */}
-      <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 flex items-start gap-2.5">
-        <Info className="w-4 h-4 text-teal-600 shrink-0 mt-0.5" />
-        <div className="space-y-0.5">
-          <span className="font-bold text-slate-800">Important Scientific Terminology:</span>
-          <p className="leading-relaxed">
-            AutoDock Vina scoring calculates predicted free energy of binding ($\Delta G$ in kcal/mol). These
-            computational estimates model thermodynamic affinity in a semi-rigid active site and must not be described
-            as experimentally confirmed bioactivity or therapeutic efficacy without in-vitro assay verification.
-          </p>
-        </div>
-      </div>
+      <p className="flex items-start gap-1.5 px-1 text-[10px] leading-relaxed text-[#8aa094]">
+        <Info className="mt-0.5 h-3 w-3 shrink-0 text-emerald-700" />
+        Vina ΔG is a computational estimate — not experimental efficacy. Confirm with assay data.
+      </p>
 
-      {/* 6. Details Modal */}
-      {inspectedRun && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl border border-slate-200 shadow-xl max-w-lg w-full p-5 space-y-3.5 text-xs">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900">
-                  Simulation Metadata — {inspectedRun.ligandName} &amp; {inspectedRun.pdbId}
-                </h3>
-                <p className="text-xs text-slate-500">{inspectedRun.targetProtein}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setInspectedRun(null)}
-                className="text-slate-400 hover:text-slate-600"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2.5 font-mono text-[11px]">
-              <div className="p-2.5 rounded bg-slate-50 border border-slate-200">
-                <span className="text-slate-500 block text-[10px] font-sans">Predicted Vina Score:</span>
-                <span className="font-bold text-emerald-700 text-sm">{inspectedRun.bindingAffinity} kcal/mol</span>
-              </div>
-              <div className="p-2.5 rounded bg-slate-50 border border-slate-200">
-                <span className="text-slate-500 block text-[10px] font-sans">Simulation Engine:</span>
-                <span className="font-bold text-slate-800">AutoDock Vina v1.2.7</span>
-              </div>
-              <div className="p-2.5 rounded bg-slate-50 border border-slate-200">
-                <span className="text-slate-500 block text-[10px] font-sans">Conformational Modes:</span>
-                <span className="font-bold text-slate-800">{inspectedRun.poseCount || 9} Poses Evaluated</span>
-              </div>
-              <div className="p-2.5 rounded bg-slate-50 border border-slate-200">
-                <span className="text-slate-500 block text-[10px] font-sans">Exhaustiveness:</span>
-                <span className="font-bold text-slate-800">{inspectedRun.exhaustiveness || 8} Iterations</span>
-              </div>
-            </div>
-
-            <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-[11px] space-y-1">
-              <span className="font-bold text-slate-800">Reproducibility &amp; Protocol:</span>
-              <p className="text-slate-600 leading-relaxed">
-                Receptor and ligand structures were prepared using Meeko / AutoDock Tools. Grid box parameters centered
-                on verified catalytic binding coordinates.
-              </p>
-            </div>
-
-            <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-              <div className="space-x-1.5">
+      {/* Details modal */}
+      <AnimatePresence>
+        {inspectedRun && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-[#0f2c20]/35 p-4 backdrop-blur-[2px]"
+            onClick={() => setInspectedRun(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 12, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 8 }}
+              transition={{ duration: 0.2 }}
+              className="w-full max-w-md rounded-2xl border border-[#d7e4dc] bg-white p-5 shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-3 border-b border-[#e8f0eb] pb-3">
+                <div className="min-w-0">
+                  <h3 className="text-sm font-bold text-[#0f2c20]">
+                    {inspectedRun.ligandName}{" "}
+                    <span className="font-mono text-emerald-800">→ {inspectedRun.pdbId}</span>
+                  </h3>
+                  <p className="mt-0.5 text-[11px] text-[#8aa094]">
+                    {inspectedRun.targetProtein}
+                  </p>
+                </div>
                 <button
                   type="button"
-                  onClick={() => {
-                    const id = inspectedRun.id;
-                    setInspectedRun(null);
-                    onSelectRunForVisuals(id, 6);
-                  }}
-                  className="px-3 py-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-800 font-semibold border border-teal-200"
+                  onClick={() => setInspectedRun(null)}
+                  className="rounded-lg p-1 text-[#8aa094] hover:bg-[#f7faf8]"
                 >
-                  View 2D Map
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const id = inspectedRun.id;
-                    setInspectedRun(null);
-                    onSelectRunForVisuals(id, 7);
-                  }}
-                  className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold shadow-xs"
-                >
-                  View 3D Model
+                  <X className="h-4 w-4" />
                 </button>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setInspectedRun(null)}
-                className="px-4 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                {[
+                  {
+                    label: "ΔG",
+                    value: `${Number(inspectedRun.bindingAffinity).toFixed(2)} kcal/mol`,
+                  },
+                  { label: "Engine", value: "AutoDock Vina 1.2.7" },
+                  {
+                    label: "Poses",
+                    value: String(inspectedRun.poseCount || 9),
+                  },
+                  {
+                    label: "Exhaustiveness",
+                    value: String(inspectedRun.exhaustiveness || 8),
+                  },
+                ].map((cell) => (
+                  <div
+                    key={cell.label}
+                    className="rounded-xl border border-[#e8f0eb] bg-[#f7faf8] p-2.5"
+                  >
+                    <span className="block text-[9px] font-bold uppercase tracking-wider text-[#8aa094]">
+                      {cell.label}
+                    </span>
+                    <span className="mt-0.5 block font-mono text-[11px] font-bold text-[#0f2c20]">
+                      {cell.value}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-[#e8f0eb] pt-3">
+                <div className="flex gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const id = inspectedRun.id;
+                      setInspectedRun(null);
+                      onSelectRunForVisuals(id, 6);
+                    }}
+                    className="inline-flex items-center gap-1 rounded-xl border border-[#d7e4dc] bg-[#f7faf8] px-3 py-1.5 text-xs font-semibold text-[#52645d]"
+                  >
+                    <Compass className="h-3 w-3" />
+                    2D
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const id = inspectedRun.id;
+                      setInspectedRun(null);
+                      onSelectRunForVisuals(id, 7);
+                    }}
+                    className="inline-flex items-center gap-1 rounded-xl bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white"
+                  >
+                    <Box className="h-3 w-3" />
+                    3D
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setInspectedRun(null)}
+                  className="rounded-xl border border-[#d7e4dc] px-3 py-1.5 text-xs font-semibold text-[#52645d]"
+                >
+                  Close
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
-

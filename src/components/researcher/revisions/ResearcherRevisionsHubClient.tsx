@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
+import { motion } from "framer-motion";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -217,7 +218,7 @@ export default function ResearcherRevisionsHubClient() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f8faf9] text-slate-800 pb-16">
+    <div className="w-full max-w-none space-y-6 pb-12 text-slate-800">
       {/* Toast Alert */}
       {toastMessage && (
         <div
@@ -236,105 +237,136 @@ export default function ResearcherRevisionsHubClient() {
         </div>
       )}
 
-      {/* ===================================================================== */}
-      {/* TOP BANNER & METRICS                                                  */}
-      {/* ===================================================================== */}
-      <div className="bg-gradient-to-r from-[#092218] via-[#0f3424] to-[#0b271b] text-white border-b border-emerald-900/60 shadow-md">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-2">
-                <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-400/30 text-[10.5px] font-mono font-bold uppercase tracking-wider flex items-center gap-1">
-                  <MessageSquareWarning className="w-3 h-3 text-amber-400" />
-                  Peer Review Revisions Console
-                </span>
-                <span className="text-xs text-emerald-300 font-mono">Researcher Mode</span>
-              </div>
-              <h1 className="text-2xl sm:text-3xl font-heading font-extrabold tracking-tight text-white">
-                Review Feedback &amp; Required Revisions
-              </h1>
-              <p className="text-xs sm:text-sm text-emerald-100/80 max-w-2xl leading-relaxed">
-                Review scientific observations, critical findings, and required revisions submitted by multidisciplinary reviewers. Directly document your resolutions, jump to specific research steps, and notify reviewers in real-time.
-              </p>
+      {/* 1. TOP HEADER — matches My Research Projects */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="relative w-full overflow-hidden rounded-2xl border border-[#0f2c20]/15 bg-[linear-gradient(120deg,#0f2c20_0%,#134032_48%,#0b271b_100%)] px-4 py-3.5 text-white shadow-[0_12px_28px_-18px_rgba(15,44,32,0.55)] sm:px-5"
+      >
+        <div className="pointer-events-none absolute -right-10 -top-12 h-36 w-36 rounded-full bg-amber-400/15 blur-3xl" />
+        <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/35 bg-amber-500/15 px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-amber-200">
+                <MessageSquareWarning className="h-3 w-3 text-amber-300" />
+                Revisions Console
+              </span>
+              <span className="rounded-full border border-white/15 bg-white/5 px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-emerald-100/80">
+                Researcher
+              </span>
             </div>
-
-            <div className="flex items-center gap-3 shrink-0">
-              <button
-                type="button"
-                onClick={fetchRevisions}
-                disabled={loading}
-                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 border border-white/20 text-white text-xs font-bold transition-colors cursor-pointer"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
-                <span>Sync Revisions</span>
-              </button>
-            </div>
+            <h1 className="mt-1.5 text-lg font-semibold tracking-tight text-white sm:text-xl">
+              Review Feedback &amp; Revisions
+            </h1>
+            <p className="mt-0.5 text-xs text-emerald-100/75">
+              Resolve reviewer findings and notify the panel.
+            </p>
           </div>
 
-          {/* METRICS CARDS */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 pt-2">
-            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/15">
-              <span className="text-[10.5px] font-bold text-emerald-200 uppercase tracking-wider block">
-                Total Feedback
-              </span>
-              <span className="font-mono text-2xl sm:text-3xl font-black text-white block mt-1">
-                {stats.total}
-              </span>
-              <span className="text-[10px] text-emerald-300/80 mt-0.5 block">
-                Across all research projects
-              </span>
-            </div>
-
-            <div className="bg-amber-500/15 backdrop-blur-md rounded-2xl p-4 border border-amber-400/30">
-              <span className="text-[10.5px] font-bold text-amber-300 uppercase tracking-wider block">
-                Action Required
-              </span>
-              <span className="font-mono text-2xl sm:text-3xl font-black text-amber-200 block mt-1">
-                {stats.open}
-              </span>
-              <span className="text-[10px] text-amber-300/80 mt-0.5 block">
-                Requires researcher response
-              </span>
-            </div>
-
-            <div className="bg-teal-500/15 backdrop-blur-md rounded-2xl p-4 border border-teal-400/30">
-              <span className="text-[10.5px] font-bold text-teal-300 uppercase tracking-wider block">
-                Addressed
-              </span>
-              <span className="font-mono text-2xl sm:text-3xl font-black text-teal-200 block mt-1">
-                {stats.addressed}
-              </span>
-              <span className="text-[10px] text-teal-300/80 mt-0.5 block">
-                Pending reviewer sign-off
-              </span>
-            </div>
-
-            <div className="bg-emerald-500/15 backdrop-blur-md rounded-2xl p-4 border border-emerald-400/30">
-              <span className="text-[10.5px] font-bold text-emerald-300 uppercase tracking-wider block">
-                Resolved &amp; Approved
-              </span>
-              <span className="font-mono text-2xl sm:text-3xl font-black text-emerald-200 block mt-1">
-                {stats.resolved}
-              </span>
-              <span className="text-[10px] text-emerald-300/80 mt-0.5 block">
-                Reviewer certified
-              </span>
-            </div>
-          </div>
+          <button
+            type="button"
+            onClick={fetchRevisions}
+            disabled={loading}
+            className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-xl bg-emerald-400 px-3.5 py-2 text-xs font-semibold text-[#091a13] shadow-sm transition hover:bg-emerald-300 active:bg-emerald-500 disabled:opacity-60"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+            <span>Sync</span>
+          </button>
         </div>
+      </motion.div>
+
+      {/* 2. METRICS */}
+      <div className="grid w-full grid-cols-2 gap-3 sm:gap-3.5 lg:grid-cols-4">
+        {[
+          {
+            key: "total",
+            label: "Total Feedback",
+            value: stats.total,
+            hint: "All projects",
+            icon: MessageSquareWarning,
+            surface: "bg-[linear-gradient(145deg,#f4f8f5_0%,#ffffff_45%,#eef5f1_100%)]",
+            bar: "from-[#0f2c20] to-emerald-400",
+            valueClass: "text-[#0f2c20]",
+            iconWrap: "bg-[#0f2c20] text-emerald-200",
+            glow: "bg-emerald-400/20",
+          },
+          {
+            key: "open",
+            label: "Action Required",
+            value: stats.open,
+            hint: "Needs response",
+            icon: Clock,
+            surface: "bg-[linear-gradient(145deg,#fffbeb_0%,#ffffff_45%,#fff7ed_100%)]",
+            bar: "from-amber-500 to-orange-300",
+            valueClass: "text-amber-900",
+            iconWrap: "bg-gradient-to-br from-amber-500 to-orange-500 text-white",
+            glow: "bg-amber-400/25",
+          },
+          {
+            key: "addressed",
+            label: "Addressed",
+            value: stats.addressed,
+            hint: "Awaiting sign-off",
+            icon: Check,
+            surface: "bg-[linear-gradient(145deg,#f0fdfa_0%,#ffffff_45%,#ecfeff_100%)]",
+            bar: "from-teal-500 to-cyan-300",
+            valueClass: "text-teal-900",
+            iconWrap: "bg-gradient-to-br from-teal-500 to-cyan-600 text-white",
+            glow: "bg-teal-400/25",
+          },
+          {
+            key: "resolved",
+            label: "Resolved",
+            value: stats.resolved,
+            hint: "Reviewer certified",
+            icon: CheckCircle2,
+            surface: "bg-[linear-gradient(145deg,#ecfdf5_0%,#ffffff_45%,#f0fdfa_100%)]",
+            bar: "from-emerald-500 to-teal-300",
+            valueClass: "text-emerald-900",
+            iconWrap: "bg-gradient-to-br from-emerald-500 to-teal-600 text-white",
+            glow: "bg-emerald-400/25",
+          },
+        ].map((stat, index) => {
+          const Icon = stat.icon;
+          return (
+            <motion.div
+              key={stat.key}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.32, delay: 0.04 + index * 0.05, ease: [0.22, 1, 0.36, 1] }}
+              className={`group relative overflow-hidden rounded-2xl border border-[#d7e4dc]/90 ${stat.surface} p-3.5 shadow-[0_1px_2px_rgba(15,44,32,0.04)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_14px_28px_-18px_rgba(15,44,32,0.35)]`}
+            >
+              <div className={`absolute inset-x-0 top-0 h-[2.5px] bg-gradient-to-r ${stat.bar}`} />
+              <div className={`pointer-events-none absolute -right-8 -top-10 h-24 w-24 rounded-full blur-2xl ${stat.glow}`} />
+              <div className="relative flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#6d7f76]">
+                    {stat.label}
+                  </p>
+                  <p className={`mt-1.5 text-2xl font-semibold tabular-nums leading-none tracking-tight sm:text-[1.7rem] ${stat.valueClass}`}>
+                    {stat.value}
+                  </p>
+                  <p className="mt-1.5 text-[11px] font-medium text-[#8aa094]">{stat.hint}</p>
+                </div>
+                <span className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg shadow-sm ${stat.iconWrap}`}>
+                  <Icon className="h-3.5 w-3.5" strokeWidth={2.2} />
+                </span>
+              </div>
+            </motion.div>
+          );
+        })}
       </div>
 
-      {/* ===================================================================== */}
-      {/* MAIN CONTENT AREA                                                     */}
-      {/* ===================================================================== */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 space-y-6">
+      {/* 3. FILTERS + LIST */}
+      <div className="space-y-4">
         {/* FILTER & SEARCH TOOLBAR */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-2xs space-y-4">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="space-y-3 rounded-2xl border border-[#d7e4dc]/90 bg-white p-3.5 shadow-[0_1px_2px_rgba(15,44,32,0.04)] sm:p-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
             {/* Project Selector */}
-            <div className="flex-1 max-w-md space-y-1">
-              <label className="text-xs font-bold text-slate-700 block">
-                Filter by Research Project:
+            <div className="max-w-md flex-1 space-y-1">
+              <label className="block text-[10px] font-bold uppercase tracking-[0.12em] text-[#6d7f76]">
+                Project
               </label>
               <select
                 value={selectedProjectId || ""}
@@ -342,7 +374,7 @@ export default function ResearcherRevisionsHubClient() {
                   const val = e.target.value ? parseInt(e.target.value, 10) : null;
                   setSelectedProjectId(val);
                 }}
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+                className="w-full cursor-pointer rounded-xl border border-[#d5e3da] bg-[#fbfdfb] px-3.5 py-2.5 text-xs font-semibold text-[#0f2c20] outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15"
               >
                 <option value="">All Research Projects ({projects.length})</option>
                 {projects.map((p) => (
@@ -354,36 +386,36 @@ export default function ResearcherRevisionsHubClient() {
             </div>
 
             {/* Status Pills */}
-            <div className="flex items-center gap-1.5 flex-wrap">
+            <div className="flex flex-wrap items-center gap-1.5">
               <button
                 type="button"
                 onClick={() => setFilterStatus("ALL")}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                className={`cursor-pointer rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors ${
                   filterStatus === "ALL"
-                    ? "bg-slate-900 text-white"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    ? "bg-[#0f2c20] text-white shadow-sm"
+                    : "bg-[#edf5f0] text-[#52645d] hover:bg-[#e2eee7] hover:text-[#0f2c20]"
                 }`}
               >
-                All Status ({stats.total})
+                All ({stats.total})
               </button>
               <button
                 type="button"
                 onClick={() => setFilterStatus("OPEN")}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                className={`cursor-pointer rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors ${
                   filterStatus === "OPEN"
-                    ? "bg-amber-600 text-white shadow-xs"
-                    : "bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200"
+                    ? "bg-amber-600 text-white shadow-sm"
+                    : "border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100"
                 }`}
               >
-                Action Required ({stats.open})
+                Action ({stats.open})
               </button>
               <button
                 type="button"
                 onClick={() => setFilterStatus("ADDRESSED")}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                className={`cursor-pointer rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors ${
                   filterStatus === "ADDRESSED"
-                    ? "bg-teal-700 text-white shadow-xs"
-                    : "bg-teal-50 text-teal-800 hover:bg-teal-100 border border-teal-200"
+                    ? "bg-teal-700 text-white shadow-sm"
+                    : "border border-teal-200 bg-teal-50 text-teal-800 hover:bg-teal-100"
                 }`}
               >
                 Addressed ({stats.addressed})

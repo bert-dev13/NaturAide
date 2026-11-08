@@ -403,6 +403,176 @@ export const SOLVENT_RATIO_OPTIONS = [
   "Custom",
 ] as const;
 
+export interface ExtractionDurationPreset {
+  id: string;
+  label: string;
+  value: string;
+  /** Total contact time in minutes (for matching / sorting). */
+  minutes: number;
+  description: string;
+}
+
+export const EXTRACTION_DURATION_PRESETS: ExtractionDurationPreset[] = [
+  {
+    id: "dur_15m",
+    label: "15 minutes",
+    value: "15 minutes",
+    minutes: 15,
+    description: "MAE / brief acoustic cavitation",
+  },
+  {
+    id: "dur_30m",
+    label: "30 minutes",
+    value: "30 minutes",
+    minutes: 30,
+    description: "Short UAE / aqueous infusion",
+  },
+  {
+    id: "dur_45m",
+    label: "45 minutes",
+    value: "45 minutes",
+    minutes: 45,
+    description: "Standard ultrasound-assisted extraction",
+  },
+  {
+    id: "dur_1h",
+    label: "1 hour",
+    value: "1 hour",
+    minutes: 60,
+    description: "Decoction / short reflux contact",
+  },
+  {
+    id: "dur_2h",
+    label: "2 hours",
+    value: "2 hours",
+    minutes: 120,
+    description: "Reflux / supercritical fluid extraction",
+  },
+  {
+    id: "dur_4h",
+    label: "4 hours",
+    value: "4 hours",
+    minutes: 240,
+    description: "Hot maceration standard",
+  },
+  {
+    id: "dur_6h",
+    label: "6 hours",
+    value: "6 hours",
+    minutes: 360,
+    description: "Soxhlet continuous cycling",
+  },
+  {
+    id: "dur_8h",
+    label: "8 hours",
+    value: "8 hours",
+    minutes: 480,
+    description: "Extended thermal extraction",
+  },
+  {
+    id: "dur_12h",
+    label: "12 hours",
+    value: "12 hours",
+    minutes: 720,
+    description: "Overnight laboratory steeping",
+  },
+  {
+    id: "dur_24h",
+    label: "24 hours",
+    value: "24 hours",
+    minutes: 1440,
+    description: "Percolation / overnight maceration",
+  },
+  {
+    id: "dur_48h",
+    label: "48 hours",
+    value: "48 hours",
+    minutes: 2880,
+    description: "Cold maceration pharmacopeial standard",
+  },
+  {
+    id: "dur_72h",
+    label: "72 hours",
+    value: "72 hours",
+    minutes: 4320,
+    description: "Extended cold maceration",
+  },
+];
+
+/**
+ * Parse a free-text duration into total minutes when possible.
+ */
+export function parseExtractionDurationMinutes(raw: string): number | null {
+  const text = (raw || "").trim().toLowerCase();
+  if (!text || text.startsWith("custom")) return null;
+
+  const match = text.match(
+    /(\d+(?:\.\d+)?)\s*(minutes?|mins?|min|hours?|hrs?|hr|h|m)?\b/
+  );
+  if (!match) return null;
+
+  const value = parseFloat(match[1]);
+  if (!Number.isFinite(value) || value < 0) return null;
+
+  const unit = match[2] || "";
+  const isMinutes =
+    unit === "m" ||
+    unit === "min" ||
+    unit === "mins" ||
+    unit === "minute" ||
+    unit === "minutes";
+  const isHours =
+    unit === "h" ||
+    unit === "hr" ||
+    unit === "hrs" ||
+    unit === "hour" ||
+    unit === "hours";
+
+  if (isMinutes) return Math.round(value);
+  if (isHours) return Math.round(value * 60);
+
+  // No unit: fractional values are hours (method defaults like 0.75);
+  // integers ≥ 10 are treated as minutes (lab shorthand, e.g. "45").
+  if (value > 0 && value < 1) return Math.round(value * 60);
+  if (value >= 10 && Number.isInteger(value)) return value;
+  return Math.round(value * 60);
+}
+
+export function matchExtractionDurationPreset(
+  raw: string
+): ExtractionDurationPreset | null {
+  const text = (raw || "").trim().toLowerCase();
+  if (!text) return null;
+
+  const byLabel = EXTRACTION_DURATION_PRESETS.find(
+    (p) => p.label.toLowerCase() === text || p.value.toLowerCase() === text
+  );
+  if (byLabel) return byLabel;
+
+  const minutes = parseExtractionDurationMinutes(raw);
+  if (minutes === null) return null;
+
+  return EXTRACTION_DURATION_PRESETS.find((p) => p.minutes === minutes) || null;
+}
+
+/**
+ * Format method-catalog default duration into a friendly preset label.
+ */
+export function formatMethodDefaultDuration(preset: ExtractionMethodPreset): string {
+  const minutes =
+    preset.durationUnit === "minutes"
+      ? Math.round(preset.defaultDuration)
+      : Math.round(preset.defaultDuration * 60);
+
+  const matched = EXTRACTION_DURATION_PRESETS.find((p) => p.minutes === minutes);
+  if (matched) return matched.value;
+
+  if (minutes < 60) return `${minutes} minutes`;
+  if (minutes === 60) return "1 hour";
+  if (minutes % 60 === 0) return `${minutes / 60} hours`;
+  return `${minutes} minutes`;
+}
+
 /**
  * Check whether concentration input is chemically meaningful for the selected solvent
  */
