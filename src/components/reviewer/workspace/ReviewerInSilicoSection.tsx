@@ -34,6 +34,7 @@ import Interaction2DStep6Section from "@/components/researcher/in-silico/Interac
 import Molecular3DStep7Section from "@/components/researcher/in-silico/Molecular3DStep7Section";
 import BindingAffinityStep5Section from "@/components/researcher/in-silico/BindingAffinityStep5Section";
 import type { DockingRunItem } from "@/components/researcher/in-silico/DockingExecutionStep4Section";
+import ReviewerDockingExecutionStep4 from "./ReviewerDockingExecutionStep4";
 import ReviewerStepFeedbackSection from "./ReviewerStepFeedbackSection";
 import { isFeedbackBelongsToStep } from "@/lib/feedback-step-filter";
 
@@ -165,8 +166,9 @@ export default function ReviewerInSilicoSection({
   const insilicoSynthesis =
     dossier?.section2?.insilicoSynthesis || dossier?.insilicoSynthesis || {};
 
-  // Live workspace runs loaded directly from docking API if available
+  // Live workspace runs / targets loaded directly from docking API if available
   const [workspaceRuns, setWorkspaceRuns] = useState<any[]>([]);
+  const [workspaceTargets, setWorkspaceTargets] = useState<any[]>([]);
 
   useEffect(() => {
     if (!project?.id) return;
@@ -176,9 +178,17 @@ export default function ReviewerInSilicoSection({
         if (data?.workspace?.runs && Array.isArray(data.workspace.runs) && data.workspace.runs.length > 0) {
           setWorkspaceRuns(data.workspace.runs);
         }
+        if (data?.workspace?.targets && Array.isArray(data.workspace.targets)) {
+          setWorkspaceTargets(data.workspace.targets);
+        }
       })
       .catch(() => {});
   }, [project?.id]);
+
+  const effectiveTargets = useMemo(() => {
+    if (workspaceTargets.length > 0) return workspaceTargets;
+    return targets;
+  }, [workspaceTargets, targets]);
 
   // Combined raw runs prioritizing live workspace
   const allRawRuns = useMemo(() => {
@@ -204,7 +214,10 @@ export default function ReviewerInSilicoSection({
       rmsdLb: r.rmsdLb !== undefined ? Number(r.rmsdLb) : 0,
       rmsdUb: r.rmsdUb !== undefined ? Number(r.rmsdUb) : 0,
       poseCount: r.poseCount || 9,
+      exhaustiveness: r.exhaustiveness != null ? Number(r.exhaustiveness) : undefined,
       vinaVersion: r.vinaVersion || "AutoDock Vina",
+      errorMessage: r.errorMessage || r.error || null,
+      startedAt: r.startedAt ? String(r.startedAt) : undefined,
       createdAt: r.createdAt ? String(r.createdAt) : undefined,
       completedAt: r.completedAt ? String(r.completedAt) : undefined,
     }));
@@ -798,79 +811,19 @@ export default function ReviewerInSilicoSection({
         {/* STEP 4: MOLECULAR DOCKING SETUP & AUTODOCK VINA EXECUTION        */}
         {/* ================================================================= */}
         {activeStep === 4 && (
-          <div className="space-y-5">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                  <Play className="w-4 h-4 text-indigo-600" />
-                  <span>Step 4: Molecular Docking Setup &amp; AutoDock Vina Execution</span>
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Verify search grid box coordinates, exhaustiveness level, number of binding modes, and simulation convergence.
-                </p>
-              </div>
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-800 border border-indigo-200">
-                AutoDock Vina 1.2.5
-              </span>
-            </div>
-
-            {/* Grid Box Parameters Card */}
-            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-3 text-xs">
-              <span className="font-bold text-slate-900 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
-                <Box className="w-4 h-4 text-indigo-600" />
-                <span>Search Grid Box Dimensions &amp; Catalytic Coordinates (Å)</span>
-              </span>
-
-              <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
-                <div className="p-2.5 rounded-lg bg-white border border-slate-200 space-y-0.5">
-                  <span className="text-[10px] text-slate-400 font-bold uppercase">Center X</span>
-                  <p className="text-sm font-mono font-bold text-slate-900">-19.45 Å</p>
-                </div>
-                <div className="p-2.5 rounded-lg bg-white border border-slate-200 space-y-0.5">
-                  <span className="text-[10px] text-slate-400 font-bold uppercase">Center Y</span>
-                  <p className="text-sm font-mono font-bold text-slate-900">74.20 Å</p>
-                </div>
-                <div className="p-2.5 rounded-lg bg-white border border-slate-200 space-y-0.5">
-                  <span className="text-[10px] text-slate-400 font-bold uppercase">Center Z</span>
-                  <p className="text-sm font-mono font-bold text-slate-900">38.90 Å</p>
-                </div>
-                <div className="p-2.5 rounded-lg bg-white border border-slate-200 space-y-0.5">
-                  <span className="text-[10px] text-slate-400 font-bold uppercase">Size X</span>
-                  <p className="text-sm font-mono font-bold text-slate-900">22.0 Å</p>
-                </div>
-                <div className="p-2.5 rounded-lg bg-white border border-slate-200 space-y-0.5">
-                  <span className="text-[10px] text-slate-400 font-bold uppercase">Size Y</span>
-                  <p className="text-sm font-mono font-bold text-slate-900">22.0 Å</p>
-                </div>
-                <div className="p-2.5 rounded-lg bg-white border border-slate-200 space-y-0.5">
-                  <span className="text-[10px] text-slate-400 font-bold uppercase">Size Z</span>
-                  <p className="text-sm font-mono font-bold text-slate-900">24.0 Å</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Algorithm Parameters */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 text-xs">
-              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Exhaustiveness</span>
-                <p className="text-sm font-bold font-mono text-slate-900">16 (High Thoroughness)</p>
-                <span className="text-[10.5px] text-slate-500">Iterated Local Search global steps</span>
-              </div>
-              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Max Binding Modes</span>
-                <p className="text-sm font-bold font-mono text-slate-900">9 Conformations</p>
-                <span className="text-[10.5px] text-slate-500">Energy range: 3.0 kcal/mol window</span>
-              </div>
-              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Job Completion Status</span>
-                <p className="text-sm font-bold text-emerald-700 flex items-center gap-1">
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>Convergence Achieved</span>
-                </p>
-                <span className="text-[10.5px] text-slate-500">All ligand runs executed successfully</span>
-              </div>
-            </div>
-          </div>
+          <ReviewerDockingExecutionStep4
+            projectId={project.id}
+            plantName={project.plantName || "Botanical Specimen"}
+            plantScientificName={project.plantScientificName}
+            compounds={compounds}
+            targets={effectiveTargets}
+            runs={normalizedRuns}
+            onSelectRunForVisuals={(runId, targetStep) => {
+              setSelectedRunId(runId);
+              setActiveStep(targetStep);
+            }}
+            onNavigateToResults={() => setActiveStep(5)}
+          />
         )}
 
         {/* ================================================================= */}
