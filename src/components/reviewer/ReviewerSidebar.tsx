@@ -10,23 +10,20 @@ import {
   User,
   ChevronLeft,
   ChevronRight,
-  ShieldCheck,
   Sparkles,
   FlaskConical,
   CheckCircle2,
   Clock3,
   AlertTriangle,
-  CircleAlert,
   Circle,
   RefreshCw,
-  ClipboardList,
   ClipboardCheck,
-  MessageSquare,
   RotateCcw,
   type LucideIcon,
 } from "lucide-react";
 import LogoutButton from "@/components/LogoutButton";
 import { useReviewerProject } from "@/context/ReviewerProjectContext";
+import { useLiveDisplayName } from "@/hooks/useLiveDisplayName";
 
 interface ReviewFlowStageItem {
   number: string;
@@ -157,29 +154,13 @@ export default function ReviewerSidebar({
     role: string;
   };
 }) {
-  const [userName, setUserName] = useState(user?.name || "Professional Reviewer");
+  const { name: userName, initial } = useLiveDisplayName(
+    user?.name || "Professional Reviewer"
+  );
   const [collapsed, setCollapsed] = useState(false);
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { activeProject } = useReviewerProject();
-
-  useEffect(() => {
-    if (user?.name) {
-      setUserName(user.name);
-    }
-  }, [user?.name]);
-
-  useEffect(() => {
-    const handleProfileUpdate = (e: any) => {
-      if (e.detail?.name) {
-        setUserName(e.detail.name);
-      }
-    };
-    window.addEventListener("natureaide:user-profile-updated", handleProfileUpdate);
-    return () => {
-      window.removeEventListener("natureaide:user-profile-updated", handleProfileUpdate);
-    };
-  }, []);
 
   React.useEffect(() => {
     const updateSidebarVar = () => {
@@ -188,7 +169,7 @@ export default function ReviewerSidebar({
       } else {
         document.documentElement.style.setProperty(
           "--sidebar-width",
-          collapsed ? "80px" : "305px"
+          collapsed ? "80px" : "280px"
         );
       }
     };
@@ -311,47 +292,52 @@ export default function ReviewerSidebar({
     };
   });
 
+  const navItem = (active: boolean) =>
+    `flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-semibold transition-colors ${
+      active
+        ? "bg-blue-600 text-white"
+        : "text-blue-100/75 hover:text-white hover:bg-white/10"
+    }`;
+
   return (
     <aside
-      className={`hidden lg:flex flex-col justify-between shrink-0 transition-all duration-300 border-r border-[#1e3a5f]/60 bg-gradient-to-b from-[#07172b] via-[#0b2447] to-[#051121] text-white ${
-        collapsed ? "w-20 px-2.5 py-4" : "w-[305px] px-3.5 py-5"
-      } h-screen sticky top-0 select-none shadow-xl z-30`}
+      className={`hidden lg:flex flex-col justify-between shrink-0 transition-all duration-200 border-r border-[#1e3a5f] bg-[#07172b] text-white ${
+        collapsed ? "w-20 px-3 py-4" : "w-[280px] px-4 py-5"
+      } h-screen sticky top-0 select-none shadow-sm z-30`}
     >
       <div className="flex flex-col min-h-0 flex-1">
-        {/* LOGO & BRAND HEADER */}
-        <div className="flex items-center justify-between pb-4 mb-4 border-b border-white/10 shrink-0">
+        <div className="flex items-center justify-between pb-4 mb-4 border-b border-blue-900/50 shrink-0">
           <Link
             href="/reviewer"
             className="flex items-center gap-3 overflow-hidden group min-w-0"
-            title="NatureAide Scientific Review Platform"
+            title="NaturAide Review Platform"
           >
-            <div className="w-10 h-10 rounded-xl bg-white p-1.5 shrink-0 flex items-center justify-center shadow-md shadow-blue-950/40 group-hover:scale-105 transition-transform">
+            <div className="w-9 h-9 rounded-lg bg-white p-1.5 shrink-0 flex items-center justify-center shadow-xs">
               <Image
                 src="/images/nature-logo.png"
-                alt="NatureAide Logo"
-                width={28}
-                height={28}
-                className="object-contain w-full h-full"
+                alt="NaturAide Logo"
+                width={24}
+                height={24}
+                className="object-contain"
                 priority
               />
             </div>
             {!collapsed && (
               <div className="flex flex-col min-w-0">
-                <span className="font-heading font-extrabold text-[19px] tracking-tight text-white flex items-center gap-1.5 leading-tight">
-                  NatureAide
-                  <span className="w-2 h-2 rounded-full bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.9)] animate-pulse" />
+                <span className="font-semibold text-base tracking-tight text-white leading-tight">
+                  NaturAide
                 </span>
-                <span className="text-[9.5px] font-bold text-blue-300/90 tracking-wider uppercase whitespace-nowrap">
-                  SCIENTIFIC REVIEW PLATFORM
+                <span className="text-[10px] font-medium text-blue-400/80 tracking-widest uppercase">
+                  Review Platform
                 </span>
               </div>
             )}
           </Link>
 
-          {/* Collapse Toggle */}
           <button
+            type="button"
             onClick={() => setCollapsed(!collapsed)}
-            className="p-1.5 rounded-lg text-blue-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer shrink-0 border border-white/10"
+            className="p-1.5 rounded-lg text-blue-400/80 hover:text-white hover:bg-blue-900/40 transition-colors cursor-pointer shrink-0 border border-blue-800/40"
             title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
@@ -359,51 +345,32 @@ export default function ReviewerSidebar({
           </button>
         </div>
 
-        {/* NAVIGATION SECTIONS */}
-        <div className="flex-1 overflow-y-auto pr-1 pb-2 space-y-4 custom-scrollbar">
-          {/* SECTION: MAIN */}
-          <div className="space-y-1">
+        <div className="flex-1 overflow-y-auto pr-1 pb-2 space-y-3 custom-scrollbar">
+          <div className="space-y-0.5">
             {!collapsed && (
-              <div className="px-3 pb-1">
-                <p className="text-[10px] font-extrabold tracking-wider text-blue-300/80 uppercase">
-                  MAIN
+              <div className="px-2.5 pb-1">
+                <p className="text-[10px] font-bold tracking-wider text-blue-400/70 uppercase">
+                  Main
                 </p>
               </div>
             )}
-            <Link
-              href="/reviewer"
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl font-heading font-bold text-xs transition-all ${
-                isWorkspaceActive
-                  ? "bg-blue-600 text-white shadow-md shadow-blue-900/40"
-                  : "text-slate-300 hover:text-white hover:bg-white/10"
-              }`}
-              title="Dashboard"
-            >
-              <LayoutDashboard className="w-4 h-4 shrink-0 text-blue-300" />
+            <Link href="/reviewer" className={navItem(isWorkspaceActive)} title="Dashboard">
+              <LayoutDashboard className="w-4 h-4 shrink-0" />
               {!collapsed && <span>Dashboard</span>}
             </Link>
 
             <Link
               href="/reviewer/projects"
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl font-heading font-bold text-xs transition-all ${
-                isProjectsActive
-                  ? "bg-blue-600 text-white shadow-md shadow-blue-900/40"
-                  : "text-slate-300 hover:text-white hover:bg-white/10"
-              }`}
+              className={navItem(isProjectsActive)}
               title="Review Queue & All Projects"
             >
-              <Layers className="w-4 h-4 shrink-0 text-blue-300" />
-              {!collapsed && <span>Review Queue</span>}
+              <Layers className="w-4 h-4 shrink-0" />
+              {!collapsed && <span>Projects</span>}
             </Link>
 
-            {/* Dedicated Revisions Page */}
             <Link
               href="/reviewer/revisions"
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl font-heading font-bold text-xs transition-all ${
-                isRevisionsActive
-                  ? "bg-blue-600 text-white shadow-md shadow-blue-900/40"
-                  : "text-slate-300 hover:text-white hover:bg-white/10"
-              }`}
+              className={navItem(isRevisionsActive)}
               title="Revisions & Findings Queue"
             >
               <RotateCcw className="w-4 h-4 shrink-0 text-amber-300" />
@@ -420,18 +387,17 @@ export default function ReviewerSidebar({
             </Link>
           </div>
 
-          {/* SECTION: PROJECT REVIEW (Selected Botanical Subject) */}
           <div className="space-y-1">
             {!collapsed ? (
-              <div className="p-2.5 rounded-xl bg-[#0a2318] border border-emerald-600/35 text-white shadow-xs space-y-1">
-                <div className="flex items-center justify-between pb-1 border-b border-emerald-600/25">
-                  <p className="text-[9.5px] font-extrabold tracking-wider text-emerald-400 uppercase flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    PROJECT REVIEW
+              <div className="p-2.5 rounded-lg bg-blue-950/50 border border-blue-800/50 text-white space-y-1">
+                <div className="flex items-center justify-between pb-1 border-b border-blue-800/40">
+                  <p className="text-[9.5px] font-bold tracking-wider text-blue-300 uppercase flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                    Active project
                   </p>
                   <Link
                     href="/reviewer/projects"
-                    className="text-[9.5px] font-medium text-emerald-300 hover:text-white underline transition-colors cursor-pointer"
+                    className="text-[9.5px] font-medium text-blue-300 hover:text-white transition-colors"
                     title="Change to another research project"
                   >
                     {activeProject ? "Change" : "Select"}
@@ -444,7 +410,7 @@ export default function ReviewerSidebar({
                     title={`View ${activeProject.title}`}
                   >
                     <p
-                      className="font-heading font-extrabold text-xs text-white leading-snug line-clamp-2 group-hover:text-emerald-300 transition-colors"
+                      className="font-semibold text-xs text-white leading-snug line-clamp-2 group-hover:text-blue-200 transition-colors"
                       title={activeProject.title}
                     >
                       {activeProject.title}
@@ -456,16 +422,16 @@ export default function ReviewerSidebar({
                     className="block group pt-0.5"
                     title={`View Research Project #${effectiveProjectId}`}
                   >
-                    <p className="font-heading font-extrabold text-xs text-white leading-snug line-clamp-2 group-hover:text-emerald-300 transition-colors">
+                    <p className="font-semibold text-xs text-white leading-snug line-clamp-2 group-hover:text-blue-200 transition-colors">
                       Research Project #{effectiveProjectId}
                     </p>
                   </Link>
                 ) : (
                   <div className="py-1 text-center">
-                    <p className="text-[11px] text-slate-300">No project active</p>
+                    <p className="text-[11px] text-slate-400">No project active</p>
                     <Link
                       href="/reviewer/projects"
-                      className="mt-1.5 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10.5px] font-bold text-emerald-200 bg-emerald-900/60 hover:bg-emerald-800 transition-colors"
+                      className="mt-1.5 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10.5px] font-semibold text-blue-100 bg-blue-900/60 hover:bg-blue-800 transition-colors"
                     >
                       Select a Project →
                     </Link>
@@ -475,7 +441,7 @@ export default function ReviewerSidebar({
             ) : (
               <Link
                 href="/reviewer/projects"
-                className="w-10 h-10 mx-auto rounded-xl bg-[#0a2318] border border-emerald-600/40 flex items-center justify-center text-emerald-400 hover:text-white transition-colors cursor-pointer block"
+                className="w-10 h-10 mx-auto rounded-lg bg-blue-950/50 border border-blue-800/50 flex items-center justify-center text-blue-300 hover:text-white transition-colors"
                 title={
                   activeProject
                     ? `Active Project: ${activeProject.plantName} (${activeProject.plantScientificName || ""}) · Click to change`
@@ -487,12 +453,11 @@ export default function ReviewerSidebar({
             )}
           </div>
 
-          {/* SECTION: RESEARCH REVIEW FLOW */}
-          <div className="space-y-1.5">
+          <div className="space-y-1">
             {!collapsed && (
-              <div className="px-3 pb-0.5">
-                <p className="text-[10px] font-extrabold tracking-wider text-blue-300/80 uppercase">
-                  RESEARCH REVIEW FLOW
+              <div className="px-2.5 pb-0.5">
+                <p className="text-[10px] font-bold tracking-wider text-blue-400/70 uppercase">
+                  Review flow
                 </p>
               </div>
             )}
@@ -708,82 +673,65 @@ export default function ReviewerSidebar({
             </div>
           </div>
 
-          {/* SECTION: AI */}
-          <div className="pt-2 border-t border-white/10 space-y-1">
+          <div className="pt-2 border-t border-blue-900/50 space-y-0.5">
             <Link
               href="/reviewer/assistant"
-              className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
-                pathname === "/reviewer/assistant"
-                  ? "bg-blue-600 text-white shadow-md shadow-blue-900/40 font-bold"
-                  : "text-slate-300 hover:text-white hover:bg-white/10"
-              }`}
+              className={navItem(pathname === "/reviewer/assistant")}
               title="Ask NatureAide"
             >
-              <Sparkles className="w-4 h-4 shrink-0 text-sky-400" />
+              <Sparkles className="w-4 h-4 shrink-0" />
               {!collapsed && <span>Ask NatureAide</span>}
             </Link>
-          </div>
-
-          {/* SECTION: ACCOUNT */}
-          <div className="space-y-1">
-            {!collapsed && (
-              <div className="px-3 pb-1">
-                <p className="text-[10px] font-extrabold tracking-wider text-blue-300/80 uppercase">
-                  ACCOUNT
-                </p>
-              </div>
-            )}
             <Link
               href="/reviewer/profile"
-              className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
-                pathname === "/reviewer/profile"
-                  ? "bg-blue-600 text-white shadow-md shadow-blue-900/40 font-bold"
-                  : "text-slate-300 hover:text-white hover:bg-white/10"
-              }`}
+              className={navItem(pathname === "/reviewer/profile")}
               title="Professional Profile"
             >
-              <User className="w-4 h-4 shrink-0 text-blue-300" />
+              <User className="w-4 h-4 shrink-0" />
               {!collapsed && <span>Profile</span>}
             </Link>
           </div>
         </div>
       </div>
 
-      {/* BOTTOM SECTION: GENERAL PROFESSIONAL REVIEWER & LOGOUT */}
-      <div className="pt-3 border-t border-white/10 shrink-0 space-y-2.5">
+      <div className="pt-3 border-t border-blue-900/50 shrink-0 space-y-2">
         {!collapsed ? (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between gap-2 p-2.5 rounded-2xl bg-white/10 border border-white/15">
-              <Link
-                href="/reviewer/profile"
-                className="flex items-center gap-2.5 min-w-0 flex-1 group"
-                title={`${userName} (Reviewer Profile)`}
-              >
-                <div className="w-8 h-8 rounded-full bg-blue-500/30 text-blue-300 font-bold text-xs flex items-center justify-center shrink-0 border border-blue-400/40">
-                  {(userName || "P").charAt(0).toUpperCase()}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-bold text-white truncate group-hover:text-blue-300 transition-colors">
-                    {userName}
-                  </p>
-                  <span className="text-[10px] text-blue-300/80 font-bold tracking-wider uppercase truncate block">
-                    Reviewer
-                  </span>
-                </div>
-              </Link>
-            </div>
-            <LogoutButton className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-rose-300 hover:text-white bg-rose-500/20 hover:bg-rose-500/30 border border-rose-400/30 transition-colors cursor-pointer" />
+          <div className="flex items-center justify-between gap-2 p-2.5 rounded-lg bg-blue-950/40 border border-blue-900/60">
+            <Link
+              href="/reviewer/profile"
+              className="flex items-center gap-2.5 min-w-0 flex-1 group"
+              title={`${userName} (Reviewer Profile)`}
+            >
+              <div className="w-8 h-8 rounded-lg bg-blue-900/80 text-blue-300 font-semibold text-xs flex items-center justify-center shrink-0 border border-blue-700/50">
+                {initial}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-medium text-white truncate group-hover:text-blue-300 transition-colors">
+                  {userName}
+                </p>
+                <p className="text-[10px] text-blue-400/70 uppercase tracking-wider truncate">
+                  Reviewer
+                </p>
+              </div>
+            </Link>
+            <LogoutButton
+              iconOnly
+              className="p-1.5 text-slate-400 hover:text-rose-300 hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer"
+            />
           </div>
         ) : (
           <div className="flex flex-col items-center gap-2">
             <Link
               href="/reviewer/profile"
-              className="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-blue-300 font-bold text-xs transition-colors"
+              className="w-9 h-9 rounded-lg bg-blue-900/80 text-blue-300 font-semibold text-xs flex items-center justify-center border border-blue-700/50 hover:bg-blue-800 transition-colors"
               title={`${userName} (Reviewer Profile)`}
             >
-              {(userName || "P").charAt(0).toUpperCase()}
+              {initial}
             </Link>
-            <LogoutButton iconOnly className="w-10 h-10 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 hover:text-white border border-rose-400/30 flex items-center justify-center transition-colors cursor-pointer" />
+            <LogoutButton
+              iconOnly
+              className="p-1.5 text-slate-400 hover:text-rose-300 rounded-lg"
+            />
           </div>
         )}
       </div>

@@ -321,6 +321,10 @@ function formatAffinityScore(val: number): string {
 export async function getSection3CompiledContext(
   projectId: number
 ): Promise<CompiledResearchOverview> {
+  // Ensure V2 tables exist on fresh databases before compiling overview.
+  const { ensureV2ResearchSchema } = await import("@/lib/v2-research-schema");
+  await ensureV2ResearchSchema();
+
   const [projRows]: any = await pool.query(
     `SELECT rp.*,
             COALESCE(p.commonName, rp.plantCustomName, 'Unspecified Plant') AS plantName,

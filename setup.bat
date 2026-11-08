@@ -647,16 +647,15 @@ Write-Host ""
 
 Write-Host "NEXT STEPS TO RUN NATUREAIDE:" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "1. MANUALLY CREATE & IMPORT DATABASE IN phpMyAdmin:" -ForegroundColor Yellow
-Write-Host "   a. Open your browser to: " -NoNewline
-Write-Host "http://localhost/phpmyadmin" -ForegroundColor White
-Write-Host "   b. Click 'New' -> Database name: " -NoNewline
-Write-Host "natureaide_db" -ForegroundColor Green
-Write-Host " (Collation: utf8mb4_unicode_ci) -> Click 'Create'."
-Write-Host "   c. Select 'natureaide_db' -> Click the 'Import' tab."
-Write-Host "   d. Choose file: " -NoNewline
-Write-Host "natureaide_backup.sql" -ForegroundColor White
-Write-Host " -> Click 'Import' at the bottom."
+Write-Host "1. DATABASE SCHEMA:" -ForegroundColor Yellow
+Write-Host "   Setup already ran 'npm run db:migrate' (creates all required tables including" -ForegroundColor White
+Write-Host "   research_product_selections). If MySQL was offline during setup, start it in" -ForegroundColor White
+Write-Host "   XAMPP and run:" -ForegroundColor White
+Write-Host ""
+Write-Host "     npm run db:migrate" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "   Optional: import natureaide_backup.sql in phpMyAdmin ONLY for demo seed data" -ForegroundColor DarkGray
+Write-Host "   AFTER migrations (do not skip db:migrate)." -ForegroundColor DarkGray
 Write-Host ""
 
 Write-Host "2. (OPTIONAL) CONFIGURE EXTERNAL AI KEYS IN .env.local:" -ForegroundColor Yellow
@@ -666,7 +665,7 @@ Write-Host ""
 Write-Host "3. START NATUREAIDE:" -ForegroundColor Yellow
 Write-Host "   In this terminal, run:" -ForegroundColor White
 Write-Host ""
-Write-Host "     npm run dev" -ForegroundColor Cyan
+Write-Host "     npm run dev:share" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "   Then open your browser to: " -NoNewline
 Write-Host "http://localhost:3000" -ForegroundColor Green

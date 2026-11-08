@@ -327,7 +327,7 @@ export default function ReviewerInSilicoSection({
               onClick={() => setActiveStep(step.num)}
               className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium shrink-0 transition-all cursor-pointer ${
                 isCurrent
-                  ? "bg-indigo-700 text-white font-semibold shadow-xs"
+                  ? "bg-blue-600 text-white font-semibold shadow-xs"
                   : isStepApproved
                   ? "bg-emerald-50 text-emerald-800 border border-emerald-300 font-semibold"
                   : "bg-white text-slate-700 hover:bg-slate-50 border border-slate-200/90"
@@ -480,13 +480,16 @@ export default function ReviewerInSilicoSection({
       {/* Step Content Container */}
       <div className="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-7 shadow-xs space-y-6">
         {/* Step Header with Assigned Specialist Info */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-slate-900 text-white text-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 rounded-xl border border-blue-400/25 bg-[linear-gradient(120deg,#071930_0%,#0b2447_48%,#0f3460_100%)] px-4 py-3 text-white text-xs shadow-[0_8px_20px_-14px_rgba(7,25,48,0.45)]">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-mono text-[10.5px] font-bold px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-400/30">
+            <span className="font-mono text-[10.5px] font-bold px-2 py-0.5 rounded border border-blue-400/30 bg-blue-500/20 text-blue-200">
               Role 02: {currentStepConfig.roleName}
             </span>
-            <span className="text-slate-300">
-              Specialist: <strong className="text-white">{currentStepConfig.roleProfession}</strong>
+            <span className="text-blue-100/80">
+              Specialist:{" "}
+              <strong className="text-white px-1.5 py-0.5 rounded bg-white/10 border border-white/15">
+                {currentStepConfig.roleProfession}
+              </strong>
             </span>
           </div>
           <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
@@ -1002,7 +1005,7 @@ export default function ReviewerInSilicoSection({
               <button
                 type="button"
                 onClick={() => onNavigateTab && onNavigateTab("feedback")}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold transition-all shadow-xs cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold transition-all shadow-xs cursor-pointer"
               >
                 <span>Consolidated Feedback Console</span>
                 <ArrowRight className="w-3.5 h-3.5" />
@@ -1010,7 +1013,7 @@ export default function ReviewerInSilicoSection({
               <button
                 type="button"
                 onClick={() => onNavigateTab && onNavigateTab("section3")}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-purple-700 hover:bg-purple-800 text-white font-bold shadow-xs cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-xs cursor-pointer"
               >
                 <span>Next: Section 3 · Paper</span>
                 <ArrowRight className="w-3.5 h-3.5" />
@@ -1020,7 +1023,7 @@ export default function ReviewerInSilicoSection({
             <button
               type="button"
               onClick={() => setActiveStep((prev: number) => Math.min(prev + 1, INSILICO_STEPS.length))}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-700 hover:bg-indigo-800 text-white font-semibold transition-all shadow-xs cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-all shadow-xs cursor-pointer"
             >
               <span>Next Step ({activeStep + 1} of {INSILICO_STEPS.length})</span>
               <ArrowRight className="w-3.5 h-3.5" />

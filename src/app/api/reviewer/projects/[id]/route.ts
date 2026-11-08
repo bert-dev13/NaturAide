@@ -22,6 +22,7 @@ import {
   hydrateSummaryRow,
   type SavedAiReviewSummaryRecord,
 } from "@/lib/reviewer-ai-summary-service";
+import { getSection3CompiledContext } from "@/lib/manuscript-upload-service";
 
 function mapCoverageStatusToDisplay(
   rawStatus?: string | null
@@ -584,6 +585,7 @@ export async function GET(
       specialties,
       approvedStepsBySection: approvedSteps,
       dossier: activeSnapshot,
+      compiledOverview: await getSection3CompiledContext(projectId),
       finalApprovalSummary,
     });
   } catch (error: any) {

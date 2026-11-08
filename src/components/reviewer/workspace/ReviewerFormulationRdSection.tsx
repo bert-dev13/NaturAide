@@ -352,7 +352,7 @@ export default function ReviewerFormulationRdSection({
       {/* Step Content Container */}
       <div className="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-7 shadow-xs space-y-6">
         {/* Step Header with Assigned Specialist Info */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl bg-gradient-to-r from-[#0b2b4c] via-[#103a64] to-[#071e35] text-white text-xs border border-blue-900/50 shadow-xs relative overflow-hidden">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 rounded-xl border border-blue-400/25 bg-[linear-gradient(120deg,#071930_0%,#0b2447_48%,#0f3460_100%)] px-4 py-3 text-white text-xs shadow-[0_8px_20px_-14px_rgba(7,25,48,0.45)]">
           <div className="flex items-center gap-2.5 flex-wrap z-10">
             <span className="font-mono text-[11px] font-bold px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 flex items-center gap-1.5 shadow-2xs">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
@@ -1620,7 +1620,7 @@ export default function ReviewerFormulationRdSection({
               <button
                 type="button"
                 onClick={() => onNavigateTab && onNavigateTab("feedback")}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold transition-all shadow-xs cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold transition-all shadow-xs cursor-pointer"
               >
                 <span>Consolidated Feedback Console</span>
                 <ArrowRight className="w-3.5 h-3.5" />

@@ -5,33 +5,26 @@ import {
   FileText,
   Upload,
   CheckCircle2,
-  Award,
   Download,
-  ExternalLink,
-  MessageSquarePlus,
-  Eye,
   AlertTriangle,
-  Clock,
-  BookOpen,
   ArrowRight,
   ArrowLeft,
-  Sprout,
-  Dna,
-  ShieldCheck,
-  FileCheck2,
   Check,
   ChevronLeft,
   ChevronRight,
   ZoomIn,
   ZoomOut,
-  Maximize2,
 } from "lucide-react";
 import ReviewerStepFeedbackSection from "./ReviewerStepFeedbackSection";
+import ReviewerResearchSummaryStep1 from "./ReviewerResearchSummaryStep1";
 import { isFeedbackBelongsToStep } from "@/lib/feedback-step-filter";
+import { resolveResearchSummaryText } from "@/lib/research-summary-utils";
+import type { CompiledResearchOverview } from "@/lib/manuscript-upload-service";
 
 export interface ReviewerSubmissionSectionProps {
   project: any;
   dossier: any;
+  compiledOverview?: CompiledResearchOverview | null;
   submission: any;
   feedbackList?: any[];
   onAddFeedbackForStep?: (stepTitle: string) => void;
@@ -43,6 +36,14 @@ export interface ReviewerSubmissionSectionProps {
   onRefreshFeedback?: () => Promise<void>;
   onDeleteFeedback?: (id: number) => Promise<void>;
   onResolveFeedback?: (id: number) => Promise<void>;
+}
+
+function splitReadableParagraphs(text: string): string[] {
+  if (!text) return [];
+  return text
+    .split(/\n{2,}/)
+    .map((p) => p.trim())
+    .filter(Boolean);
 }
 
 const SUBMISSION_STEPS = [
@@ -69,6 +70,7 @@ const SUBMISSION_STEPS = [
 export default function ReviewerSubmissionSection({
   project,
   dossier,
+  compiledOverview = null,
   submission,
   feedbackList = [],
   onAddFeedbackForStep,
@@ -88,12 +90,26 @@ export default function ReviewerSubmissionSection({
     if (onStepChange) onStepChange(nextVal);
     setInternalActiveStep(nextVal);
   };
-  const [summaryTab, setSummaryTab] = useState<"executive" | "section1" | "section2">("executive");
   const [currentPage, setCurrentPage] = useState(1);
   const [zoomScale, setZoomScale] = useState(100);
 
   const manuscript = dossier?.section3?.manuscript || dossier?.manuscript || null;
   const dossierRecord = dossier?.section3?.dossier || dossier?.dossier || {};
+  const savedSummary =
+    dossierRecord?.executiveSummary ||
+    dossier?.executiveSummary ||
+    dossier?.section3?.dossier?.executiveSummary ||
+    "";
+  const executiveSummary = resolveResearchSummaryText(
+    savedSummary,
+    compiledOverview?.compiledSummaryText
+  );
+  const findingsParagraphs = splitReadableParagraphs(
+    compiledOverview?.interpretation?.keyFindings || ""
+  );
+  const limitationsParagraphs = splitReadableParagraphs(
+    compiledOverview?.interpretation?.potentialLimitations || ""
+  );
   const hasUploadedManuscript = Boolean(
     manuscript && (manuscript.fileName || manuscript.fileUrl || manuscript.storagePath)
   );
@@ -277,13 +293,16 @@ export default function ReviewerSubmissionSection({
       {/* Step Content Container */}
       <div className="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-7 shadow-xs space-y-6">
         {/* Step Header with Assigned Specialist Info */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-slate-900 text-white text-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 rounded-xl border border-blue-400/25 bg-[linear-gradient(120deg,#071930_0%,#0b2447_48%,#0f3460_100%)] px-4 py-3 text-white text-xs shadow-[0_8px_20px_-14px_rgba(7,25,48,0.45)]">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-mono text-[10.5px] font-bold px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-400/30">
+            <span className="font-mono text-[10.5px] font-bold px-2 py-0.5 rounded border border-blue-400/30 bg-blue-500/20 text-blue-200">
               Role 03: {currentStepConfig.roleName}
             </span>
-            <span className="text-slate-300">
-              Specialist: <strong className="text-white">{currentStepConfig.roleProfession}</strong>
+            <span className="text-blue-100/80">
+              Specialist:{" "}
+              <strong className="text-white px-1.5 py-0.5 rounded bg-white/10 border border-white/15">
+                {currentStepConfig.roleProfession}
+              </strong>
             </span>
           </div>
           <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
@@ -314,115 +333,19 @@ export default function ReviewerSubmissionSection({
         {/* ================================================================= */}
         {/* STEP 1: RESEARCH SUMMARY & CROSS-DISCIPLINARY SYNTHESIS          */}
         {/* ================================================================= */}
-        {activeStep === 1 && (
-          <div className="space-y-5">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-purple-600" />
-                  <span>Step 1: Cross-Disciplinary Research Summary &amp; Dossier Overview</span>
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Inspect the integrated findings across Section 1 (Formulation R&amp;D) and Section 2 (In-Silico Docking).
-                </p>
-              </div>
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-50 text-purple-800 border border-purple-200">
-                Summary Complete
-              </span>
-            </div>
+        {activeStep === 1 && compiledOverview && (
+          <ReviewerResearchSummaryStep1
+            projectId={project.id}
+            compiledOverview={compiledOverview}
+            executiveSummary={executiveSummary}
+            findingsParagraphs={findingsParagraphs}
+            limitationsParagraphs={limitationsParagraphs}
+          />
+        )}
 
-            {/* Sub-Tabs for Summary Sections */}
-            <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
-              <button
-                type="button"
-                onClick={() => setSummaryTab("executive")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${
-                  summaryTab === "executive"
-                    ? "bg-purple-700 text-white"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                }`}
-              >
-                Executive Synthesis
-              </button>
-              <button
-                type="button"
-                onClick={() => setSummaryTab("section1")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${
-                  summaryTab === "section1"
-                    ? "bg-purple-700 text-white"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                }`}
-              >
-                Section 1: Formulation Highlights
-              </button>
-              <button
-                type="button"
-                onClick={() => setSummaryTab("section2")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${
-                  summaryTab === "section2"
-                    ? "bg-purple-700 text-white"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                }`}
-              >
-                Section 2: Computational Docking Highlights
-              </button>
-            </div>
-
-            {/* Tab 1: Executive Summary */}
-            {summaryTab === "executive" && (
-              <div className="p-4 rounded-xl bg-purple-50/60 border border-purple-200 space-y-2 text-xs">
-                <span className="font-bold text-purple-950 uppercase tracking-wider text-[11px] block">
-                  Executive Scientific Summary &amp; Multi-Disciplinary Thesis
-                </span>
-                <p className="text-slate-800 leading-relaxed text-xs">
-                  {dossierRecord?.executiveSummary ||
-                    dossier?.executiveSummary ||
-                    `This research establishes a complete translational development pipeline for ${project.plantName} (${project.plantScientificName || "Vitex negundo L."}). Combining ethnobotanical documentation with computational in-silico target screening (AutoDock Vina) and standardized pharmaceutical formulation R&D, the study demonstrates that active flavonoid constituents exhibit high-affinity binding to pro-inflammatory TNF-alpha (ΔG = -8.70 kcal/mol) and can be formulated into a physically stable, compliant topical hydrogel matrix with verified batch quality specifications.`}
-                </p>
-              </div>
-            )}
-
-            {/* Tab 2: Section 1 Highlights */}
-            {summaryTab === "section1" && (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">
-                  <span className="text-[10px] text-slate-400 font-bold uppercase">Botanical Authentication</span>
-                  <p className="text-sm font-bold text-slate-900">Voucher: USTH-HERB-2026-084</p>
-                  <span className="text-[10.5px] text-emerald-700 font-semibold">PITAHC Verified Taxon</span>
-                </div>
-                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">
-                  <span className="text-[10px] text-slate-400 font-bold uppercase">Master Formula</span>
-                  <p className="text-sm font-bold text-slate-900">EXP-GEL-01 (Topical Hydrogel)</p>
-                  <span className="text-[10.5px] text-slate-600">Active extract: 5.0% w/w</span>
-                </div>
-                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">
-                  <span className="text-[10px] text-slate-400 font-bold uppercase">Batch QC Status</span>
-                  <p className="text-sm font-bold text-emerald-800">pH 5.82 · 24,500 cP</p>
-                  <span className="text-[10.5px] text-slate-600">3 Replicate Batches Passed</span>
-                </div>
-              </div>
-            )}
-
-            {/* Tab 3: Section 2 Highlights */}
-            {summaryTab === "section2" && (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">
-                  <span className="text-[10px] text-slate-400 font-bold uppercase">Receptor Target</span>
-                  <p className="text-sm font-bold text-slate-900">TNF-α (PDB: 2AZ5)</p>
-                  <span className="text-[10.5px] text-slate-600">Resolution: 2.10 Å</span>
-                </div>
-                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">
-                  <span className="text-[10px] text-slate-400 font-bold uppercase">Lead Binding Affinity</span>
-                  <p className="text-sm font-mono font-bold text-emerald-700">-8.70 kcal/mol</p>
-                  <span className="text-[10.5px] text-slate-600">Casticin (Top Mode)</span>
-                </div>
-                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">
-                  <span className="text-[10px] text-slate-400 font-bold uppercase">Lipinski Rule of 5</span>
-                  <p className="text-sm font-bold text-emerald-800">100% Pass Rate</p>
-                  <span className="text-[10.5px] text-slate-600">Drug-like oral bioavailability</span>
-                </div>
-              </div>
-            )}
+        {activeStep === 1 && !compiledOverview && (
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-xs text-slate-500">
+            Loading compiled research overview…
           </div>
         )}
 
@@ -600,7 +523,7 @@ export default function ReviewerSubmissionSection({
               <button
                 type="button"
                 onClick={() => onNavigateTab && onNavigateTab("feedback")}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold transition-all shadow-xs cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold transition-all shadow-xs cursor-pointer"
               >
                 <span>Consolidated Feedback Console</span>
                 <ArrowRight className="w-3.5 h-3.5" />

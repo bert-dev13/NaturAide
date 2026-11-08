@@ -211,44 +211,44 @@ export default function ReviewerSpecialtyEvaluationSection({
       {/* =================================================================== */}
       {/* 1. TOP PANEL: COMPACT MULTIDISCIPLINARY APPROVAL DASHBOARD          */}
       {/* =================================================================== */}
-      <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-[#091e36] via-[#0d2a4d] to-[#08182b] text-white border border-blue-800/40 shadow-sm space-y-3.5">
-        {/* ROW 1: HEADER & OVERALL PERCENTAGE */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-blue-500/15 border border-blue-400/30 flex items-center justify-center shrink-0">
+      <div className="relative overflow-hidden rounded-2xl border border-blue-500/20 bg-[linear-gradient(120deg,#071930_0%,#0b2447_48%,#0f3460_100%)] px-4 py-3.5 text-white shadow-[0_12px_28px_-18px_rgba(7,25,48,0.55)] sm:px-5 space-y-3">
+        <div className="pointer-events-none absolute -right-8 -top-10 h-24 w-24 rounded-full bg-blue-400/12 blur-3xl" />
+
+        <div className="relative flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-blue-400/30 bg-blue-500/15">
               <ClipboardCheck
-                className={`w-5 h-5 ${
-                  overallApprovalPercent === 100 ? "text-emerald-400" : "text-cyan-300"
+                className={`h-4 w-4 ${
+                  overallApprovalPercent === 100 ? "text-emerald-400" : "text-blue-300"
                 }`}
               />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base sm:text-lg font-heading font-extrabold text-white tracking-tight leading-tight">
-                  Multidisciplinary Review Panel
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-base font-semibold tracking-tight text-white sm:text-lg">
+                  Multidisciplinary review panel
                 </h2>
-                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-cyan-400/15 text-cyan-200 border border-cyan-400/25">
-                  3 Expert Roles
+                <span className="rounded-full border border-blue-400/30 bg-blue-500/10 px-2 py-0.5 font-mono text-[10px] font-bold text-blue-200">
+                  3 roles
                 </span>
               </div>
-              <p className="text-[11px] text-blue-200/80 mt-0.5">
-                Consolidated cross-section verification across all 16 research steps
+              <p className="mt-0.5 text-[11px] text-blue-100/75">
+                Cross-section verification · 16 research steps
               </p>
             </div>
           </div>
 
-          {/* Compact Right Total Metric */}
-          <div className="flex items-center gap-3 self-start sm:self-auto bg-white/5 border border-white/10 px-3.5 py-1.5 rounded-xl">
+          <div className="flex shrink-0 items-center gap-2.5 self-start rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 sm:self-auto">
             <div className="text-right">
-              <span className="text-[10px] uppercase tracking-wider text-blue-200 font-bold block leading-none">
-                Total Approval
+              <span className="block text-[10px] font-bold uppercase tracking-wider text-blue-200 leading-none">
+                Total
               </span>
-              <span className="text-[11px] font-mono font-medium text-slate-300 block mt-0.5">
-                {totalApprovedSections} of 3 Roles Approved
+              <span className="mt-0.5 block font-mono text-[11px] text-blue-100/80">
+                {totalApprovedSections}/3 approved
               </span>
             </div>
-            <div className="text-right border-l border-white/10 pl-3">
-              <span className="font-mono text-xl sm:text-2xl font-black text-white leading-none">
+            <div className="border-l border-white/10 pl-2.5 text-right">
+              <span className="font-mono text-xl font-bold leading-none text-white sm:text-2xl">
                 {overallApprovalPercent}%
               </span>
             </div>
@@ -262,7 +262,7 @@ export default function ReviewerSpecialtyEvaluationSection({
               overallApprovalPercent === 100
                 ? "bg-gradient-to-r from-emerald-400 to-teal-400 shadow-xs shadow-emerald-400/40"
                 : overallApprovalPercent > 0
-                ? "bg-gradient-to-r from-cyan-400 to-blue-500"
+                ? "bg-gradient-to-r from-blue-400 to-blue-500"
                 : "bg-white/15"
             }`}
             style={{ width: `${Math.max(overallApprovalPercent, 2)}%` }}

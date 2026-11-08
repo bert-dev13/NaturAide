@@ -197,40 +197,34 @@ export default function AllProjectsDirectoryClient() {
   ];
 
   return (
-    <div className="w-full max-w-none space-y-6 pb-12 font-sans text-slate-800">
-      {/* 1. PAGE HEADER (SCIENTIFIC BLUE THEME, FULL WIDTH) */}
-      <div className="w-full bg-gradient-to-r from-[#071930] via-[#0b2447] to-[#0f3460] rounded-2xl border border-blue-500/30 p-6 sm:p-7 shadow-md text-white">
-        <div className="w-full flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-1.5">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wider uppercase bg-blue-500/20 text-blue-200 border border-blue-400/30">
-                <Layers className="w-3.5 h-3.5 text-blue-300" />
-                RESEARCH DIRECTORY
-              </span>
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white font-heading">
+    <div className="w-full max-w-none space-y-4 pb-12 font-sans text-slate-800">
+      {/* 1. Compact navy hero */}
+      <div className="relative w-full overflow-hidden rounded-2xl border border-blue-500/20 bg-[linear-gradient(120deg,#071930_0%,#0b2447_48%,#0f3460_100%)] px-4 py-3.5 text-white shadow-[0_12px_28px_-18px_rgba(7,25,48,0.55)] sm:px-5">
+        <div className="pointer-events-none absolute -right-10 -top-12 h-32 w-32 rounded-full bg-blue-400/15 blur-3xl" />
+        <div className="relative flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-400/30 bg-blue-500/10 px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-blue-200">
+              <Layers className="h-3 w-3 text-blue-300" />
+              Directory
+            </span>
+            <h1 className="mt-1.5 text-lg font-semibold tracking-tight text-white sm:text-xl">
               All Research Projects
             </h1>
-            <p className="text-xs sm:text-sm text-blue-200/80 mt-1">
-              Browse and review scientific research projects.
-            </p>
+            <p className="mt-0.5 text-xs text-blue-100/75">Browse and open dossiers for review.</p>
           </div>
-
-          <div className="flex items-center gap-3 shrink-0">
-            <Link
-              href="/reviewer/assistant"
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-blue-500 hover:bg-blue-600 border border-blue-400/30 shadow-md shadow-blue-950/40 transition-all cursor-pointer"
-            >
-              <Sparkles className="w-4 h-4 text-blue-200" />
-              Ask NatureAide
-            </Link>
-          </div>
+          <Link
+            href="/reviewer/assistant"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-blue-600 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-blue-700"
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            Ask NatureAide
+          </Link>
         </div>
       </div>
 
       {/* 2. FILTER & SEARCH BAR (FULL WIDTH) */}
       <div className="w-full">
-        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 bg-white p-3 sm:p-4 rounded-2xl border border-slate-200/80 shadow-xs">
+        <div className="flex flex-col items-stretch justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-2.5 shadow-[0_1px_2px_rgba(7,25,48,0.04)] md:flex-row md:items-center sm:p-3">
           {/* Status Tabs */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
             {filterTabs.map((tab) => {
@@ -239,7 +233,7 @@ export default function AllProjectsDirectoryClient() {
                 <button
                   key={tab.id}
                   onClick={() => handleStatusFilterChange(tab.id)}
-                  className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-all cursor-pointer ${
                     isActive
                       ? "bg-slate-900 text-white shadow-xs"
                       : "bg-slate-100/70 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900"
@@ -321,14 +315,14 @@ export default function AllProjectsDirectoryClient() {
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="bg-slate-50/80 border-b border-slate-200/80 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                    <th className="py-3.5 px-5">Research Project</th>
-                    <th className="py-3.5 px-4">Plant / Study</th>
-                    <th className="py-3.5 px-4">Researcher</th>
-                    <th className="py-3.5 px-4">Research Progress</th>
-                    <th className="py-3.5 px-4">Professional Review</th>
-                    <th className="py-3.5 px-4">Status</th>
-                    <th className="py-3.5 px-4">Updated</th>
-                    <th className="py-3.5 px-5 text-right">Action</th>
+                    <th className="py-2.5 px-4">Research Project</th>
+                    <th className="py-2.5 px-3">Plant / Study</th>
+                    <th className="py-2.5 px-3">Researcher</th>
+                    <th className="py-2.5 px-3">Research Progress</th>
+                    <th className="py-2.5 px-3">Professional Review</th>
+                    <th className="py-2.5 px-3">Status</th>
+                    <th className="py-2.5 px-3">Updated</th>
+                    <th className="py-2.5 px-4 text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -343,7 +337,7 @@ export default function AllProjectsDirectoryClient() {
                         className="hover:bg-slate-50/70 transition-colors group"
                       >
                         {/* Research Project Title & Cycle */}
-                        <td className="py-4 px-5 max-w-xs xl:max-w-sm">
+                        <td className="py-3 px-4 max-w-xs xl:max-w-sm">
                           <div className="flex flex-col min-w-0">
                             <Link
                               href={`/reviewer/projects/${project.projectId}?tab=section1`}
@@ -360,7 +354,7 @@ export default function AllProjectsDirectoryClient() {
                         </td>
 
                         {/* Plant / Study */}
-                        <td className="py-4 px-4 whitespace-nowrap">
+                        <td className="py-3 px-3 whitespace-nowrap">
                           <div className="flex flex-col">
                             <span className="text-xs font-semibold text-emerald-800">
                               {project.plantName}
@@ -374,14 +368,14 @@ export default function AllProjectsDirectoryClient() {
                         </td>
 
                         {/* Researcher */}
-                        <td className="py-4 px-4 whitespace-nowrap">
+                        <td className="py-3 px-3 whitespace-nowrap">
                           <span className="font-medium text-slate-700">
                             {project.researcherName}
                           </span>
                         </td>
 
                         {/* Research Progress (e.g. Stage 3 of 6 · 33%) */}
-                        <td className="py-4 px-4 whitespace-nowrap">
+                        <td className="py-3 px-3 whitespace-nowrap">
                           <div className="flex flex-col gap-1 min-w-[120px]">
                             <div className="flex items-center justify-between text-[11px]">
                               <span className="font-semibold text-slate-700">
@@ -404,7 +398,7 @@ export default function AllProjectsDirectoryClient() {
                         </td>
 
                         {/* Professional Review Progress (e.g. 2 / 5 complete) */}
-                        <td className="py-4 px-4 whitespace-nowrap">
+                        <td className="py-3 px-3 whitespace-nowrap">
                           <div className="flex flex-col gap-1.5 min-w-[130px]">
                             <div className="flex items-center justify-between text-[11px]">
                               <span className="font-semibold text-slate-700">
@@ -463,7 +457,7 @@ export default function AllProjectsDirectoryClient() {
                         </td>
 
                         {/* Project Status */}
-                        <td className="py-4 px-4 whitespace-nowrap">
+                        <td className="py-3 px-3 whitespace-nowrap">
                           <span
                             className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold ${
                               project.displayStatus === "Completed"
@@ -495,7 +489,7 @@ export default function AllProjectsDirectoryClient() {
                         </td>
 
                         {/* Updated */}
-                        <td className="py-4 px-4 whitespace-nowrap text-slate-500 text-[11px]">
+                        <td className="py-3 px-3 whitespace-nowrap text-slate-500 text-[11px]">
                           {formatRelativeTime(project.updatedAt)}
                         </td>
 

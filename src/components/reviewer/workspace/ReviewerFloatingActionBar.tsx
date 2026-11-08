@@ -8,7 +8,6 @@ import {
   ArrowRight,
   ArrowLeft,
   Check,
-  Sparkles,
 } from "lucide-react";
 
 export interface ReviewerFloatingActionBarProps {
@@ -51,9 +50,9 @@ export default function ReviewerFloatingActionBar({
     <aside
       aria-label="Reviewer navigation bar"
       style={{ left: "var(--sidebar-width, 0px)" }}
-      className="fixed bottom-4 right-0 z-40 px-3 sm:px-6 pointer-events-none flex flex-col items-center justify-end gap-2 transition-[left] duration-200"
+      className="fixed bottom-3 right-0 z-40 px-3 sm:px-5 pointer-events-none flex flex-col items-center justify-end transition-[left] duration-200"
     >
-      <div className="pointer-events-auto bg-slate-900/95 backdrop-blur-md text-white rounded-2xl border border-slate-700/80 shadow-2xl shadow-slate-950/40 px-3.5 sm:px-5 py-2.5 max-w-5xl w-full mx-auto flex flex-col md:flex-row items-center justify-between gap-3 transition-all">
+      <div className="pointer-events-auto max-w-5xl w-full mx-auto flex flex-col md:flex-row items-center justify-between gap-2 rounded-xl border border-blue-400/25 bg-[linear-gradient(120deg,#071930_0%,#0b2447_48%,#0f3460_100%)] px-3 sm:px-4 py-2 text-white shadow-[0_12px_28px_-18px_rgba(7,25,48,0.55)] backdrop-blur-md">
         {/* Left: Section, Step Info & Approval Progress Percentage */}
         <div className="flex items-center gap-3 min-w-0 w-full md:w-auto justify-between md:justify-start">
           <div className="shrink-0 bg-blue-500/20 text-blue-300 border border-blue-400/30 px-2.5 py-1 rounded-lg text-xs font-bold font-mono">
@@ -66,7 +65,7 @@ export default function ReviewerFloatingActionBar({
                 {currentSectionTitle}
               </span>
               {isSectionStepMode && (
-                <span className="font-mono text-[11px] px-2 py-0.5 rounded-md bg-white/10 text-cyan-300 border border-white/10 font-bold">
+                <span className="font-mono text-[10.5px] px-2 py-0.5 rounded-md bg-white/10 text-blue-200 border border-white/10 font-bold">
                   Step {currentStep} of {totalSteps}
                 </span>
               )}
@@ -81,7 +80,7 @@ export default function ReviewerFloatingActionBar({
                       approvedStepsPercent === 100
                         ? "bg-emerald-400 shadow-sm shadow-emerald-400/50"
                         : approvedStepsPercent > 0
-                        ? "bg-cyan-400"
+                        ? "bg-blue-400"
                         : "bg-white/20"
                     }`}
                     style={{ width: `${Math.max(approvedStepsPercent, 2)}%` }}
@@ -146,7 +145,7 @@ export default function ReviewerFloatingActionBar({
             <button
               type="button"
               onClick={onNextStep}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-white/15 hover:bg-white/25 text-white border border-white/20 transition-all cursor-pointer shadow-xs"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white border border-blue-500/50 transition-all cursor-pointer"
               title={
                 currentStep >= totalSteps
                   ? activeTab === "section3"

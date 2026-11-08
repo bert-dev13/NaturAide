@@ -43,28 +43,31 @@ export default function ReviewerProjectOverviewTab({
   return (
     <div className="space-y-6">
       {/* 1. Multidisciplinary Evaluation Status Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl p-6 shadow-md border border-slate-800 space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
-          <div className="space-y-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-300">
-              Multidisciplinary Research Evaluation
+      <div className="relative overflow-hidden rounded-2xl border border-blue-500/20 bg-[linear-gradient(120deg,#071930_0%,#0b2447_48%,#0f3460_100%)] px-4 py-3.5 text-white shadow-[0_12px_28px_-18px_rgba(7,25,48,0.55)] sm:px-5 space-y-3">
+        <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between border-b border-white/10 pb-3">
+          <div className="min-w-0 space-y-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-blue-200">
+              Multidisciplinary evaluation
             </span>
-            <h2 className="text-xl sm:text-2xl font-bold tracking-tight">
+            <h2 className="text-lg font-semibold tracking-tight truncate sm:text-xl">
               {project.title}
             </h2>
-            <p className="text-xs text-slate-300">
-              Lead Researcher: <strong>{project.researcherName}</strong> · Plant Subject:{" "}
-              <strong>{project.plantName}</strong> (
-              <span className="italic font-serif">{project.plantScientificName || "Vitex negundo L."}</span>)
+            <p className="text-[11px] text-blue-100/80">
+              <strong className="text-white">{project.researcherName}</strong>
+              {" · "}
+              <strong className="text-white">{project.plantName}</strong>{" "}
+              <span className="italic font-serif text-blue-100/70">
+                ({project.plantScientificName || "Vitex negundo L."})
+              </span>
             </p>
           </div>
 
-          <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
-            <span className="px-3 py-1.5 rounded-xl bg-white/10 border border-white/10 text-xs font-mono font-bold text-indigo-200">
+          <div className="flex shrink-0 items-center gap-2 self-start sm:self-center">
+            <span className="rounded-lg border border-white/15 bg-white/10 px-2.5 py-1 font-mono text-[11px] font-bold text-blue-100">
               {activeSubmission?.versionTag || "v1.0"}
             </span>
             <span
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold border ${
+              className={`rounded-lg px-2.5 py-1 text-[11px] font-bold border ${
                 approvedCount === 3
                   ? "bg-emerald-500/20 text-emerald-200 border-emerald-400/40"
                   : "bg-blue-500/20 text-blue-200 border-blue-400/40"
@@ -90,7 +93,7 @@ export default function ReviewerProjectOverviewTab({
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
                     <span className="font-mono text-[10.5px] text-slate-400 font-bold">{spec.number}</span>
-                    <span className="text-[10px] uppercase font-semibold text-indigo-300">
+                    <span className="text-[10px] uppercase font-semibold text-blue-200">
                       {spec.order === 1 ? "Section 1" : spec.order === 2 ? "Section 2" : "Section 3"}
                     </span>
                   </div>
@@ -104,7 +107,7 @@ export default function ReviewerProjectOverviewTab({
                 </div>
                 <div>
                   <p className="font-bold text-white text-xs truncate">{spec.label}</p>
-                  <p className="text-[11px] text-indigo-200/90 truncate font-medium">{spec.professionTitle}</p>
+                  <p className="text-[11px] text-blue-100/80 truncate font-medium">{spec.professionTitle}</p>
                   <p className="text-[10px] text-slate-300 truncate mt-0.5">{spec.status}</p>
                 </div>
               </button>

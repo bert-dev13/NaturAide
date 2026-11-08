@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { EXPERT_REVIEW_AREAS, type ExpertReviewAreaKey } from "@/lib/expert-review-areas";
 import { useReviewerProject } from "@/context/ReviewerProjectContext";
+import { useLiveDisplayName } from "@/hooks/useLiveDisplayName";
 
 interface SpecialtyBadge {
   areaKey: ExpertReviewAreaKey;
@@ -122,6 +123,8 @@ export default function ReviewerDashboardClient({
 }: Props) {
   const router = useRouter();
   const { setActiveProject } = useReviewerProject();
+  const { name: liveName, firstName: liveFirstName } = useLiveDisplayName(user?.name || "");
+  const welcomeName = liveFirstName || liveName || user?.name || "Reviewer";
 
   const [assignedSpecialties, setAssignedSpecialties] = useState<SpecialtyBadge[]>(
     initialAssignedSpecialties
@@ -227,49 +230,45 @@ export default function ReviewerDashboardClient({
   };
 
   return (
-    <div className="w-full max-w-[1440px] mx-auto space-y-6 pb-12">
-      {/* 1. COMPACT DASHBOARD HEADER */}
-      <div className="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-xs">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div className="space-y-1.5">
+    <div className="w-full max-w-[1440px] mx-auto space-y-4 pb-12 text-slate-800">
+      {/* 1. Compact navy hero */}
+      <div className="relative w-full overflow-hidden rounded-2xl border border-blue-500/20 bg-[linear-gradient(120deg,#071930_0%,#0b2447_48%,#0f3460_100%)] px-4 py-3.5 text-white shadow-[0_12px_28px_-18px_rgba(7,25,48,0.55)] sm:px-5">
+        <div className="pointer-events-none absolute -right-10 -top-12 h-36 w-36 rounded-full bg-blue-400/15 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-14 left-1/4 h-28 w-28 rounded-full bg-sky-300/10 blur-3xl" />
+        <div className="relative flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200">
-                <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />
-                Professional Reviewer Platform
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-400/30 bg-blue-500/10 px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-blue-200">
+                <ShieldCheck className="h-3 w-3 text-blue-300" />
+                Review Workbench
               </span>
               {profile?.professionalTitle && (
-                <span className="text-xs font-medium text-slate-500">
+                <span className="rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-blue-100/80">
                   {profile.professionalTitle}
                 </span>
               )}
             </div>
-            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
-              Reviewer Dashboard
+            <h1 className="mt-1.5 text-lg font-semibold tracking-tight text-white sm:text-xl">
+              Welcome back, {welcomeName}
             </h1>
-            <p className="text-xs sm:text-sm text-slate-600">
-              Signed in as <span className="font-semibold text-slate-800">{user.name}</span> — Reviewing assigned multidisciplinary research submissions.
+            <p className="mt-0.5 max-w-xl text-xs leading-relaxed text-blue-100/75">
+              Multidisciplinary peer review across assigned scientific dossiers.
             </p>
           </div>
 
-          {/* Assigned Specialties Display & Admin/Role Assignment Trigger */}
-          <div className="flex flex-col sm:items-end gap-2">
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                Assigned Specialties ({assignedSpecialties.length})
-              </span>
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedAreaKeys(assignedSpecialties.map((s) => s.areaKey));
-                  setSpecialtyMessage(null);
-                  setShowSpecialtyModal(true);
-                }}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/80 transition-colors cursor-pointer"
-              >
-                <SlidersHorizontal className="w-3 h-3" />
-                Assign Specialties
-              </button>
-            </div>
+          <div className="flex shrink-0 flex-col gap-2 sm:items-end">
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedAreaKeys(assignedSpecialties.map((s) => s.areaKey));
+                setSpecialtyMessage(null);
+                setShowSpecialtyModal(true);
+              }}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-blue-400/30 bg-blue-500/10 px-3 py-2 text-xs font-semibold text-blue-100 transition hover:bg-blue-500/20 cursor-pointer"
+            >
+              <SlidersHorizontal className="h-3.5 w-3.5" />
+              Assign Specialties ({assignedSpecialties.length})
+            </button>
             <div className="flex flex-wrap items-center gap-1.5">
               {EXPERT_REVIEW_AREAS.map((area) => {
                 const isAssigned = assignedSpecialties.some((s) => s.areaKey === area.key);
@@ -277,11 +276,9 @@ export default function ReviewerDashboardClient({
                 return (
                   <span
                     key={area.key}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-900 text-white shadow-2xs"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/10 px-2 py-0.5 text-[11px] font-semibold text-blue-50"
                   >
-                    <span className="text-[10px] font-mono text-indigo-300 font-bold">
-                      0{area.order}
-                    </span>
+                    <span className="font-mono text-[10px] font-bold text-blue-300">0{area.order}</span>
                     <span>{area.label}</span>
                   </span>
                 );
@@ -291,101 +288,113 @@ export default function ReviewerDashboardClient({
         </div>
       </div>
 
-      {/* 2. FOUR COMPACT METRICS */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
+      {/* 2. Compact KPI metrics */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <button
           type="button"
           onClick={() => setStatusFilter("ALL")}
-          className={`text-left p-4 sm:p-5 rounded-xl border transition-all cursor-pointer ${
+          className={`group relative overflow-hidden rounded-2xl border text-left transition-all cursor-pointer p-3.5 shadow-[0_1px_2px_rgba(7,25,48,0.04)] ${
             statusFilter === "ALL"
-              ? "bg-white border-indigo-500 ring-2 ring-indigo-500/10 shadow-xs"
-              : "bg-white border-slate-200/90 hover:border-slate-300 shadow-2xs"
+              ? "border-blue-500 bg-gradient-to-br from-blue-50/80 to-white ring-2 ring-blue-500/10"
+              : "border-slate-200 bg-gradient-to-br from-slate-50/50 to-white hover:border-slate-300"
           }`}
         >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500">Assigned Research</span>
-            <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
-              <FileCheck2 className="w-4 h-4" />
+          <div className="absolute inset-x-0 top-0 h-[2.5px] bg-gradient-to-r from-blue-400 to-blue-600" />
+          <div className="relative flex items-start justify-between gap-2">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Assigned</p>
+              <p className="mt-1.5 text-2xl font-semibold tabular-nums text-slate-900 sm:text-[1.7rem]">
+                {metrics.assignedResearch}
+              </p>
+              <p className="mt-1 text-[11px] text-slate-500">Active dossiers</p>
             </div>
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+              <FileCheck2 className="h-3.5 w-3.5" />
+            </span>
           </div>
-          <p className="mt-2 text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
-            {metrics.assignedResearch}
-          </p>
-          <p className="mt-0.5 text-[11px] text-slate-500">Total active research dossiers</p>
         </button>
 
         <button
           type="button"
           onClick={() => setStatusFilter("PENDING")}
-          className={`text-left p-4 sm:p-5 rounded-xl border transition-all cursor-pointer ${
+          className={`group relative overflow-hidden rounded-2xl border text-left transition-all cursor-pointer p-3.5 shadow-[0_1px_2px_rgba(7,25,48,0.04)] ${
             statusFilter === "PENDING"
-              ? "bg-white border-sky-500 ring-2 ring-sky-500/10 shadow-xs"
-              : "bg-white border-slate-200/90 hover:border-slate-300 shadow-2xs"
+              ? "border-sky-500 bg-gradient-to-br from-sky-50/80 to-white ring-2 ring-sky-500/10"
+              : "border-slate-200 bg-gradient-to-br from-slate-50/50 to-white hover:border-slate-300"
           }`}
         >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500">Pending Reviews</span>
-            <div className="w-8 h-8 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center">
-              <Clock3 className="w-4 h-4" />
+          <div className="absolute inset-x-0 top-0 h-[2.5px] bg-gradient-to-r from-sky-400 to-sky-600" />
+          <div className="relative flex items-start justify-between gap-2">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Pending</p>
+              <p className="mt-1.5 text-2xl font-semibold tabular-nums text-slate-900 sm:text-[1.7rem]">
+                {metrics.pendingReviews}
+              </p>
+              <p className="mt-1 text-[11px] text-slate-500">In progress</p>
             </div>
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-sky-50 text-sky-600">
+              <Clock3 className="h-3.5 w-3.5" />
+            </span>
           </div>
-          <p className="mt-2 text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
-            {metrics.pendingReviews}
-          </p>
-          <p className="mt-0.5 text-[11px] text-slate-500">Awaiting review or in progress</p>
         </button>
 
         <button
           type="button"
           onClick={() => setStatusFilter("REVISION_REQUIRED")}
-          className={`text-left p-4 sm:p-5 rounded-xl border transition-all cursor-pointer ${
+          className={`group relative overflow-hidden rounded-2xl border text-left transition-all cursor-pointer p-3.5 shadow-[0_1px_2px_rgba(7,25,48,0.04)] ${
             statusFilter === "REVISION_REQUIRED"
-              ? "bg-white border-amber-500 ring-2 ring-amber-500/10 shadow-xs"
-              : "bg-white border-slate-200/90 hover:border-slate-300 shadow-2xs"
+              ? "border-amber-500 bg-gradient-to-br from-amber-50/80 to-white ring-2 ring-amber-500/10"
+              : "border-slate-200 bg-gradient-to-br from-slate-50/50 to-white hover:border-slate-300"
           }`}
         >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500">Revisions Requested</span>
-            <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
-              <AlertTriangle className="w-4 h-4" />
+          <div className="absolute inset-x-0 top-0 h-[2.5px] bg-gradient-to-r from-amber-400 to-amber-600" />
+          <div className="relative flex items-start justify-between gap-2">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Revisions</p>
+              <p className="mt-1.5 text-2xl font-semibold tabular-nums text-slate-900 sm:text-[1.7rem]">
+                {metrics.revisionsRequested}
+              </p>
+              <p className="mt-1 text-[11px] text-slate-500">Returned</p>
             </div>
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
+              <AlertTriangle className="h-3.5 w-3.5" />
+            </span>
           </div>
-          <p className="mt-2 text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
-            {metrics.revisionsRequested}
-          </p>
-          <p className="mt-0.5 text-[11px] text-slate-500">Returned for researcher revision</p>
         </button>
 
         <button
           type="button"
           onClick={() => setStatusFilter("APPROVED")}
-          className={`text-left p-4 sm:p-5 rounded-xl border transition-all cursor-pointer ${
+          className={`group relative overflow-hidden rounded-2xl border text-left transition-all cursor-pointer p-3.5 shadow-[0_1px_2px_rgba(7,25,48,0.04)] ${
             statusFilter === "APPROVED"
-              ? "bg-white border-emerald-500 ring-2 ring-emerald-500/10 shadow-xs"
-              : "bg-white border-slate-200/90 hover:border-slate-300 shadow-2xs"
+              ? "border-emerald-500 bg-gradient-to-br from-emerald-50/80 to-white ring-2 ring-emerald-500/10"
+              : "border-slate-200 bg-gradient-to-br from-slate-50/50 to-white hover:border-slate-300"
           }`}
         >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500">Completed Reviews</span>
-            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
-              <CheckCircle2 className="w-4 h-4" />
+          <div className="absolute inset-x-0 top-0 h-[2.5px] bg-gradient-to-r from-emerald-400 to-emerald-600" />
+          <div className="relative flex items-start justify-between gap-2">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Completed</p>
+              <p className="mt-1.5 text-2xl font-semibold tabular-nums text-slate-900 sm:text-[1.7rem]">
+                {metrics.completedReviews}
+              </p>
+              <p className="mt-1 text-[11px] text-slate-500">Approved</p>
             </div>
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+            </span>
           </div>
-          <p className="mt-2 text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
-            {metrics.completedReviews}
-          </p>
-          <p className="mt-0.5 text-[11px] text-slate-500">Approved across assigned areas</p>
         </button>
       </div>
 
       {/* 3. COMPACT RESEARCH LIST */}
       <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h2 className="text-base font-bold text-slate-900">Assigned Research Submissions</h2>
-            <p className="text-xs text-slate-500">
-              Select a research project to open the multidisciplinary Review Workspace.
-            </p>
+        <div className="flex flex-col gap-2 border-b border-slate-200/80 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-600" />
+            <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-600">
+              Assigned submissions
+            </h2>
           </div>
 
           <div className="flex items-center gap-2.5">
@@ -396,7 +405,7 @@ export default function ReviewerDashboardClient({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search title, plant, researcher..."
-                className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 focus:bg-white text-slate-800"
+                className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 focus:bg-white text-slate-800"
               />
             </div>
             {statusFilter !== "ALL" && (
@@ -446,7 +455,7 @@ export default function ReviewerDashboardClient({
                           <span className="font-bold text-slate-900 leading-snug">
                             {row.title}
                           </span>
-                          <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-indigo-50 text-indigo-700 border border-indigo-200/70">
+                          <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-blue-50 text-blue-700 border border-blue-200/70">
                             {row.versionTag}
                           </span>
                         </div>
@@ -482,7 +491,7 @@ export default function ReviewerDashboardClient({
                                 key={spec.areaKey}
                                 type="button"
                                 onClick={() => handleOpenReview(row, spec.areaKey)}
-                                className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-slate-100 hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 border border-slate-200/90 hover:border-indigo-200 transition-colors cursor-pointer"
+                                className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 border border-slate-200/90 hover:border-blue-200 transition-colors cursor-pointer"
                                 title={`Open ${spec.label} Review (${spec.status || "Pending"})`}
                               >
                                 <span className={`w-1.5 h-1.5 rounded-full ${specBadge.dotColor}`} />
@@ -513,7 +522,7 @@ export default function ReviewerDashboardClient({
                         <button
                           type="button"
                           onClick={() => handleOpenReview(row)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-2xs transition-colors cursor-pointer"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-2xs transition-colors cursor-pointer"
                         >
                           <span>Open Review</span>
                           <ArrowRight className="w-3.5 h-3.5" />
@@ -534,7 +543,7 @@ export default function ReviewerDashboardClient({
           <div className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-lg w-full overflow-hidden">
             <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <UserCheck className="w-4 h-4 text-indigo-600" />
+                <UserCheck className="w-4 h-4 text-blue-600" />
                 <h3 className="text-sm font-bold text-slate-900">
                   Assign Reviewer Specialties ({user.name})
                 </h3>
@@ -563,13 +572,13 @@ export default function ReviewerDashboardClient({
                       onClick={() => handleToggleSpecialty(area.key)}
                       className={`w-full text-left p-3 rounded-xl border transition-all flex items-start justify-between gap-3 cursor-pointer ${
                         isSelected
-                          ? "bg-indigo-50/60 border-indigo-500 text-slate-900"
+                          ? "bg-blue-50/60 border-blue-500 text-slate-900"
                           : "bg-white border-slate-200 hover:border-slate-300 text-slate-700"
                       }`}
                     >
                       <div className="space-y-0.5">
                         <div className="flex items-center gap-2">
-                          <span className="font-mono text-xs font-bold text-indigo-600">
+                          <span className="font-mono text-xs font-bold text-blue-600">
                             0{area.order}
                           </span>
                           <span className="text-xs font-bold text-slate-900">
@@ -584,7 +593,7 @@ export default function ReviewerDashboardClient({
                       <div
                         className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 mt-0.5 border ${
                           isSelected
-                            ? "bg-indigo-600 border-indigo-600 text-white"
+                            ? "bg-blue-600 border-blue-600 text-white"
                             : "border-slate-300 bg-white"
                         }`}
                       >
@@ -606,7 +615,7 @@ export default function ReviewerDashboardClient({
                 onClick={() =>
                   setSelectedAreaKeys(EXPERT_REVIEW_AREAS.map((a) => a.key))
                 }
-                className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 cursor-pointer"
+                className="text-xs font-semibold text-blue-600 hover:text-blue-800 cursor-pointer"
               >
                 Select All 3 Roles
               </button>
@@ -622,7 +631,7 @@ export default function ReviewerDashboardClient({
                   type="button"
                   disabled={isSavingSpecialties}
                   onClick={handleSaveSpecialties}
-                  className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50 transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 transition-colors cursor-pointer"
                 >
                   {isSavingSpecialties && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                   <span>Save Specialties</span>

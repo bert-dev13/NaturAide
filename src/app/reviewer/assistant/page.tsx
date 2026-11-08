@@ -418,8 +418,8 @@ export default function ReviewerAssistantPage() {
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className={`space-y-4 w-full h-[calc(100vh-130px)] flex flex-col relative transition-colors ${
-        isDraggingOver ? "ring-4 ring-blue-400/50 rounded-2xl bg-blue-50/20" : ""
+      className={`relative flex h-[calc(100vh-120px)] w-full flex-col gap-3 transition-colors ${
+        isDraggingOver ? "rounded-2xl bg-blue-50/30 ring-2 ring-blue-400/40" : ""
       }`}
     >
       {/* Hidden file input for paper uploads */}
@@ -446,66 +446,63 @@ export default function ReviewerAssistantPage() {
         </div>
       )}
 
-      {/* HERO HEADER BAR */}
-      <div className="relative overflow-hidden p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-[#071d3a] via-[#0b2b54] to-[#123e73] border border-blue-400/30 text-white shadow-lg shadow-blue-950/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
-        <div className="absolute -top-12 -right-12 w-48 h-48 bg-blue-500/20 rounded-full blur-2xl pointer-events-none animate-pulse" />
-
-        <div className="relative z-10 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-blue-500/30 border border-blue-400/40 flex items-center justify-center text-blue-300 shrink-0 shadow-inner">
-            <Sparkles className="w-5 h-5 text-blue-300 animate-pulse" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-base sm:text-lg font-heading font-extrabold text-white leading-tight drop-shadow-xs">
-                Ask NatureAide
-              </h1>
-              <span className="hidden sm:inline-flex px-2 py-0.5 rounded-full bg-blue-500/30 text-blue-200 border border-blue-400/30 text-[10px] font-extrabold uppercase tracking-wider">
-                AI Peer Review &amp; Paper Q&amp;A
-              </span>
+      {/* Compact navy hero */}
+      <div className="relative shrink-0 overflow-hidden rounded-2xl border border-blue-500/20 bg-[linear-gradient(120deg,#071930_0%,#0b2447_48%,#0f3460_100%)] px-4 py-3 text-white shadow-[0_12px_28px_-18px_rgba(7,25,48,0.55)] sm:px-5">
+        <div className="pointer-events-none absolute -right-10 -top-12 h-32 w-32 rounded-full bg-blue-400/15 blur-3xl" />
+        <div className="relative flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-500/15 text-blue-200">
+              <Sparkles className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-base font-semibold tracking-tight text-white sm:text-lg">Ask NatureAide</h1>
+                <span className="rounded-full border border-blue-400/30 bg-blue-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-blue-200">
+                  Review AI
+                </span>
+              </div>
+              <p className="truncate text-[11px] text-blue-100/75">
+                {selectedProject?.plantName || "Select dossier"} · grounded Q&amp;A
+              </p>
             </div>
-            <p className="text-[11px] text-blue-200/80">
-              Professional Scientific Review Assistant · Together AI Grounding
-            </p>
           </div>
-        </div>
 
-        {/* Project Selector & Actions */}
-        <div className="relative z-10 flex flex-wrap items-center gap-2">
-          {(messages.length > 0 || attachedPaper) && (
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
             <button
               type="button"
               onClick={handleClearChat}
               disabled={clearingChat}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-rose-500/20 hover:border-rose-400/40 border border-white/20 text-xs font-semibold text-blue-100 hover:text-rose-200 transition-colors cursor-pointer disabled:opacity-50"
-              title="Clear current chat and start fresh"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/5 px-2.5 py-1.5 text-[11px] font-semibold text-blue-100 transition hover:border-rose-400/40 hover:bg-rose-500/20 hover:text-rose-100 disabled:cursor-not-allowed disabled:opacity-40"
+              title="Clear chat"
+              aria-label="Clear chat"
             >
               {clearingChat ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : (
-                <Trash2 className="w-3.5 h-3.5 text-rose-300" />
+                <Trash2 className="h-3.5 w-3.5" />
               )}
-              <span>Clear Chat</span>
+              Clear chat
             </button>
-          )}
-
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-blue-200 font-semibold whitespace-nowrap">Dossier:</span>
-            <select
-              value={selectedProjectId || ""}
-              onChange={(e) => {
-                setSelectedProjectId(Number(e.target.value));
-                setMessages([]);
-                setConversationId(null);
-                setAttachedPaper(null);
-              }}
-              className="px-3 py-1.5 rounded-xl border border-white/20 bg-white/10 text-xs font-semibold text-white outline-none focus:bg-[#0b2b54] backdrop-blur-md cursor-pointer"
-            >
-              {projects.map((p) => (
-                <option key={p.id} value={p.id} className="text-slate-900 bg-white">
-                  {p.plantName} ({p.title})
-                </option>
-              ))}
-            </select>
+            <div className="relative">
+              <select
+                value={selectedProjectId || ""}
+                onChange={(e) => {
+                  setSelectedProjectId(Number(e.target.value));
+                  setMessages([]);
+                  setConversationId(null);
+                  setAttachedPaper(null);
+                }}
+                className="max-w-[220px] cursor-pointer appearance-none truncate rounded-xl border border-white/15 bg-white/10 py-1.5 pl-3 pr-8 text-[11px] font-semibold text-white outline-none backdrop-blur-md focus:bg-[#0b2447]"
+                title="Active dossier"
+              >
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id} className="bg-white text-slate-900">
+                    {p.plantName}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-blue-200" />
+            </div>
           </div>
         </div>
       </div>
@@ -538,10 +535,10 @@ export default function ReviewerAssistantPage() {
       )}
 
       {/* CHAT MESSAGES CONTAINER */}
-      <div className="flex-1 bg-white border border-slate-200 rounded-2xl shadow-xs p-4 sm:p-6 overflow-y-auto space-y-4">
+      <div className="flex-1 overflow-y-auto space-y-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-[0_1px_2px_rgba(7,25,48,0.04)] sm:p-4">
         {/* Welcome Banner */}
         {messages.length === 0 && (
-          <div className="p-6 rounded-2xl bg-slate-50 border border-slate-200 text-center max-w-2xl mx-auto space-y-4 my-4">
+          <div className="my-2 max-w-2xl mx-auto space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-center">
             <div className="w-12 h-12 rounded-2xl bg-blue-100 text-blue-600 mx-auto flex items-center justify-center">
               <Sparkles className="w-6 h-6" />
             </div>

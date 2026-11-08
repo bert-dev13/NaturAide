@@ -14,12 +14,10 @@ import {
   Sprout,
   Dna,
   Activity,
-  FlaskConical,
   ShieldAlert,
   Save,
   Lock,
   GitCompare,
-  Sparkles,
   Layers,
   Loader2,
   ShieldCheck,
@@ -492,9 +490,8 @@ export default function ProjectReviewWorkspaceClient({
   if (loading) {
     return (
       <div className="w-full max-w-[1440px] mx-auto py-24 flex flex-col items-center justify-center gap-3 text-slate-500">
-        <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
-        <p className="text-sm font-semibold text-slate-700">Loading Scientific Review Workspace...</p>
-        <p className="text-xs text-slate-400">Hydrating researcher dossiers, in-silico complexes, and specialty criteria...</p>
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+        <p className="text-sm font-semibold text-slate-700">Loading review workspace…</p>
       </div>
     );
   }
@@ -523,105 +520,79 @@ export default function ProjectReviewWorkspaceClient({
     submissionVersions,
     specialties,
     dossier,
+    compiledOverview,
   } = data;
 
   const currentSpecialty =
     specialties.find((s: any) => s.areaKey === activeSpecialtyKey) || specialties[0] || null;
 
   return (
-    <div className="w-full max-w-[1440px] mx-auto space-y-6 pb-36">
-      {/* 1. TOP HEADER BAR: Compact Sleek Blue Header with Animated Badges & Metadata */}
-      <div className="bg-gradient-to-r from-[#0b2b4c] via-[#103a64] to-[#071e35] text-white rounded-2xl border border-blue-400/25 p-4 sm:p-5 shadow-xl shadow-blue-950/30 relative overflow-hidden transition-all duration-300 space-y-3.5">
-        {/* Decorative background glows */}
-        <div className="absolute top-0 right-0 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
-        <div className="absolute bottom-0 left-1/3 w-60 h-60 bg-cyan-500/10 rounded-full blur-2xl pointer-events-none" />
+    <div className="w-full max-w-[1440px] mx-auto space-y-4 pb-28">
+      {/* Compact navy workspace hero */}
+      <div className="relative w-full overflow-hidden rounded-2xl border border-blue-500/20 bg-[linear-gradient(120deg,#071930_0%,#0b2447_48%,#0f3460_100%)] px-4 py-3.5 text-white shadow-[0_12px_28px_-18px_rgba(7,25,48,0.55)] sm:px-5 space-y-2.5">
+        <div className="pointer-events-none absolute -right-10 -top-12 h-28 w-28 rounded-full bg-blue-400/12 blur-3xl" />
 
-        {/* Row 1: Breadcrumb · Read-Only Mode · Actions */}
-        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
-          <div className="flex items-center gap-2">
+        <div className="relative flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-white/10 pb-2.5">
+          <div className="flex flex-wrap items-center gap-2 min-w-0">
             <Link
               href="/reviewer/projects"
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-200 hover:text-white transition-colors group"
+              className="inline-flex items-center gap-1 text-xs font-semibold text-blue-200 hover:text-white transition-colors"
             >
-              <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-0.5 transition-transform" />
-              <span>Review Queue</span>
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Review queue</span>
             </Link>
-            <span className="text-blue-300/40">/</span>
-            <span className="text-[10.5px] font-bold uppercase tracking-wider text-cyan-300 flex items-center gap-1.5">
-              <Sparkles className="w-3 h-3 text-cyan-400 animate-pulse" />
-              <span>Research Evaluation Workspace</span>
+            <span className="text-blue-300/40">·</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-blue-200">
+              Evaluation workspace
             </span>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-cyan-400/15 text-cyan-200 border border-cyan-400/30 shadow-xs backdrop-blur-xs">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-400"></span>
-              </span>
-              <Eye className="w-3.5 h-3.5 text-cyan-300" />
-              <span>Read-Only Reviewer Mode</span>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-400/30 bg-blue-500/10 px-2 py-0.5 text-[10px] font-semibold text-blue-100">
+              <Eye className="w-3 h-3 text-blue-300" />
+              Read-only
             </span>
 
             {submissionVersions && submissionVersions.length > 1 && (
               <select
                 value={activeSubmission?.id || ""}
                 onChange={(e) => loadWorkspace(Number(e.target.value))}
-                className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white/10 border border-white/20 text-white focus:outline-none cursor-pointer"
+                className="cursor-pointer rounded-lg border border-white/15 bg-white/10 px-2 py-1 text-[11px] font-semibold text-white focus:outline-none"
                 aria-label="Select submission version"
               >
                 {submissionVersions.map((v: any) => (
-                  <option key={v.id} value={v.id} className="bg-slate-900 text-white">
+                  <option key={v.id} value={v.id} className="bg-[#071930] text-white">
                     Version {v.versionTag} (Round {v.reviewRound})
                   </option>
                 ))}
               </select>
             )}
-
-
           </div>
         </div>
 
-        {/* Row 2: Project Title & Compact Animated Metadata Pills */}
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-3">
-          <div className="space-y-1.5 min-w-0">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-cyan-400/15 border border-cyan-400/30 flex items-center justify-center shrink-0 text-cyan-300 shadow-inner">
-                <FlaskConical className="w-4 h-4 animate-pulse" />
-              </div>
-              <h1 className="text-lg sm:text-xl font-heading font-extrabold text-white tracking-tight truncate">
-                {project.title}
-              </h1>
-            </div>
+        <div className="relative min-w-0 space-y-2">
+          <h1 className="text-lg font-semibold tracking-tight truncate sm:text-xl">{project.title}</h1>
 
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/10 text-slate-200 border border-white/10 text-[11px] backdrop-blur-xs">
-                <User className="w-3 h-3 text-cyan-300 shrink-0" />
-                <span>
-                  Researcher: <strong className="text-white">{project.researcherName}</strong>
-                </span>
-              </span>
-
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/10 text-slate-200 border border-white/10 text-[11px] backdrop-blur-xs">
-                <Sprout className="w-3 h-3 text-emerald-300 shrink-0" />
-                <span>
-                  Botanical: <strong className="text-white">{project.plantName}</strong>{" "}
-                  <em className="text-emerald-200/90 font-serif">({project.plantScientificName || "Vitex negundo L."})</em>
-                </span>
-              </span>
-
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/10 text-slate-200 border border-white/10 text-[11px] backdrop-blur-xs">
-                <Layers className="w-3 h-3 text-cyan-300 shrink-0" />
-                <span>
-                  Version: <strong className="font-mono text-cyan-300">{activeSubmission?.versionTag || "v1.0"}</strong>
-                </span>
-              </span>
-
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-200 border border-emerald-400/30 text-[11px] font-semibold backdrop-blur-xs">
-                <CheckCircle2 className="w-3 h-3 text-emerald-300 shrink-0" />
-                <span>{project.overallReviewStatus || "Under Professional Review"}</span>
-              </span>
-            </div>
+          <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-blue-100/85">
+            <span className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-0.5">
+              <User className="w-3 h-3 text-blue-300 shrink-0" />
+              <strong className="text-white font-medium">{project.researcherName}</strong>
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-0.5">
+              <Sprout className="w-3 h-3 text-emerald-300 shrink-0" />
+              <strong className="text-white font-medium">{project.plantName}</strong>
+              <em className="text-emerald-200/80 font-serif text-[10px]">
+                ({project.plantScientificName || "Vitex negundo L."})
+              </em>
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-0.5 font-mono">
+              <Layers className="w-3 h-3 text-blue-300 shrink-0" />
+              {activeSubmission?.versionTag || "v1.0"}
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-lg border border-emerald-400/30 bg-emerald-500/15 px-2 py-0.5 font-semibold text-emerald-100">
+              <CheckCircle2 className="w-3 h-3 text-emerald-300 shrink-0" />
+              {project.overallReviewStatus || "Under review"}
+            </span>
           </div>
         </div>
       </div>
@@ -675,6 +646,7 @@ export default function ProjectReviewWorkspaceClient({
           <ReviewerSubmissionSection
             project={project}
             dossier={dossier}
+            compiledOverview={compiledOverview}
             submission={activeSubmission}
             feedbackList={feedbackList}
             activeStep={section3Step}

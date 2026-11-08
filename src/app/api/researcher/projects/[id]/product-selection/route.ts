@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import pool from "@/lib/db";
 import { callTogetherChat } from "@/lib/ai/together-provider";
 import { generateScientificRationale } from "@/lib/product-format-catalog";
+import { ensureV2ResearchSchema } from "@/lib/v2-research-schema";
 
 // GET /api/researcher/projects/[id]/product-selection
 export async function GET(
@@ -20,6 +21,8 @@ export async function GET(
     if (isNaN(projectId)) {
       return NextResponse.json({ error: "Invalid project ID" }, { status: 400 });
     }
+
+    await ensureV2ResearchSchema();
 
     const [rows]: any = await pool.query(
       "SELECT * FROM research_product_selections WHERE projectId = ? LIMIT 1",
@@ -52,6 +55,8 @@ export async function POST(
     if (isNaN(projectId)) {
       return NextResponse.json({ error: "Invalid project ID" }, { status: 400 });
     }
+
+    await ensureV2ResearchSchema();
 
     const body = await req.json();
 

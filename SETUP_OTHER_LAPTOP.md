@@ -9,7 +9,7 @@ A step-by-step guide for setting up and running the complete **NatureAide** bota
 Follow this clean 6-step setup sequence:
 
 ```text
-[1] Install Software ──> [2] Git Clone ──> [3] Run setup.bat ──> [4] Import DB (phpMyAdmin) ──> [5] Edit .env.local ──> [6] npm run dev
+[1] Install Software ──> [2] Git Clone ──> [3] Run setup.bat ──> [4] Import DB (optional) + npm run db:migrate ──> [5] Edit .env.local ──> [6] npm run dev:share
 ```
 
 ---
@@ -51,18 +51,21 @@ setup.bat
 The script automatically:
 - Verifies Node.js, npm, Python, XAMPP/MySQL, and AutoDock Vina.
 - Runs `npm install` (with automatic `--legacy-peer-deps` fallback for React 19).
+- Runs `npm run db:migrate` when MySQL is online (creates/updates required tables).
 - Downloads official **AutoDock Vina** (`tools\vina\vina.exe`) if missing.
 - Sets up the `.docking-venv` Python virtual environment and installs `rdkit`, `meeko`, `scipy`, `gemmi`, and `openbabel-wheel`.
 - Prepares local paths and `.docking-artifacts` for molecular docking.
 - Checks `.env.local` safely and generates a secure `AUTH_SECRET` if missing without exposing or overwriting secrets.
-- Verifies MySQL server connectivity on port 3306 without modifying the database.
+- Verifies MySQL server connectivity on port 3306.
 - Displays `SETUP COMPLETE` with clear next steps.
 
 ---
 
-## Step 4: Manually Import Database via phpMyAdmin
+## Step 4: Import Database Seed Data (Optional) + Re-run Migrations
 
-> **Note:** `setup.bat` intentionally does **not** create, modify, or seed the database, keeping all database operations manual for data safety.
+> **Important:** Schema comes from migrations (`npm run db:migrate`), not only from the SQL dump.
+> Older `natureaide_backup.sql` files may be missing tables such as `research_product_selections`.
+> Always run migrations **after** importing a dump.
 
 1. Open **XAMPP Control Panel** (`C:\xampp\xampp-control.exe`) and start both **Apache** and **MySQL**.
 2. Open your browser to: **`http://localhost/phpmyadmin`**
@@ -73,7 +76,13 @@ The script automatically:
 7. Click the **Import** tab at the top.
 8. Under *File to import*, click **Choose File** and select your `natureaide_backup.sql` file.
 9. Scroll down and click **Import**.
-10. Verify all 96 tables appear under `natureaide_db`.
+10. Back in the project terminal, apply any newer schema that the dump may not include:
+
+```cmd
+npm run db:migrate
+```
+
+11. Confirm `research_product_selections` exists in phpMyAdmin (or via `npm run db:migrate:status`).
 
 ---
 
