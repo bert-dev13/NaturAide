@@ -414,7 +414,17 @@ npx tsx scripts/seed-verified-product-evidence.ts
 
 # 9. Sync botanical images
 node scripts/apply_ai_representative_images_to_db.js
+
+# 10. Seed phytochemical constituents (REQUIRED for Formulation R&D / In-Silico)
+npm run db:seed:phytochemicals
 ```
+
+> **If Phytochemical Constituents are empty** after setup, run:
+> ```cmd
+> npm run db:migrate
+> npm run db:seed:phytochemicals
+> ```
+> Then refresh the Formulation R&D botanical step. The app also auto-seeds this catalog the first time a project page loads with an empty `plant_compounds` table.
 
 ---
 

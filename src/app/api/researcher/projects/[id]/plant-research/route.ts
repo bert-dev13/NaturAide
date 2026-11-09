@@ -6,7 +6,7 @@ import {
   getBotanicalPlantRecord,
   VERIFIED_BOTANICAL_REGISTRY,
 } from "@/lib/botanical-registry";
-import { resolveCanonicalPlantId } from "@/lib/phytochemical-catalog";
+import { loadVerifiedPhytochemicals, resolveCanonicalPlantId } from "@/lib/phytochemical-catalog";
 
 export async function GET(
   request: Request,
@@ -110,19 +110,11 @@ export async function GET(
       plantData.family = registryRecord.family;
     }
 
-    // Fetch verified phytochemicals for this plant
-    let verifiedPhytochemicals: any[] = [];
-    if (canonicalId) {
-      const [pcRows]: any = await pool.query(
-        `SELECT id, plantId, compoundName, iupacName, molecularFormula, molecularWeight,
-                compoundClass, pubchemId, smiles, plantPartReported, referencesData, verificationStatus
-         FROM plant_compounds
-         WHERE plantId = ? OR plantScientificName LIKE ?
-         ORDER BY compoundName ASC`,
-        [canonicalId, `%${project.plantScientificName || project.plantName}%`]
-      );
-      verifiedPhytochemicals = pcRows;
-    }
+    const verifiedPhytochemicals = await loadVerifiedPhytochemicals({
+      plantId: canonicalId || project.plantId,
+      scientificName: project.plantScientificName,
+      commonName: project.plantName || project.plantCustomName,
+    });
 
     // Fetch currently selected study compounds for this project
     const [studyCompRows]: any = await pool.query(

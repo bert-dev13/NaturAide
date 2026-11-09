@@ -280,10 +280,24 @@ if ($mysqlPortOpen) {
     } catch {
         Write-WarningMsg "Could not run migrations automatically: $_"
     }
+
+    # 5. Seed phytochemical constituents catalog (required for Formulation R&D / In-Silico)
+    Write-Info "Seeding verified phytochemical constituents catalog..."
+    try {
+        $phytoProcess = Start-Process -FilePath $npmCmd -ArgumentList "run db:seed:phytochemicals" -WorkingDirectory $ScriptDir -Wait -PassThru -NoNewWindow
+        if ($phytoProcess.ExitCode -eq 0) {
+            Write-Success "Phytochemical constituents catalog seeded into plant_compounds."
+        } else {
+            Write-WarningMsg "Phytochemical seed reported exit code $($phytoProcess.ExitCode). Run 'npm run db:seed:phytochemicals' manually."
+        }
+    } catch {
+        Write-WarningMsg "Could not seed phytochemicals automatically: $_"
+    }
     Write-Host ""
 } else {
     Write-Info "MySQL server is not running on port 3306. Skipping migrations for now."
     Write-Info "Start MySQL in XAMPP and run 'npm run db:migrate' when ready."
+    Write-Info "Then seed phytochemicals with: npm run db:seed:phytochemicals"
 }
 
 # ==============================================================================
@@ -653,9 +667,11 @@ Write-Host "   research_product_selections). If MySQL was offline during setup, 
 Write-Host "   XAMPP and run:" -ForegroundColor White
 Write-Host ""
 Write-Host "     npm run db:migrate" -ForegroundColor Cyan
+Write-Host "     npm run db:seed:phytochemicals" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "   Optional: import natureaide_backup.sql in phpMyAdmin ONLY for demo seed data" -ForegroundColor DarkGray
 Write-Host "   AFTER migrations (do not skip db:migrate)." -ForegroundColor DarkGray
+Write-Host "   If Phytochemical Constituents are empty, run db:seed:phytochemicals above." -ForegroundColor DarkGray
 Write-Host ""
 
 Write-Host "2. (OPTIONAL) CONFIGURE EXTERNAL AI KEYS IN .env.local:" -ForegroundColor Yellow

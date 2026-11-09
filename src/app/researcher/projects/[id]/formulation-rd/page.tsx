@@ -2,7 +2,7 @@ import React from "react";
 import { notFound, redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import pool from "@/lib/db";
-import { resolveCanonicalPlantId } from "@/lib/phytochemical-catalog";
+import { loadVerifiedPhytochemicals, resolveCanonicalPlantId } from "@/lib/phytochemical-catalog";
 import {
   getBotanicalPlantRecord,
   getAllBotanicalPlants,
@@ -141,23 +141,12 @@ export default async function FormulationRdPage({
   }
   const allPlants = Array.from(plantMap.values());
 
-  // 4. Verified compounds for this plant from plant_compounds
-  let verifiedPhytochemicals: any[] = [];
-  try {
-    if (canonicalPlantId) {
-      const [pcRows]: any = await pool.query(
-        `SELECT id, plantId, compoundName, iupacName, molecularFormula, molecularWeight,
-                compoundClass, pubchemId, smiles, plantPartReported, referencesData, verificationStatus
-         FROM plant_compounds
-         WHERE plantId = ? OR plantScientificName LIKE ?
-         ORDER BY compoundName ASC`,
-        [canonicalPlantId, `%${project.plantScientificName || project.plantName}%`]
-      );
-      verifiedPhytochemicals = pcRows;
-    }
-  } catch (err) {
-    console.warn("Failed to fetch verified plant compounds:", err);
-  }
+  // 4. Verified compounds for this plant (auto-seeds curated catalog on fresh laptops)
+  const verifiedPhytochemicals = await loadVerifiedPhytochemicals({
+    plantId: canonicalPlantId || project.plantId,
+    scientificName: project.plantScientificName,
+    commonName: project.plantName || project.plantCustomName,
+  });
 
   // 5. Currently selected study compounds in research_compounds
   const [studyCompRows]: any = await pool.query(

@@ -1204,3 +1204,132 @@ export async function syncPhytochemicalCatalog(): Promise<{
   return { totalSynced: synced, totalCatalogSize };
 }
 
+/**
+ * Create plant_compounds if a fresh laptop only ran schema migrations.
+ * The table is not present in older dumps / migrate-only setups.
+ */
+export async function ensurePlantCompoundsTable(): Promise<void> {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS plant_compounds (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      plantId VARCHAR(191) NULL,
+      plantScientificName VARCHAR(191) NOT NULL,
+      plantCommonName VARCHAR(191) NOT NULL,
+      compoundName VARCHAR(191) NOT NULL,
+      iupacName VARCHAR(255) NULL,
+      molecularFormula VARCHAR(100) NULL,
+      molecularWeight DECIMAL(10, 4) NULL,
+      compoundClass VARCHAR(100) NULL,
+      pubchemId VARCHAR(50) NULL,
+      smiles VARCHAR(500) NULL,
+      plantPartReported VARCHAR(150) NULL,
+      referencesData JSON NULL,
+      verificationStatus VARCHAR(50) DEFAULT 'VERIFIED_DATABASE',
+      submittedByResearcherId INT NULL,
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_plant_sci (plantScientificName),
+      INDEX idx_plant_id (plantId),
+      INDEX idx_compound_name (compoundName)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `);
+}
+
+function curatedAsRows(plantId: string) {
+  return CURATED_PLANT_PHYTOCHEMICALS.filter((item) => item.plantId === plantId).map((item, index) => ({
+    id: `curated-${plantId}-${index}`,
+    plantId: item.plantId,
+    plantScientificName: item.plantScientificName,
+    plantCommonName: item.plantCommonName,
+    compoundName: item.compoundName,
+    iupacName: item.iupacName || null,
+    molecularFormula: item.molecularFormula,
+    molecularWeight: item.molecularWeight,
+    compoundClass: item.compoundClass,
+    pubchemId: item.pubchemId,
+    smiles: item.smiles,
+    plantPartReported: item.plantPartReported,
+    referencesData: item.references,
+    verificationStatus: item.verificationStatus || "VERIFIED_DATABASE",
+  }));
+}
+
+async function queryPlantCompounds(
+  plantId: string | null,
+  scientificName?: string | null,
+  commonName?: string | null
+): Promise<any[]> {
+  const clauses: string[] = [];
+  const params: unknown[] = [];
+
+  if (plantId) {
+    clauses.push("plantId = ?");
+    params.push(plantId);
+  }
+  if (scientificName && scientificName.trim().length > 2) {
+    clauses.push("LOWER(TRIM(plantScientificName)) = LOWER(TRIM(?))");
+    params.push(scientificName.trim());
+    clauses.push("plantScientificName LIKE ?");
+    params.push(`%${scientificName.trim()}%`);
+  }
+  if (commonName && commonName.trim().length > 1) {
+    const first = commonName.split(/[\s(/]/)[0].replace(/[^a-zA-Z-]/g, "");
+    clauses.push("plantCommonName LIKE ?");
+    params.push(`%${first || commonName.trim()}%`);
+  }
+
+  if (clauses.length === 0) return [];
+
+  const [rows]: any = await pool.query(
+    `
+    SELECT id, plantId, plantScientificName, plantCommonName, compoundName,
+           iupacName, molecularFormula, molecularWeight, compoundClass,
+           pubchemId, smiles, plantPartReported, referencesData, verificationStatus
+    FROM plant_compounds
+    WHERE ${clauses.join(" OR ")}
+    ORDER BY compoundName ASC
+    `,
+    params
+  );
+  return rows || [];
+}
+
+/**
+ * Load verified phytochemical constituents for a plant.
+ * On a fresh laptop the plant_compounds table is often empty after migrate-only setup;
+ * this seeds the curated catalog automatically and falls back to the in-memory catalog.
+ */
+export async function loadVerifiedPhytochemicals(options: {
+  plantId?: string | null;
+  scientificName?: string | null;
+  commonName?: string | null;
+}): Promise<any[]> {
+  const canonicalId =
+    resolveCanonicalPlantId(options.plantId) ||
+    resolveCanonicalPlantId(options.scientificName) ||
+    resolveCanonicalPlantId(options.commonName) ||
+    (options.plantId && String(options.plantId).trim()) ||
+    null;
+
+  try {
+    await ensurePlantCompoundsTable();
+
+    let rows = await queryPlantCompounds(canonicalId, options.scientificName, options.commonName);
+
+    if (rows.length === 0) {
+      const [countRows]: any = await pool.query("SELECT COUNT(*) AS total FROM plant_compounds");
+      const total = Number(countRows[0]?.total || 0);
+      if (total === 0 || (canonicalId && CURATED_PLANT_PHYTOCHEMICALS.some((item) => item.plantId === canonicalId))) {
+        await syncPhytochemicalCatalog();
+        rows = await queryPlantCompounds(canonicalId, options.scientificName, options.commonName);
+      }
+    }
+
+    if (rows.length > 0) return rows;
+  } catch (error) {
+    console.warn("loadVerifiedPhytochemicals database warning:", error);
+  }
+
+  if (canonicalId) return curatedAsRows(canonicalId);
+  return [];
+}
+

@@ -3,7 +3,7 @@ import pool from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { queryLiterature } from "@/lib/literature-service";
 import { callGrokChat } from "@/lib/ai/grok-provider";
-import { resolveCanonicalPlantId } from "@/lib/phytochemical-catalog";
+import { loadVerifiedPhytochemicals, resolveCanonicalPlantId } from "@/lib/phytochemical-catalog";
 import { discoverPlantPhytochemicalsFromLiterature, queryPubChemCompound } from "@/lib/phytochemical-discovery";
 import { searchPhytochemicalLibrary, lookupCompoundOnline } from "@/lib/phytochemical-search-service";
 import { suggestTargetsForProject, searchCuratedTargets, CURATED_TARGET_PROTEINS } from "@/lib/target-protein-catalog";
@@ -262,38 +262,11 @@ export async function GET(
       project.plantId ||
       null;
 
-    let plantCompoundRows: any[] = [];
-    try {
-      if (canonicalPlantId) {
-        const [pcRows]: any = await pool.query(
-          `
-          SELECT id, plantId, plantScientificName, plantCommonName, compoundName,
-                 iupacName, molecularFormula, molecularWeight, compoundClass,
-                 pubchemId, smiles, plantPartReported, referencesData, verificationStatus
-          FROM plant_compounds
-          WHERE plantId = ?
-          ORDER BY compoundName ASC
-          `,
-          [canonicalPlantId]
-        );
-        plantCompoundRows = pcRows;
-      } else if (project.plantScientificName && project.plantScientificName.trim().length > 2) {
-        const [pcRows]: any = await pool.query(
-          `
-          SELECT id, plantId, plantScientificName, plantCommonName, compoundName,
-                 iupacName, molecularFormula, molecularWeight, compoundClass,
-                 pubchemId, smiles, plantPartReported, referencesData, verificationStatus
-          FROM plant_compounds
-          WHERE LOWER(TRIM(plantScientificName)) = LOWER(TRIM(?))
-          ORDER BY compoundName ASC
-          `,
-          [project.plantScientificName.trim()]
-        );
-        plantCompoundRows = pcRows;
-      }
-    } catch (e) {
-      console.warn("plant_compounds query warning:", e);
-    }
+    const plantCompoundRows = await loadVerifiedPhytochemicals({
+      plantId: canonicalPlantId || project.plantId,
+      scientificName: project.plantScientificName,
+      commonName: project.plantName || project.plantCustomName,
+    });
 
     const projectAddedNames = new Set(
       compounds.map((c: any) => c.compoundName.trim().toLowerCase())

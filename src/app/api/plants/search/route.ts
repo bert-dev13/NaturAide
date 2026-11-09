@@ -6,7 +6,7 @@ import {
   getAllBotanicalPlants,
   VERIFIED_BOTANICAL_REGISTRY,
 } from "@/lib/botanical-registry";
-import { resolveCanonicalPlantId } from "@/lib/phytochemical-catalog";
+import { loadVerifiedPhytochemicals, resolveCanonicalPlantId } from "@/lib/phytochemical-catalog";
 
 export async function GET(request: Request) {
   try {
@@ -41,15 +41,12 @@ export async function GET(request: Request) {
       const isPitahc = Boolean(registryRecord?.isPitahc ?? dbPlant?.is_pitahc);
       const imageUrl = resolvePlantImage(dbPlant?.local_image_path || dbPlant?.imageUrl || registryRecord?.imageUrl || "/images/placeholder-plant.jpg");
 
-      // 1. Fetch verified phytochemicals
-      const [compounds]: any = await pool.query(
-        `SELECT id, plantId, compoundName, iupacName, molecularFormula, molecularWeight,
-                compoundClass, pubchemId, smiles, plantPartReported, referencesData, verificationStatus
-         FROM plant_compounds
-         WHERE plantId = ? OR plantScientificName LIKE ?
-         ORDER BY compoundName ASC`,
-        [canonicalId, `%${scientificName || commonName}%`]
-      );
+      // 1. Fetch verified phytochemicals (auto-seeds catalog if this laptop has an empty table)
+      const compounds = await loadVerifiedPhytochemicals({
+        plantId: canonicalId,
+        scientificName,
+        commonName,
+      });
 
       // 2. Fetch scientific literature
       const firstCommon = commonName.split(" ")[0].replace(/[^a-zA-Z]/g, "");

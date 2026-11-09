@@ -14,6 +14,7 @@
     "lint": "eslint",
     "db:migrate": "npx tsx scripts/migrate.ts",
     "db:migrate:status": "npx tsx scripts/migrate.ts --status",
+    "db:seed:phytochemicals": "npx tsx scripts/seed-phytochemical-catalog.ts",
     "sync:product-images": "npx tsx scripts/sync-product-images.ts",
     "discover:products": "npx tsx scripts/discover-plant-products.ts",
     "discover": "npx tsx scripts/discover-plant-products.ts",

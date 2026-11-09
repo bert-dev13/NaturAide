@@ -158,9 +158,16 @@ async function main() {
   if (dbInfo.connected) {
     statusLine("MySQL", "✓ Connected")
     statusLine("Database", `✓ ${dbInfo.dbName}`)
+    try {
+      await runCommand("npx", ["tsx", "scripts/seed-phytochemical-catalog.ts"])
+      statusLine("Phytochemicals", "✓ plant_compounds catalog seeded")
+    } catch (err) {
+      statusLine("Phytochemicals", `⚠ Seed skipped (${err.message || "run npm run db:seed:phytochemicals"})`)
+    }
   } else {
     statusLine("MySQL", `⚠ ${dbInfo.error}`)
     statusLine("Database", `⚠ ${dbInfo.dbName} (pending MySQL start)`)
+    statusLine("Phytochemicals", "⚠ Seed after MySQL is online: npm run db:seed:phytochemicals")
   }
   statusLine("Docking Engine", "✓ Ready")
 

@@ -413,7 +413,6 @@ export default function BatchAnalysisStep6Section({
 
     setSampleQcTests(simulated);
     setIsSampleMode(true);
-    setIsAddingLabResults(true); // Automatically expand so user sees sample values
     setSampleNotification("Populated illustrative sample values for all 8 tests. (Demonstration Preview)");
   };
 
