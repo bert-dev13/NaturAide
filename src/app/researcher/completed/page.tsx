@@ -10,9 +10,13 @@ export default async function CompletedResearchPage() {
     redirect("/login");
   }
 
-  const completedProjects = await getCompletedResearchListForResearcher(
-    Number(session.id)
-  );
+  let completedProjects: Awaited<ReturnType<typeof getCompletedResearchListForResearcher>> = [];
+  try {
+    completedProjects = await getCompletedResearchListForResearcher(Number(session.id));
+  } catch (error) {
+    console.warn("Completed research list failed:", error);
+    completedProjects = [];
+  }
 
   return (
     <CompletedResearchListClient

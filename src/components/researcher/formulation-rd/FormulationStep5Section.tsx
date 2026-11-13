@@ -9,7 +9,6 @@ import {
   ChevronDown,
   AlertTriangle,
   RotateCcw,
-  Plus,
   Trash2,
   Edit2,
   Info,
@@ -17,9 +16,7 @@ import {
   Layers,
   Sparkles,
   Scale,
-  ShieldCheck,
   X,
-  BookOpen,
   Send,
   Loader2,
   Bot,
@@ -30,9 +27,7 @@ import {
   CheckSquare,
   Square,
   Wand2,
-  Clock,
   ArrowDown,
-  ShieldAlert,
   FileCheck2,
   ChevronUp,
   RefreshCw,
@@ -116,6 +111,8 @@ interface Props {
   onSave: () => Promise<boolean | void>;
   onRefreshMaterials?: () => Promise<void>;
   isSaving: boolean;
+  /** Reviewer / read-only mode: hide AI assist, matrix editors, add/remove */
+  readOnly?: boolean;
 }
 
 export default function FormulationStep5Section({
@@ -128,8 +125,8 @@ export default function FormulationStep5Section({
   formulation,
   onChange,
   onSave,
-  onRefreshMaterials,
   isSaving,
+  readOnly = false,
 }: Props) {
   // Template Selection & Dropdown State
   const [isTemplateDropdownOpen, setIsTemplateDropdownOpen] = useState(false);
@@ -140,10 +137,8 @@ export default function FormulationStep5Section({
   // Per-Ingredient Details Modal State
   const [selectedComponentModalIdx, setSelectedComponentModalIdx] = useState<number | null>(null);
 
-  // Add Component Dropdown State
-  const [isAddDropdownOpen, setIsAddDropdownOpen] = useState(false);
-  const [ingredientSearch, setIngredientSearch] = useState("");
-  const addDropdownRef = useRef<HTMLDivElement>(null);
+  // Select-from-inventory control (no ingredient creation on this page)
+  const inventorySelectRef = useRef<HTMLSelectElement>(null);
 
   // AI Formulation Proposal Panel State
   const [isAiPanelOpen, setIsAiPanelOpen] = useState(false);
@@ -157,11 +152,22 @@ export default function FormulationStep5Section({
     message: string;
   } | null>(null);
   const [highlightedRowNames, setHighlightedRowNames] = useState<Set<string>>(new Set());
-  const [addingToInventoryId, setAddingToInventoryId] = useState<string | null>(null);
-  const [addedInventorySuccess, setAddedInventorySuccess] = useState<Record<string, boolean>>({});
   const [aiError, setAiError] = useState<string | null>(null);
 
   const [isDirty, setIsDirty] = useState(false);
+  const [customBatchOpen, setCustomBatchOpen] = useState(false);
+  const [expandedIngredientIdx, setExpandedIngredientIdx] = useState<number | null>(null);
+  const [pendingBalance, setPendingBalance] = useState<{
+    vehicleIdx: number | null;
+    vehicleName: string;
+    currentConc: number;
+    proposedConc: number;
+    nonVehicleSum: number;
+  } | null>(null);
+  const [balanceError, setBalanceError] = useState<string | null>(null);
+  const didSyncDefaults = useRef(false);
+
+  const BATCH_PRESETS = ["100 g", "250 g", "500 g", "1,000 g"] as const;
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -169,13 +175,70 @@ export default function FormulationStep5Section({
       if (templateDropdownRef.current && !templateDropdownRef.current.contains(event.target as Node)) {
         setIsTemplateDropdownOpen(false);
       }
-      if (addDropdownRef.current && !addDropdownRef.current.contains(event.target as Node)) {
-        setIsAddDropdownOpen(false);
-      }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  // Inherit dosage format from Product Selection; suggest name/code without forcing researcher entry.
+  useEffect(() => {
+    if (didSyncDefaults.current) return;
+    didSyncDefaults.current = true;
+    const format =
+      productSelection?.deliveryFormat || formulation.dosageFormType || "Topical Hydrogel";
+    const suggestedName = `${project.plantName} ${format}`.trim();
+    const next: FormulationState = { ...formulation };
+    let changed = false;
+
+    if (productSelection?.deliveryFormat && formulation.dosageFormType !== productSelection.deliveryFormat) {
+      next.dosageFormType = productSelection.deliveryFormat;
+      changed = true;
+    }
+    if (
+      !formulation.formulationName ||
+      /5%\s+Topical Comfort Gel/i.test(formulation.formulationName)
+    ) {
+      next.formulationName = suggestedName;
+      changed = true;
+    }
+    if (!formulation.formulationCode || formulation.formulationCode === "FRM-TOP-001") {
+      const generated = generateFormulationCode(format, formulation.formulationCode);
+      if (generated !== formulation.formulationCode) {
+        next.formulationCode = generated;
+        changed = true;
+      }
+    }
+    if (changed) onChange(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const batchSelectValue = useMemo(() => {
+    const raw = (formulation.targetBatchSize || "").trim();
+    if ((BATCH_PRESETS as readonly string[]).includes(raw)) return raw;
+    if (raw === "1000 g" || raw === "1000g") return "1,000 g";
+    return "custom";
+  }, [formulation.targetBatchSize]);
+
+  useEffect(() => {
+    setCustomBatchOpen(batchSelectValue === "custom");
+  }, [batchSelectValue]);
+
+  function simplifyPurpose(role?: string | null, componentType?: string): string {
+    const r = (role || "").toLowerCase();
+    if (componentType === "ACTIVE_EXTRACT" || componentType === "ACTIVE_BOTANICAL") {
+      return "Main Ingredient";
+    }
+    if (r.includes("vehicle") || componentType === "VEHICLE") return "Base Ingredient";
+    if (r.includes("gelling") || r.includes("matrix")) return "Gelling Agent";
+    if (r.includes("preserv")) return "Preservative";
+    if (r.includes("humectant") || r.includes("emollient") || r.includes("moistur")) {
+      return "Moisturizer";
+    }
+    if (r.includes("ph") || r.includes("neutral")) return "pH Adjuster";
+    if (r.includes("solvent") || r.includes("cosolvent")) return "Solvent";
+    if (r.includes("emulsif")) return "Emulsifier";
+    return role || "Ingredient";
+  }
 
   // Current matched template
   const currentTemplate = useMemo(() => {
@@ -216,6 +279,26 @@ export default function FormulationStep5Section({
 
   const isOver100 = totalConcentrationSum > 100.05;
   const isUnder100 = totalConcentrationSum < 99.95;
+  const hasInvalidConcentrations = formulation.components.some((c) => {
+    const v = parseFloat(String(c.concentrationValue));
+    return Number.isNaN(v) || v < 0;
+  });
+
+  const totalCalculatedWeightGrams = useMemo(() => {
+    return formulation.components.reduce((acc, c) => {
+      const conc = parseFloat(String(c.concentrationValue)) || 0;
+      if (conc <= 0) return acc;
+      return acc + (numericBatchSizeGrams * conc) / 100;
+    }, 0);
+  }, [formulation.components, numericBatchSizeGrams]);
+
+  const compositionStatusLabel = hasInvalidConcentrations
+    ? "Invalid values"
+    : isBalanced
+      ? "Balanced"
+      : isOver100
+        ? "Above 100%"
+        : "Below 100%";
 
   // Active Botanical in matrix with 0 concentration
   const unassignedBotanicalWarning = useMemo(() => {
@@ -226,8 +309,20 @@ export default function FormulationStep5Section({
     );
   }, [formulation.components]);
 
+  function findVehicleIndex(components: FormulationComponentItem[]) {
+    return components.findIndex(
+      (c) =>
+        c.isVehicle ||
+        c.componentType === "VEHICLE" ||
+        (c.ingredientName || "").toLowerCase().includes("water") ||
+        (c.roleOrFunction || "").toLowerCase().includes("vehicle") ||
+        (c.roleOrFunction || "").toLowerCase().includes("q.s")
+    );
+  }
+
   // Handle generic header field changes
   const handleFieldChange = (field: keyof FormulationState, value: any) => {
+    if (readOnly) return;
     setIsDirty(true);
     onChange({
       ...formulation,
@@ -237,6 +332,7 @@ export default function FormulationStep5Section({
 
   // Component Matrix updates
   const handleUpdateComponent = (index: number, field: keyof FormulationComponentItem, value: any) => {
+    if (readOnly) return;
     setIsDirty(true);
     const updated = [...formulation.components];
     updated[index] = { ...updated[index], [field]: value };
@@ -247,85 +343,111 @@ export default function FormulationStep5Section({
   };
 
   const handleRemoveComponent = (index: number) => {
+    if (readOnly) return;
+    const name = formulation.components[index]?.ingredientName || "this ingredient";
+    if (!confirm(`Remove “${name}” from the composition?`)) return;
     setIsDirty(true);
     const updated = formulation.components.filter((_, idx) => idx !== index);
     onChange({
       ...formulation,
       components: updated,
     });
+    if (expandedIngredientIdx === index) setExpandedIngredientIdx(null);
   };
 
-  // Add Component from Inventory or Preset
-  const handleAddComponentFromSource = (item: {
-    name: string;
-    type: string;
-    role: string;
-    grade?: string;
-    supplier?: string;
-    lot?: string;
-    materialId?: number;
-    suggestedConcentration?: number;
-    isVehicle?: boolean;
-    inventoryStatus?: string;
-  }) => {
-    setIsDirty(true);
-    setIsAddDropdownOpen(false);
+  /** Add a row from My Ingredients only (never registers a new inventory ingredient). */
+  const handleSelectInventoryIngredient = (materialId: number) => {
+    if (readOnly) return;
+    const mat = materials.find((m) => m.id === materialId);
+    if (!mat) return;
 
+    const nameNorm = (mat.materialName || "").trim().toLowerCase();
+    const alreadyExists = formulation.components.some((c) => {
+      if (c.materialId != null && c.materialId === mat.id) return true;
+      return (c.ingredientName || "").trim().toLowerCase() === nameNorm;
+    });
+    if (alreadyExists) {
+      setBuildFeedback({
+        type: "info",
+        message: `“${mat.materialName}” is already in the composition. Edit its percentage instead.`,
+      });
+      if (inventorySelectRef.current) inventorySelectRef.current.value = "";
+      return;
+    }
+
+    setIsDirty(true);
+    const suggested =
+      mat.materialType === "ACTIVE_BOTANICAL" ? 5.0 : 1.0;
     const newComponent: FormulationComponentItem = {
       id: `comp-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-      ingredientName: item.name,
-      componentType: item.type === "ACTIVE_BOTANICAL" ? "ACTIVE_EXTRACT" : item.type,
-      concentrationValue: item.suggestedConcentration || 1.0,
+      ingredientName: mat.materialName,
+      componentType:
+        mat.materialType === "ACTIVE_BOTANICAL" ? "ACTIVE_EXTRACT" : mat.materialType,
+      concentrationValue: suggested,
       concentrationUnit: "% w/w",
-      minConcentration: item.suggestedConcentration ? Math.max(0.1, Number((item.suggestedConcentration * 0.5).toFixed(1))) : 0.1,
-      maxConcentration: item.suggestedConcentration ? Number((item.suggestedConcentration * 2.0).toFixed(1)) : 5.0,
-      roleOrFunction: item.role,
-      gradeOrPurity: item.grade || "USP / NF",
-      supplierOrSource: item.supplier || "",
-      lotOrBatchNumber: item.lot || "",
-      notes: item.lot ? `Inventory Lot: ${item.lot} (${item.supplier || "Internal Depot"})` : "",
-      isVehicle: Boolean(item.isVehicle || (item.role || "").toLowerCase().includes("vehicle")),
-      materialId: item.materialId,
-      inventoryStatus: item.inventoryStatus,
+      minConcentration: Math.max(0.1, Number((suggested * 0.5).toFixed(1))),
+      maxConcentration: Number((suggested * 2.0).toFixed(1)),
+      roleOrFunction: mat.functionDescription || "Compounding Agent",
+      gradeOrPurity: mat.gradeOrPurity || "",
+      supplierOrSource: mat.supplierOrSource || "",
+      lotOrBatchNumber: mat.lotOrBatchNumber || "",
+      notes: mat.lotOrBatchNumber
+        ? `Inventory Lot: ${mat.lotOrBatchNumber} (${mat.supplierOrSource || "Internal Depot"})`
+        : "",
+      isVehicle: Boolean(
+        (mat.functionDescription || "").toLowerCase().includes("vehicle") ||
+          ((mat.materialName || "").toLowerCase().includes("water") &&
+            (mat.materialType === "SOLVENT" || mat.materialType === "EXCIPIENT"))
+      ),
+      materialId: mat.id,
+      inventoryStatus: mat.inventoryStatus,
     };
 
     onChange({
       ...formulation,
       components: [...formulation.components, newComponent],
     });
+    if (inventorySelectRef.current) inventorySelectRef.current.value = "";
   };
 
-  // Balance with Vehicle (q.s. to 100%)
-  const handleBalanceWithVehicle = () => {
-    const vehicleIdx = formulation.components.findIndex(
-      (c) =>
-        c.isVehicle ||
-        c.componentType === "VEHICLE" ||
-        (c.ingredientName || "").toLowerCase().includes("water") ||
-        (c.roleOrFunction || "").toLowerCase().includes("vehicle")
-    );
+  const availableInventoryIngredients = useMemo(() => {
+    return materials.filter((mat) => {
+      const nameNorm = (mat.materialName || "").trim().toLowerCase();
+      return !formulation.components.some((c) => {
+        if (c.materialId != null && c.materialId === mat.id) return true;
+        return (c.ingredientName || "").trim().toLowerCase() === nameNorm;
+      });
+    });
+  }, [materials, formulation.components]);
 
+  /** Preview q.s. balance — never apply until researcher confirms. */
+  const handleRequestBalanceTo100 = () => {
+    if (readOnly) return;
+    setBalanceError(null);
+
+    const vehicleIdx = findVehicleIndex(formulation.components);
     if (vehicleIdx === -1) {
-      // Create vehicle row if none exists
       const nonVehicleSum = formulation.components.reduce(
         (acc, c) => acc + (parseFloat(String(c.concentrationValue)) || 0),
         0
       );
-      const needed = Number(Math.max(0, 100.0 - nonVehicleSum).toFixed(2));
-      const vehicleItem: FormulationComponentItem = {
-        id: `vehicle-${Date.now()}`,
-        ingredientName: "Purified Water (USP)",
-        componentType: "VEHICLE",
-        concentrationValue: needed,
-        concentrationUnit: "% w/w",
-        roleOrFunction: "Aqueous Vehicle (q.s. to 100%)",
-        isVehicle: true,
-      };
-
-      setIsDirty(true);
-      onChange({
-        ...formulation,
-        components: [...formulation.components, vehicleItem],
+      if (nonVehicleSum >= 100.05) {
+        setBalanceError(
+          "Composition already meets or exceeds 100% and no q.s. base/vehicle ingredient is designated. Adjust percentages manually."
+        );
+        return;
+      }
+      if (formulation.components.length === 0) {
+        setBalanceError("Add ingredients before balancing the composition.");
+        return;
+      }
+      const proposed = Number(Math.max(0, 100.0 - nonVehicleSum).toFixed(2));
+      setPendingBalance({
+        vehicleIdx: null,
+        vehicleName: "Purified Water (USP)",
+        currentConc: 0,
+        proposedConc: proposed,
+        nonVehicleSum,
       });
       return;
     }
@@ -335,25 +457,65 @@ export default function FormulationStep5Section({
       return acc + (parseFloat(String(c.concentrationValue)) || 0);
     }, 0);
 
-    const neededVehicleConcentration = Number(Math.max(0, 100.0 - nonVehicleSum).toFixed(2));
+    if (nonVehicleSum > 100.05) {
+      setBalanceError(
+        `Other ingredients already total ${nonVehicleSum.toFixed(2)}%. Reduce those percentages before balancing the vehicle.`
+      );
+      return;
+    }
 
-    const updated = [...formulation.components];
-    updated[vehicleIdx] = {
-      ...updated[vehicleIdx],
-      concentrationValue: neededVehicleConcentration,
-      isVehicle: true,
-      roleOrFunction: `${(updated[vehicleIdx].roleOrFunction || "Aqueous Vehicle").replace(/\(q\.s\..*?\)/i, "").trim()} (q.s. to 100%)`,
-    };
-
-    setIsDirty(true);
-    onChange({
-      ...formulation,
-      components: updated,
+    const proposed = Number(Math.max(0, 100.0 - nonVehicleSum).toFixed(2));
+    const current = parseFloat(String(formulation.components[vehicleIdx].concentrationValue)) || 0;
+    setPendingBalance({
+      vehicleIdx,
+      vehicleName: formulation.components[vehicleIdx].ingredientName || "Vehicle",
+      currentConc: current,
+      proposedConc: proposed,
+      nonVehicleSum,
     });
+  };
+
+  const handleConfirmBalance = () => {
+    if (readOnly || !pendingBalance) return;
+    const { vehicleIdx, proposedConc } = pendingBalance;
+
+    if (vehicleIdx === -1 || vehicleIdx === null) {
+      const vehicleItem: FormulationComponentItem = {
+        id: `vehicle-${Date.now()}`,
+        ingredientName: "Purified Water (USP)",
+        componentType: "VEHICLE",
+        concentrationValue: proposedConc,
+        concentrationUnit: "% w/w",
+        roleOrFunction: "Aqueous Vehicle (q.s. to 100%)",
+        isVehicle: true,
+      };
+      setIsDirty(true);
+      onChange({
+        ...formulation,
+        components: [...formulation.components, vehicleItem],
+      });
+    } else {
+      const updated = [...formulation.components];
+      updated[vehicleIdx] = {
+        ...updated[vehicleIdx],
+        concentrationValue: proposedConc,
+        isVehicle: true,
+        roleOrFunction: `${(updated[vehicleIdx].roleOrFunction || "Aqueous Vehicle")
+          .replace(/\(q\.s\..*?\)/i, "")
+          .trim()} (q.s. to 100%)`,
+      };
+      setIsDirty(true);
+      onChange({
+        ...formulation,
+        components: updated,
+      });
+    }
+    setPendingBalance(null);
   };
 
   // Apply Template with Confirmation
   const handleSelectTemplate = (template: FormulationTemplate) => {
+    if (readOnly) return;
     if (formulation.components.length > 0) {
       setPendingTemplate(template);
       setIsTemplateDropdownOpen(false);
@@ -363,6 +525,7 @@ export default function FormulationStep5Section({
   };
 
   const applyTemplate = (template: FormulationTemplate) => {
+    if (readOnly) return;
     setPendingTemplate(null);
     setIsTemplateDropdownOpen(false);
     setIsDirty(true);
@@ -383,8 +546,8 @@ export default function FormulationStep5Section({
 
     onChange({
       ...formulation,
-      formulationName: `${project.plantName} 5% ${template.name}`,
-      dosageFormType: template.dosageFormat,
+      formulationName: `${project.plantName} ${template.name}`,
+      dosageFormType: template.dosageFormat || productSelection?.deliveryFormat || formulation.dosageFormType,
       formulationCode: generateFormulationCode(template.dosageFormat, formulation.formulationCode),
       targetBatchSize: template.typicalBatchSize,
       components: newComponents,
@@ -395,6 +558,7 @@ export default function FormulationStep5Section({
   // AI FORMULATION PROPOSAL HANDLERS
   // ---------------------------------------------------------------------------
   const handleToggleAiPanel = () => {
+    if (readOnly) return;
     const nextState = !isAiPanelOpen;
     setIsAiPanelOpen(nextState);
     if (nextState && !aiProposal) {
@@ -403,6 +567,7 @@ export default function FormulationStep5Section({
   };
 
   const handleFetchAiProposal = async () => {
+    if (readOnly) return;
     setIsAiLoading(true);
     setAiError(null);
     try {
@@ -451,43 +616,6 @@ export default function FormulationStep5Section({
 
   const handleDeselectAll = () => {
     setSelectedIngredientIds(new Set());
-  };
-
-  // Quick Add uncataloged recommended ingredient to Step 4 Planned Inventory
-  const handleAddToPlannedInventory = async (ing: FormulationRecommendedIngredient) => {
-    setAddingToInventoryId(ing.id);
-    try {
-      const res = await fetch(`/api/researcher/projects/${project.id}/materials/import`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          materials: [
-            {
-              materialType: ing.componentType === "ACTIVE_EXTRACT" ? "ACTIVE_BOTANICAL" : ing.componentType,
-              materialName: ing.ingredientName,
-              gradeOrPurity: "USP / NF / Compendial Grade",
-              functionDescription: ing.functionalRole,
-              scientificJustification: ing.scientificRationale,
-              extractFractionId: ing.extractFractionId || null,
-              unit: "g",
-            },
-          ],
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to add ingredient to inventory");
-
-      setAddedInventorySuccess((prev) => ({ ...prev, [ing.id]: true }));
-      // Refresh project materials
-      if (onRefreshMaterials) {
-        await onRefreshMaterials();
-      }
-    } catch (err: any) {
-      alert(`Could not add to inventory: ${err.message}`);
-    } finally {
-      setAddingToInventoryId(null);
-    }
   };
 
   // Match a recommendation to an existing component in the matrix
@@ -548,6 +676,7 @@ export default function FormulationStep5Section({
 
   // Primary Action: Build / Merge Selected Formulation into Matrix (Non-destructive)
   const handleBuildSelectedFormulation = () => {
+    if (readOnly) return;
     if (!aiProposal) return;
     if (selectedIngredientIds.size === 0) {
       setBuildFeedback({
@@ -693,6 +822,7 @@ export default function FormulationStep5Section({
 
   // Secondary Action: Replace existing matrix with selected AI proposal (Destructive with confirmation)
   const executeReplaceMatrix = () => {
+    if (readOnly) return;
     if (!aiProposal) return;
     setIsConfirmingReplace(false);
     setIsBuilding(true);
@@ -776,266 +906,136 @@ export default function FormulationStep5Section({
 
   const easeOut = [0.22, 1, 0.36, 1] as const;
 
+  const fieldClass =
+    "h-9 w-full rounded-lg border border-[#d5e3da] bg-[#fbfdfb] px-3 text-xs font-medium text-[#0f2c20] outline-none transition focus:border-emerald-600 focus:bg-white focus:ring-2 focus:ring-emerald-600/15";
+
+  const readOnlyFieldClass = readOnly
+    ? `${fieldClass} cursor-default bg-[#f8fbf9]`
+    : fieldClass;
+
+  const inheritedFormat =
+    productSelection?.deliveryFormat || formulation.dosageFormType || "Topical Hydrogel";
+
   return (
     <div className="space-y-4">
-      {/* Compact status strip — step chrome lives in parent workspace header */}
-      <motion.div
+      {/* A. Formulation Details */}
+      <motion.section
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.28, ease: easeOut }}
-        className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[#d7e4dc]/90 bg-white px-4 py-2.5 shadow-[0_1px_2px_rgba(15,44,32,0.04)]"
+        className="rounded-2xl border border-[#d7e4dc]/90 bg-white p-4 shadow-[0_1px_2px_rgba(15,44,32,0.04)]"
       >
-        <div className="flex items-center gap-2 text-[11px] text-[#6d7f76]">
-          <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-800">
-            <FlaskConical className="h-3.5 w-3.5" />
-          </span>
-          <span className="font-semibold text-[#0f2c20]">Formulation Development</span>
-          <span
-            className={`rounded-md border px-2 py-0.5 font-mono text-[10px] font-bold ${
-              isBalanced
-                ? "border-emerald-200 bg-emerald-50 text-emerald-900"
-                : isOver100
-                  ? "border-rose-200 bg-rose-50 text-rose-800"
-                  : "border-amber-200 bg-amber-50 text-amber-900"
-            }`}
-          >
-            {totalConcentrationSum.toFixed(1)}% / 100%
-          </span>
-        </div>
-        <div className="flex items-center gap-2 text-[11px] font-semibold">
-          {isDirty ? (
-            <span className="inline-flex items-center gap-1 text-amber-700">
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-              Unsaved
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1 text-emerald-800">
-              <Check className="h-3.5 w-3.5" />
-              Saved
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={handleToggleAiPanel}
-            className={`inline-flex items-center gap-1 rounded-xl border px-2.5 py-1 text-[11px] font-semibold transition ${
-              isAiPanelOpen
-                ? "border-emerald-600 bg-emerald-700 text-white"
-                : "border-[#d7e4dc] bg-[#f7faf8] text-[#52645d] hover:border-emerald-400 hover:bg-emerald-50"
-            }`}
-          >
-            <Sparkles className="h-3 w-3" />
-            {isAiPanelOpen ? "Close AI" : "AI Assist"}
-          </button>
-        </div>
-      </motion.div>
-
-      {/* Project context + how-to */}
-      <motion.section
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, ease: easeOut }}
-        className="relative overflow-hidden rounded-2xl border border-[#d7e4dc]/90 bg-[linear-gradient(165deg,#ffffff_0%,#f8fbf9_100%)] p-4 shadow-[0_1px_2px_rgba(15,44,32,0.04)]"
-      >
-        <div className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-emerald-600 via-teal-400 to-cyan-300" />
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex min-w-0 items-start gap-2.5">
-            <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-800">
-              <Leaf className="h-4 w-4" />
-            </span>
-            <div className="min-w-0">
-              <h2 className="text-sm font-semibold text-[#0f2c20]">
-                {project.plantName}
-                {project.plantScientificName ? (
-                  <span className="ml-1.5 text-xs font-normal italic text-[#6d7f76]">
-                    ({project.plantScientificName})
-                  </span>
-                ) : null}
-              </h2>
-              <p className="mt-0.5 text-[11px] text-[#8aa094]">
-                <span className="font-semibold text-[#52645d]">
-                  {formulation.dosageFormType || "Topical Hydrogel"}
-                </span>
-                <span className="mx-1.5 text-[#d7e4dc]">·</span>
-                <span className="font-mono text-[#52645d]">
-                  {formulation.formulationCode || "FRM-TOP-001"}
-                </span>
-                <span className="mx-1.5 text-[#d7e4dc]">·</span>
-                Master batch {formulation.targetBatchSize || "500 g"}
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {[
-              { n: "1", label: "Pick template" },
-              { n: "2", label: "Build matrix" },
-              { n: "3", label: "Balance to 100%" },
-            ].map((step, idx) => (
-              <span
-                key={step.n}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-[#d7e4dc] bg-white px-2.5 py-1 text-[10px] font-semibold text-[#52645d]"
-              >
-                <span className="inline-flex h-4 w-4 items-center justify-center rounded-md bg-emerald-600 text-[9px] font-bold text-white">
-                  {step.n}
-                </span>
-                {step.label}
-                {idx < 2 && <ChevronRight className="h-3 w-3 text-[#c5d4cb]" />}
-              </span>
-            ))}
-          </div>
-        </div>
-      </motion.section>
-
-      {/* 1. Template + identity */}
-      <motion.section
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.04, ease: easeOut }}
-        className="space-y-3.5 rounded-2xl border border-[#d7e4dc]/90 bg-white p-4 shadow-[0_1px_2px_rgba(15,44,32,0.04)] sm:p-5"
-      >
-        <div className="flex flex-col gap-2 border-b border-[#e8f0eb] pb-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h3 className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-[#52645d]">
-              <span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-emerald-600 text-[10px] font-bold text-white">
-                1
-              </span>
-              <Sliders className="h-3.5 w-3.5 text-emerald-700" />
-              Formulation architecture
-            </h3>
-            <p className="mt-1 text-[11px] text-[#8aa094]">
-              Choose a pharmacopeial vehicle template, then refine name, code, and batch size.
-            </p>
-          </div>
-        </div>
-
-        <div className="space-y-1.5">
-          <label className="block text-xs font-semibold text-[#52645d]">
-            Compendial Formulation Template
-          </label>
-          <div className="relative" ref={templateDropdownRef}>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="inline-flex items-center gap-2 text-sm font-bold tracking-tight text-[#0f2c20]">
+            <FlaskConical className="h-4 w-4 text-emerald-700" />
+            Formulation Details
+          </h3>
+          {!readOnly && (
             <button
               type="button"
-              onClick={() => setIsTemplateDropdownOpen(!isTemplateDropdownOpen)}
-              className="flex w-full items-center justify-between gap-2 rounded-xl border border-[#d5e3da] bg-[#fbfdfb] px-3 py-2.5 text-left text-xs font-semibold text-[#0f2c20] shadow-sm transition hover:border-emerald-400 focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-600/15 sm:text-sm"
+              onClick={handleToggleAiPanel}
+              className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition ${
+                isAiPanelOpen
+                  ? "border-emerald-600 bg-emerald-700 text-white"
+                  : "border-[#d7e4dc] bg-[#f7faf8] text-[#52645d] hover:border-emerald-400"
+              }`}
             >
-              <div className="flex min-w-0 items-center gap-2">
-                <span className="rounded-md border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800">
-                  {currentTemplate.route}
-                </span>
-                <span className="truncate">{currentTemplate.name}</span>
-                <span className="hidden truncate text-[11px] font-normal text-[#8aa094] sm:inline">
-                  — {currentTemplate.description}
-                </span>
-              </div>
-              <ChevronDown
-                className={`h-4 w-4 shrink-0 text-[#8aa094] transition ${isTemplateDropdownOpen ? "rotate-180" : ""}`}
-              />
+              <Sparkles className="h-3 w-3" />
+              AI Assist
             </button>
+          )}
+        </div>
 
-            <AnimatePresence>
-              {isTemplateDropdownOpen && (
-                <motion.div
-                  initial={{ opacity: 0, y: -6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -6 }}
-                  className="absolute top-full left-0 right-0 z-30 mt-1.5 max-h-72 overflow-y-auto rounded-2xl border border-[#d7e4dc] bg-white shadow-xl"
-                >
-                  <div className="sticky top-0 border-b border-[#e8f0eb] bg-[#f7faf8] p-2">
-                    <div className="relative">
-                      <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-[#8aa094]" />
-                      <input
-                        type="text"
-                        value={templateSearch}
-                        onChange={(e) => setTemplateSearch(e.target.value)}
-                        placeholder="Search formulation templates..."
-                        className="w-full rounded-xl border border-[#d5e3da] bg-white py-1.5 pl-8 pr-3 text-xs outline-none focus:border-emerald-600"
-                        autoFocus
-                      />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold text-[#52645d]">
+              Formulation Name
+            </label>
+            <input
+              type="text"
+              value={formulation.formulationName}
+              onChange={(e) => handleFieldChange("formulationName", e.target.value)}
+              readOnly={readOnly}
+              placeholder={`${project.plantName} ${inheritedFormat}`}
+              className={readOnlyFieldClass}
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold text-[#52645d]">
+              Formulation Template
+            </label>
+            {readOnly ? (
+              <div className={`${readOnlyFieldClass} flex items-center`}>
+                <span className="truncate">{currentTemplate.name}</span>
+              </div>
+            ) : (
+            <div className="relative" ref={templateDropdownRef}>
+              <button
+                type="button"
+                onClick={() => setIsTemplateDropdownOpen(!isTemplateDropdownOpen)}
+                className={`${fieldClass} flex items-center justify-between gap-2 text-left`}
+              >
+                <span className="truncate">{currentTemplate.name}</span>
+                <ChevronDown
+                  className={`h-3.5 w-3.5 shrink-0 text-[#8aa094] transition ${
+                    isTemplateDropdownOpen ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
+              <AnimatePresence>
+                {isTemplateDropdownOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    className="absolute left-0 right-0 top-full z-30 mt-1.5 max-h-64 overflow-y-auto rounded-xl border border-[#d7e4dc] bg-white shadow-xl"
+                  >
+                    <div className="sticky top-0 border-b border-[#eef4f0] bg-[#f7faf8] p-2">
+                      <div className="relative">
+                        <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-[#8aa094]" />
+                        <input
+                          type="text"
+                          value={templateSearch}
+                          onChange={(e) => setTemplateSearch(e.target.value)}
+                          placeholder="Search templates..."
+                          className="h-8 w-full rounded-lg border border-[#d5e3da] bg-white pl-8 pr-2 text-xs outline-none focus:border-emerald-600"
+                          autoFocus
+                        />
+                      </div>
                     </div>
-                  </div>
-                  <div className="divide-y divide-[#e8f0eb]">
                     {filteredTemplates.map((tmpl, idx) => (
                       <button
                         key={`tmpl-${tmpl.id}-${idx}`}
                         type="button"
                         onClick={() => handleSelectTemplate(tmpl)}
-                        className="flex w-full items-start justify-between gap-3 p-3 text-left text-xs transition hover:bg-emerald-50/60"
+                        className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs ${
+                          currentTemplate.id === tmpl.id
+                            ? "bg-emerald-50 font-semibold text-emerald-950"
+                            : "text-[#52645d] hover:bg-[#f4f8f5]"
+                        }`}
                       >
-                        <div className="min-w-0 space-y-0.5">
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="font-bold text-[#0f2c20]">{tmpl.name}</span>
-                            <span className="rounded-md bg-[#f7faf8] px-1.5 py-0.5 text-[10px] font-medium text-[#6d7f76]">
-                              {tmpl.dosageFormat}
-                            </span>
-                          </div>
-                          <p className="line-clamp-1 text-[11px] text-[#8aa094]">{tmpl.description}</p>
-                        </div>
+                        <span className="truncate">{tmpl.name}</span>
                         {currentTemplate.id === tmpl.id && (
-                          <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                          <Check className="h-3.5 w-3.5 text-emerald-600" />
                         )}
                       </button>
                     ))}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="space-y-1">
-            <label className="block text-xs font-semibold text-[#52645d]">Formulation Name</label>
-            <input
-              type="text"
-              value={formulation.formulationName}
-              onChange={(e) => handleFieldChange("formulationName", e.target.value)}
-              placeholder="e.g. Akapulko 5% Topical Hydrogel"
-              className="w-full rounded-xl border border-[#d5e3da] bg-[#fbfdfb] px-3 py-2 text-xs font-semibold text-[#0f2c20] outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15"
-            />
-          </div>
-          <div className="space-y-1">
-            <label className="block text-xs font-semibold text-[#52645d]">Code &amp; Version</label>
-            <div className="flex gap-1.5">
-              <input
-                type="text"
-                value={formulation.formulationCode}
-                onChange={(e) => handleFieldChange("formulationCode", e.target.value)}
-                placeholder="FRM-TOP-001"
-                className="w-full rounded-xl border border-[#d5e3da] bg-[#fbfdfb] px-2.5 py-2 font-mono text-xs text-[#0f2c20] outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15"
-              />
-              <span className="inline-flex items-center rounded-xl border border-[#d7e4dc] bg-[#f7faf8] px-2.5 py-2 font-mono text-xs font-bold text-[#52645d]">
-                {formulation.versionNumber || "v1.0"}
-              </span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
-          </div>
-          <div className="space-y-1">
-            <label className="block text-xs font-semibold text-[#52645d]">Dosage Format</label>
-            <input
-              type="text"
-              value={formulation.dosageFormType}
-              onChange={(e) => handleFieldChange("dosageFormType", e.target.value)}
-              placeholder="Topical Hydrogel"
-              className="w-full rounded-xl border border-[#d5e3da] bg-[#fbfdfb] px-3 py-2 text-xs text-[#0f2c20] outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15"
-            />
-          </div>
-          <div className="space-y-1">
-            <div className="flex items-center justify-between">
-              <label className="block text-xs font-semibold text-[#52645d]">Target Batch Size</label>
-              <span className="font-mono text-[10px] text-emerald-700">Master Batch</span>
-            </div>
-            <input
-              type="text"
-              value={formulation.targetBatchSize}
-              onChange={(e) => handleFieldChange("targetBatchSize", e.target.value)}
-              placeholder="500 g"
-              className="w-full rounded-xl border border-[#d5e3da] bg-[#fbfdfb] px-3 py-2 font-mono text-xs font-bold text-emerald-900 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15"
-            />
+            )}
+            <p className="mt-1 truncate text-[10px] text-[#8aa094]">
+              Format from Product Selection: {inheritedFormat}
+            </p>
           </div>
         </div>
       </motion.section>
 
       {/* 2. AI Formulation Assist panel */}
       <AnimatePresence>
-      {isAiPanelOpen && (
+      {!readOnly && isAiPanelOpen && (
         <motion.div
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -1050,11 +1050,8 @@ export default function FormulationStep5Section({
               </span>
               <div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-[#52645d]">
-                    <span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-emerald-600 text-[10px] font-bold text-white">
-                      2
-                    </span>
-                    {aiProposal ? aiProposal.formulationName : "AI Formulation Assist"}
+                  <h3 className="inline-flex items-center gap-1.5 text-sm font-bold tracking-tight text-[#0f2c20]">
+                    {aiProposal ? aiProposal.formulationName : "AI Assist Suggestions"}
                   </h3>
                   {aiProposal && (
                     <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-900">
@@ -1114,25 +1111,8 @@ export default function FormulationStep5Section({
           {/* Proposal Content Deck */}
           {!isAiLoading && aiProposal && (
             <div className="space-y-3">
-              {/* Scientific Rationale Alert Banner */}
-              <div className="p-3 rounded-lg bg-white/90 border border-teal-200/80 text-xs text-slate-700 space-y-1">
-                <div className="flex items-center gap-1.5 font-bold text-teal-900 text-[11px] uppercase tracking-wider">
-                  <BookOpen className="w-3.5 h-3.5 text-teal-700" />
-                  <span>Scientific Rationale &amp; Evidence Limitations</span>
-                </div>
-                <p className="text-[11px] leading-relaxed text-slate-600">
-                  {aiProposal.scientificRationale}
-                </p>
-                <div className="pt-1 text-[10px] text-amber-800 font-medium flex items-center gap-1">
-                  <ShieldAlert className="w-3 h-3 text-amber-600 shrink-0" />
-                  <span>
-                    Provisional computational design. Active extract concentrations require bench validation. No therapeutic claims implied.
-                  </span>
-                </div>
-              </div>
-
               {/* Selection Controls Toolbar */}
-              <div className="flex items-center justify-between text-xs pt-1">
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-xs">
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
@@ -1153,156 +1133,78 @@ export default function FormulationStep5Section({
                 </div>
 
                 <span className="text-[11px] font-medium text-slate-500">
-                  Checkboxes control ingredients imported into Step 5
+                  {selectedIngredientIds.size} of {aiProposal.components.length} selected
                 </span>
               </div>
 
-              {/* Recommended Ingredients Table */}
-              <div className="overflow-x-auto border border-teal-200/60 rounded-xl bg-white shadow-2xs">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-teal-50/50 text-slate-700 border-b border-teal-100 font-semibold uppercase text-[10px] tracking-wider">
+              {/* Recommended Ingredients Table — Select | Name & Role | Concentration */}
+              <div className="overflow-x-auto border border-[#d7e4dc] rounded-xl bg-white shadow-2xs">
+                <table className="w-full min-w-[320px] text-left text-xs">
+                  <thead className="bg-[#f3f8f5] text-[#3d5248] border-b border-[#e0ebe4] font-semibold uppercase text-[10px] tracking-wider">
                     <tr>
-                      <th className="py-2 px-3 w-10 text-center">Select</th>
-                      <th className="py-2 px-3">Ingredient Name &amp; Role</th>
-                      <th className="py-2 px-3">Provisional Concentration</th>
-                      <th className="py-2 px-3">Inventory Status (Step 4)</th>
-                      <th className="py-2 px-3">Scientific Rationale &amp; References</th>
+                      <th className="py-2 px-2 sm:px-3 w-10 text-center">Select</th>
+                      <th className="py-2 px-2 sm:px-3">Ingredient Name &amp; Role</th>
+                      <th className="py-2 px-2 sm:px-3 whitespace-nowrap">Provisional Concentration</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody className="divide-y divide-[#eef4f0]">
                     {aiProposal.components.map((ing, idx) => {
                       const isSelected = selectedIngredientIds.has(ing.id);
-                      const isAdding = addingToInventoryId === ing.id;
-                      const hasJustAdded = addedInventorySuccess[ing.id];
-
-                      const liveMatch = findInventoryMatch(
-                        ing.ingredientName || ing.componentName,
-                        ing.componentType,
-                        materials,
-                        project.plantName
-                      );
-                      const hasStock = Boolean(
-                        liveMatch &&
-                        liveMatch.quantityAvailable != null &&
-                        Number(liveMatch.quantityAvailable) > 0
-                      );
-                      const liveStatus: "AVAILABLE" | "PLANNED" | "NOT_IN_INVENTORY" = hasStock
-                        ? "AVAILABLE"
-                        : (liveMatch || hasJustAdded)
-                        ? "PLANNED"
-                        : "NOT_IN_INVENTORY";
 
                       return (
                         <tr
                           key={`rec-${ing.id || ing.ingredientName || "ing"}-${idx}`}
                           onClick={() => handleToggleIngredientSelect(ing.id)}
-                          className={`hover:bg-teal-50/40 transition-colors cursor-pointer ${
-                            isSelected ? "bg-teal-50/20" : ""
+                          className={`hover:bg-[#f3f8f5]/80 transition-colors cursor-pointer ${
+                            isSelected ? "bg-[#eef6f1]" : ""
                           }`}
                         >
-                          {/* Checkbox */}
-                          <td className="py-2.5 px-3 text-center" onClick={(e) => e.stopPropagation()}>
+                          <td className="py-2 px-2 sm:px-3 text-center" onClick={(e) => e.stopPropagation()}>
                             <input
                               type="checkbox"
                               checked={isSelected}
                               onChange={() => handleToggleIngredientSelect(ing.id)}
-                              className="rounded border-slate-300 text-teal-600 focus:ring-teal-500 cursor-pointer w-4 h-4"
+                              className="rounded border-slate-300 text-[#1a5c3a] focus:ring-[#1a5c3a] cursor-pointer w-4 h-4"
+                              aria-label={`Select ${ing.ingredientName}`}
                             />
                           </td>
 
-                          {/* Ingredient Name & Role (Clean, without references) */}
-                          <td className="py-2.5 px-3">
-                            <div className="space-y-1 min-w-[190px]">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="font-bold text-slate-900 text-xs sm:text-sm">
-                                  {ing.ingredientName}
-                                </span>
-                                <span
-                                  className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
-                                    ing.componentType === "ACTIVE_EXTRACT"
-                                      ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
-                                      : ing.isVehicle
-                                      ? "bg-cyan-50 text-cyan-800 border border-cyan-200"
-                                      : ing.isPhAdjuster
-                                      ? "bg-amber-50 text-amber-800 border border-amber-200"
-                                      : "bg-purple-50 text-purple-800 border border-purple-200"
-                                  }`}
-                                >
-                                  {ing.functionalRole}
-                                </span>
-                              </div>
+                          <td className="py-2 px-2 sm:px-3">
+                            <div className="min-w-0 max-w-[16rem] sm:max-w-none">
+                              <p className="font-semibold text-[#0f2c20] text-xs sm:text-sm leading-snug truncate sm:whitespace-normal">
+                                {ing.ingredientName}
+                              </p>
+                              <p className="mt-0.5 text-[11px] text-[#6b7f74] leading-snug">
+                                {ing.functionalRole}
+                              </p>
                             </div>
                           </td>
 
-                          {/* Provisional Concentration */}
-                          <td className="py-2.5 px-3">
+                          <td className="py-2 px-2 sm:px-3 whitespace-nowrap">
                             {!ing.isConcentrationSupported ? (
                               <div className="space-y-0.5">
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
-                                  <AlertTriangle className="w-3 h-3 text-amber-600" />
-                                  <span>Requires Researcher Input</span>
+                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-800">
+                                  <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" />
+                                  <span>Requires researcher input</span>
                                 </span>
                                 {ing.isPhAdjuster && (
-                                  <span className="text-[10px] text-slate-500 block">q.s. to pH 5.5–6.5</span>
+                                  <span className="text-[10px] text-[#6b7f74] block">q.s. to pH 5.5–6.5</span>
                                 )}
                               </div>
                             ) : ing.isVehicle ? (
-                              <span className="font-mono font-bold text-cyan-800 text-xs">
+                              <span className="font-mono font-semibold text-[#0f2c20] text-xs">
                                 q.s. to 100% w/w
                               </span>
                             ) : (
                               <div className="space-y-0.5">
-                                <span className="font-mono font-bold text-slate-900 text-xs">
+                                <span className="font-mono font-semibold text-[#0f2c20] text-xs">
                                   {ing.suggestedConcentration}% w/w
                                 </span>
-                                <span className="text-[10px] text-slate-400 block">
-                                  {ing.suggestedConcentrationRange}
-                                </span>
-                              </div>
-                            )}
-                          </td>
-
-                          {/* Inventory Match Status (Live Step 4 Sync) */}
-                          <td className="py-2.5 px-3" onClick={(e) => e.stopPropagation()}>
-                            {liveStatus === "AVAILABLE" ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                                <span>Verified Stock</span>
-                              </span>
-                            ) : liveStatus === "PLANNED" ? (
-                              <span
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200"
-                                title={liveMatch?.materialName ? `Matched Step 4: ${liveMatch.materialName}` : "Planned Inventory"}
-                              >
-                                <Clock className="w-3 h-3 text-amber-600" />
-                                <span>Planned Inventory</span>
-                              </span>
-                            ) : (
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="text-[10px] text-slate-400 font-medium">Missing</span>
-                                <button
-                                  type="button"
-                                  onClick={() => handleAddToPlannedInventory(ing)}
-                                  disabled={isAdding}
-                                  className="text-[10px] px-2 py-0.5 bg-white hover:bg-emerald-50 hover:text-emerald-800 text-slate-700 font-semibold rounded border border-slate-300 shadow-2xs transition-colors cursor-pointer inline-flex items-center gap-1 disabled:opacity-50"
-                                  title="Add to Step 4 Planned Inventory"
-                                >
-                                  {isAdding ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Plus className="w-2.5 h-2.5" />}
-                                  <span>+ Add to Planned</span>
-                                </button>
-                              </div>
-                            )}
-                          </td>
-
-                          {/* Scientific Rationale & References */}
-                          <td className="py-2.5 px-3 text-[11px] text-slate-600 max-w-sm">
-                            <p className="leading-relaxed">{ing.scientificRationale}</p>
-                            {ing.sourceReference && (
-                              <div className="text-[10px] text-slate-400 mt-1 flex items-center gap-1 font-mono">
-                                <BookOpen className="w-3 h-3 text-emerald-600 shrink-0" />
-                                <span className="truncate" title={ing.sourceReference}>
-                                  {ing.sourceReference}
-                                </span>
+                                {ing.suggestedConcentrationRange ? (
+                                  <span className="text-[10px] text-[#8aa094] block">
+                                    {ing.suggestedConcentrationRange}
+                                  </span>
+                                ) : null}
                               </div>
                             )}
                           </td>
@@ -1314,20 +1216,17 @@ export default function FormulationStep5Section({
               </div>
 
               {/* Panel Footer / Build Formulation Button */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1 border-t border-teal-100">
-                <div className="text-[10px] text-slate-500 flex items-center gap-1">
-                  <ShieldCheck className="w-3.5 h-3.5 text-teal-600 shrink-0" />
-                  <span>
-                    Building will merge selected items into the matrix, auto-balance continuous vehicle (q.s.), and compute batch masses.
-                  </span>
-                </div>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1 border-t border-[#e0ebe4]">
+                <p className="text-[10px] text-[#6b7f74]">
+                  Selected ingredients merge into the recipe; continuous vehicle balances to 100% (q.s.).
+                </p>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
                     onClick={handleBuildSelectedFormulation}
                     disabled={selectedIngredientIds.size === 0 || isBuilding}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold shadow-xs cursor-pointer transition-colors disabled:opacity-50"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#1a5c3a] hover:bg-[#154a2f] text-white text-xs font-bold shadow-xs cursor-pointer transition-colors disabled:opacity-50"
                   >
                     {isBuilding ? (
                       <>
@@ -1362,13 +1261,13 @@ export default function FormulationStep5Section({
       )}
       </AnimatePresence>
 
-      {/* 3. Composition matrix */}
+      {/* B. Ingredients & Composition — recipe builder */}
       <motion.section
         id="composition-matrix"
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3, delay: 0.08, ease: easeOut }}
-        className="scroll-mt-6 space-y-2 rounded-2xl border border-[#d7e4dc]/90 bg-white p-3 shadow-[0_1px_2px_rgba(15,44,32,0.04)] sm:p-4"
+        className="scroll-mt-6 space-y-3 rounded-2xl border border-[#d7e4dc]/90 bg-white p-3 shadow-[0_1px_2px_rgba(15,44,32,0.04)] sm:p-4"
       >
         <AnimatePresence>
           {buildFeedback && (
@@ -1376,7 +1275,7 @@ export default function FormulationStep5Section({
               initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              className={`flex items-center justify-between gap-3 rounded-xl border p-3 text-xs ${
+              className={`flex items-center justify-between gap-3 rounded-xl border p-2.5 text-xs ${
                 buildFeedback.type === "success"
                   ? "border-emerald-200 bg-emerald-50 text-emerald-900"
                   : buildFeedback.type === "error"
@@ -1384,16 +1283,7 @@ export default function FormulationStep5Section({
                     : "border-sky-200 bg-sky-50 text-sky-900"
               }`}
             >
-              <div className="flex items-center gap-2">
-                {buildFeedback.type === "success" ? (
-                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
-                ) : buildFeedback.type === "error" ? (
-                  <AlertTriangle className="h-4 w-4 shrink-0 text-rose-600" />
-                ) : (
-                  <Info className="h-4 w-4 shrink-0 text-sky-600" />
-                )}
-                <span className="font-semibold">{buildFeedback.message}</span>
-              </div>
+              <span className="font-semibold">{buildFeedback.message}</span>
               <button
                 type="button"
                 onClick={() => setBuildFeedback(null)}
@@ -1405,373 +1295,332 @@ export default function FormulationStep5Section({
           )}
         </AnimatePresence>
 
-        <div className="flex flex-col gap-2 border-b border-[#e8f0eb] pb-2.5 sm:flex-row sm:items-center sm:justify-between">
+        {balanceError && (
+          <div className="flex items-start justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-950">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" />
+              <span>{balanceError}</span>
+            </div>
+            <button type="button" onClick={() => setBalanceError(null)} className="text-amber-700">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
+
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div className="min-w-0">
-            <h3 className="inline-flex flex-wrap items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-[#52645d]">
-              <span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-emerald-600 text-[10px] font-bold text-white">
-                3
-              </span>
-              Composition matrix
-              <span
-                className={`rounded-md border px-1.5 py-0.5 font-mono text-[10px] font-bold normal-case tracking-normal ${
-                  isBalanced
-                    ? "border-emerald-200 bg-emerald-50 text-emerald-900"
-                    : isOver100
-                      ? "border-rose-200 bg-rose-50 text-rose-800"
-                      : "border-amber-200 bg-amber-50 text-amber-900"
-                }`}
-              >
-                {totalConcentrationSum.toFixed(2)}% / 100%
-              </span>
-              <span className="font-medium normal-case tracking-normal text-[#8aa094]">
-                · {formulation.components.length} · {numericBatchSizeGrams.toLocaleString()} g
-              </span>
+            <h3 className="text-sm font-bold tracking-tight text-[#0f2c20]">
+              Ingredients &amp; Composition
             </h3>
+            <p className="mt-0.5 text-[11px] text-[#8aa094]">
+              Edit % w/w — batch weight updates from target size
+            </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-1.5 self-end sm:self-center">
-            <button
-              type="button"
-              onClick={handleBalanceWithVehicle}
-              className="inline-flex items-center gap-1 rounded-lg border border-[#d7e4dc] bg-[#f7faf8] px-2.5 py-1 text-[11px] font-semibold text-[#52645d] transition hover:border-emerald-400 hover:bg-emerald-50"
-              title="Automatically calculate remaining vehicle percentage to reach exactly 100%"
-            >
-              <Calculator className="h-3 w-3 text-emerald-700" />
-              Balance q.s.
-            </button>
-
-            <div className="relative" ref={addDropdownRef}>
-              <button
-                type="button"
-                onClick={() => setIsAddDropdownOpen(!isAddDropdownOpen)}
-                className="inline-flex items-center gap-1 rounded-lg bg-emerald-700 px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm transition hover:bg-emerald-800"
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="min-w-[8.5rem]">
+              <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-[#8aa094]">
+                Target batch size
+              </label>
+              <select
+                value={batchSelectValue}
+                disabled={readOnly}
+                onChange={(e) => {
+                  if (readOnly) return;
+                  const v = e.target.value;
+                  if (v === "custom") {
+                    setCustomBatchOpen(true);
+                    if ((BATCH_PRESETS as readonly string[]).includes(formulation.targetBatchSize)) {
+                      handleFieldChange("targetBatchSize", "750 g");
+                    }
+                  } else {
+                    setCustomBatchOpen(false);
+                    handleFieldChange("targetBatchSize", v);
+                  }
+                }}
+                className="h-9 w-full rounded-lg border border-[#d5e3da] bg-[#fbfdfb] px-2.5 text-xs font-semibold text-[#0f2c20] outline-none focus:border-emerald-600"
               >
-                <Plus className="h-3 w-3" />
-                Add
-                <ChevronDown className="h-3 w-3" />
-              </button>
-
-              {isAddDropdownOpen && (
-                <div className="absolute top-full right-0 mt-1 bg-white rounded-xl border border-slate-200 shadow-2xl z-30 w-80 max-h-80 overflow-y-auto divide-y divide-slate-100 animate-in fade-in zoom-in-95 duration-100">
-                  <div className="p-2 bg-slate-50">
-                    <input
-                      type="text"
-                      value={ingredientSearch}
-                      onChange={(e) => setIngredientSearch(e.target.value)}
-                      placeholder="Search ingredient or material catalog..."
-                      className="w-full px-2.5 py-1 text-xs rounded-md border border-slate-200 bg-white focus:outline-none focus:border-emerald-500"
-                      autoFocus
-                    />
-                  </div>
-
-                  {/* Section 1: Cataloged Inventory Materials from Step 4 */}
-                  {materials.length > 0 && (
-                    <div>
-                      <div className="px-3 py-1 bg-emerald-50/70 text-[10px] font-bold text-emerald-800 uppercase tracking-wider flex items-center justify-between">
-                        <span>Project Materials Inventory (Step 4)</span>
-                        <span>{materials.length} available</span>
-                      </div>
-                      {materials
-                        .filter((m) => !ingredientSearch.trim() || (m.materialName || "").toLowerCase().includes(ingredientSearch.toLowerCase()))
-                        .map((mat, idx) => {
-                          const isPlanned = mat.inventoryStatus === "PLANNED" || mat.quantityAvailable == null;
-                          return (
-                            <button
-                              key={`mat-${mat.id ?? "item"}-${idx}`}
-                              type="button"
-                              onClick={() =>
-                                handleAddComponentFromSource({
-                                  name: mat.materialName,
-                                  type: mat.materialType,
-                                  role: mat.functionDescription || "Compounding Agent",
-                                  grade: mat.gradeOrPurity,
-                                  supplier: mat.supplierOrSource || undefined,
-                                  lot: mat.lotOrBatchNumber || undefined,
-                                  materialId: mat.id,
-                                  inventoryStatus: mat.inventoryStatus || (isPlanned ? "PLANNED" : "AVAILABLE"),
-                                  suggestedConcentration: mat.materialType === "ACTIVE_BOTANICAL" ? 5.0 : 1.0,
-                                })
-                              }
-                              className="w-full px-3 py-2 text-left text-xs hover:bg-slate-50 transition-colors flex items-start justify-between gap-2 cursor-pointer"
-                            >
-                              <div className="space-y-0.5 min-w-0">
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span className="font-bold text-slate-800 truncate">{mat.materialName}</span>
-                                  {isPlanned ? (
-                                    <span className="px-1.5 py-0.5 text-[9px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 rounded">
-                                      Planned (Theoretical)
-                                    </span>
-                                  ) : (
-                                    <span className="px-1.5 py-0.5 text-[9px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded">
-                                      Verified Stock
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
-                                  <span className="font-semibold text-emerald-700">{mat.materialType}</span>
-                                  <span>•</span>
-                                  <span>
-                                    {mat.quantityAvailable != null
-                                      ? `Stock: ${mat.quantityAvailable} ${mat.unit || "g"}`
-                                      : "Stock: Unmeasured (Planned)"}
-                                  </span>
-                                </div>
-                              </div>
-                              <span className="text-[10px] font-mono text-slate-400 shrink-0">
-                                {mat.lotOrBatchNumber ? `Lot: ${mat.lotOrBatchNumber}` : "Lot: Pending"}
-                              </span>
-                            </button>
-                          );
-                        })}
-                    </div>
-                  )}
-
-                  {/* Section 2: Standard Compendial Excipients */}
-                  <div>
-                    <div className="px-3 py-1 bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                      Compendial Excipient Presets
-                    </div>
-                    {[
-                      { name: "Carbomer 940", type: "EXCIPIENT", role: "Gelling Agent", conc: 1.0 },
-                      { name: "Glycerin", type: "EXCIPIENT", role: "Humectant", conc: 5.0 },
-                      { name: "Propylene Glycol", type: "EXCIPIENT", role: "Cosolvent / Penetration Enhancer", conc: 3.0 },
-                      { name: "Triethanolamine (TEA)", type: "EXCIPIENT", role: "pH Adjuster", conc: 1.0 },
-                      { name: "Phenoxyethanol", type: "PRESERVATIVE", role: "Antimicrobial Preservative", conc: 0.8 },
-                      { name: "Purified Water (USP)", type: "VEHICLE", role: "Continuous Vehicle (q.s. to 100%)", conc: 80.0, isVehicle: true },
-                    ]
-                      .filter((p) => !ingredientSearch.trim() || p.name.toLowerCase().includes(ingredientSearch.toLowerCase()))
-                      .map((preset, idx) => (
-                        <button
-                          key={`preset-${preset.name}-${idx}`}
-                          type="button"
-                          onClick={() =>
-                            handleAddComponentFromSource({
-                              name: preset.name,
-                              type: preset.type,
-                              role: preset.role,
-                              suggestedConcentration: preset.conc,
-                              isVehicle: preset.isVehicle,
-                            })
-                          }
-                          className="w-full px-3 py-2 text-left text-xs hover:bg-slate-50 transition-colors flex items-center justify-between cursor-pointer"
-                        >
-                          <span className="font-semibold text-slate-800">{preset.name}</span>
-                          <span className="text-[10px] font-mono text-slate-400">{preset.role}</span>
-                        </button>
-                      ))}
-                  </div>
-                </div>
+                {BATCH_PRESETS.map((b) => (
+                  <option key={b} value={b}>
+                    {b}
+                  </option>
+                ))}
+                <option value="custom">Custom</option>
+              </select>
+              {customBatchOpen && (
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={formulation.targetBatchSize}
+                  onChange={(e) => handleFieldChange("targetBatchSize", e.target.value)}
+                  placeholder="e.g. 750 g"
+                  className="mt-1 h-8 w-full rounded-lg border border-[#d5e3da] bg-white px-2.5 font-mono text-xs outline-none focus:border-emerald-600"
+                />
               )}
             </div>
-          </div>
-        </div>
 
-        <div
-          className={`flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-[11px] ${
-            unassignedBotanicalWarning || (!isBalanced && !isOver100)
-              ? "border-amber-200 bg-amber-50/80 text-amber-900"
-              : isOver100
-                ? "border-rose-200 bg-rose-50/80 text-rose-900"
-                : "border-emerald-200 bg-emerald-50/80 text-emerald-900"
-          }`}
-        >
-          <div className="flex min-w-0 items-center gap-1.5 font-semibold">
-            {unassignedBotanicalWarning ? (
+            {!readOnly && (
               <>
-                <AlertTriangle className="h-3 w-3 shrink-0 text-amber-600" />
-                <span className="truncate">
-                  Enter % for <strong>{unassignedBotanicalWarning.ingredientName}</strong>
-                </span>
-              </>
-            ) : isBalanced ? (
-              <>
-                <CheckCircle2 className="h-3 w-3 shrink-0 text-emerald-600" />
-                <span className="truncate">Balanced at 100% — ready for batch analysis</span>
-              </>
-            ) : isOver100 ? (
-              <>
-                <AlertTriangle className="h-3 w-3 shrink-0 text-rose-600" />
-                <span className="truncate">
-                  Over by {(totalConcentrationSum - 100.0).toFixed(2)}%
-                </span>
-              </>
-            ) : (
-              <>
-                <Info className="h-3 w-3 shrink-0 text-amber-600" />
-                <span className="truncate">
-                  {(100.0 - totalConcentrationSum).toFixed(2)}% left — Balance q.s.
-                </span>
+                <button
+                  type="button"
+                  onClick={handleRequestBalanceTo100}
+                  className="inline-flex h-9 items-center gap-1 rounded-lg border border-[#d7e4dc] bg-[#f7faf8] px-2.5 text-[11px] font-semibold text-[#52645d] transition hover:border-emerald-400 hover:bg-emerald-50"
+                  title="Adjust q.s. vehicle to reach 100% (confirmation required)"
+                >
+                  <Calculator className="h-3 w-3 text-emerald-700" />
+                  Balance to 100%
+                </button>
+
+                <div className="min-w-[11rem]">
+                  <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-[#8aa094]">
+                    My Ingredients
+                  </label>
+                  <select
+                    ref={inventorySelectRef}
+                    defaultValue=""
+                    disabled={availableInventoryIngredients.length === 0}
+                    onChange={(e) => {
+                      const id = parseInt(e.target.value, 10);
+                      if (!Number.isNaN(id)) handleSelectInventoryIngredient(id);
+                    }}
+                    className="h-9 w-full max-w-[14rem] rounded-lg border border-[#d5e3da] bg-[#fbfdfb] px-2.5 text-xs font-semibold text-[#0f2c20] outline-none focus:border-emerald-600 disabled:cursor-not-allowed disabled:opacity-60"
+                    title={
+                      materials.length === 0
+                        ? "Register ingredients in Ingredients & Materials first"
+                        : availableInventoryIngredients.length === 0
+                          ? "All My Ingredients are already in this composition"
+                          : "Select an existing inventory ingredient"
+                    }
+                  >
+                    <option value="" disabled>
+                      {materials.length === 0
+                        ? "No inventory yet"
+                        : availableInventoryIngredients.length === 0
+                          ? "All selected"
+                          : "Select ingredient…"}
+                    </option>
+                    {availableInventoryIngredients.map((mat) => (
+                      <option key={mat.id} value={mat.id}>
+                        {mat.materialName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </>
             )}
           </div>
-          <span className="shrink-0 font-mono text-[#6d7f76]">
-            {numericBatchSizeGrams.toLocaleString()} g
-          </span>
         </div>
 
+        {unassignedBotanicalWarning && (
+          <p className="text-[11px] font-medium text-amber-800">
+            Enter a concentration for {unassignedBotanicalWarning.ingredientName}.
+          </p>
+        )}
+
         {formulation.components.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-[#d7e4dc] bg-[#f7faf8] py-8 text-center">
+          <div className="flex flex-col items-center gap-2 rounded-xl bg-[#f7faf8] py-10 text-center">
             <Layers className="h-7 w-7 text-[#c5d4cb]" />
-            <p className="text-xs font-bold text-[#52645d]">Composition matrix is empty</p>
-            <p className="text-[11px] text-[#8aa094]">Use AI Assist or Add from inventory / presets.</p>
-            <div className="flex flex-wrap items-center justify-center gap-2">
-              <button
-                type="button"
-                onClick={handleToggleAiPanel}
-                className="inline-flex items-center gap-1 rounded-lg bg-emerald-700 px-2.5 py-1 text-[11px] font-semibold text-white"
-              >
-                <Sparkles className="h-3 w-3" />
-                AI Assist
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsAddDropdownOpen(true)}
-                className="inline-flex items-center gap-1 rounded-lg border border-[#d7e4dc] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#52645d]"
-              >
-                <Plus className="h-3 w-3 text-emerald-700" />
-                Add
-              </button>
-            </div>
+            <p className="text-xs font-bold text-[#52645d]">No ingredients in this formulation</p>
+            <p className="max-w-sm text-[11px] text-[#8aa094]">
+              Select ingredients from My Ingredients above
+              {materials.length === 0
+                ? ", or register them first in Ingredients & Materials (Step 4)"
+                : ""}
+              . Templates and AI Assist can also build the recipe.
+            </p>
           </div>
         ) : (
-          <div className="overflow-hidden rounded-xl border border-[#d7e4dc]/90">
-            <div className="hidden grid-cols-[minmax(0,1fr)_7.5rem_5.5rem_4.25rem] gap-2 border-b border-[#e8f0eb] bg-[#f7faf8] px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-wider text-[#8aa094] sm:grid">
-              <span>Ingredient</span>
-              <span>% w/w</span>
-              <span>Batch g</span>
-              <span className="text-right">Actions</span>
-            </div>
-            <div className="divide-y divide-[#e8f0eb]">
-              <AnimatePresence mode="popLayout">
-                {formulation.components.map((comp, idx) => {
-                  const numericConc = parseFloat(String(comp.concentrationValue)) || 0;
-                  const calculatedGrams = Number(
-                    ((numericBatchSizeGrams * numericConc) / 100).toFixed(2)
-                  );
-                  const plantClean = project?.plantName
-                    ? project.plantName.trim().toLowerCase()
-                    : "";
-                  const ingredientClean = (comp.ingredientName || "").trim().toLowerCase();
-                  const isBotanicalActive =
-                    comp.componentType === "ACTIVE_EXTRACT" ||
-                    comp.componentType === "ACTIVE_BOTANICAL" ||
-                    Boolean(
-                      plantClean && ingredientClean && ingredientClean.includes(plantClean)
+          <div className="overflow-x-auto rounded-xl border border-[#e8f0eb]">
+            <table className="w-full min-w-[32rem] table-fixed border-collapse text-left">
+              <colgroup>
+                <col className="w-auto" />
+                <col className="w-[7.5rem]" />
+                <col className="w-[6.5rem]" />
+                <col className="w-[5rem]" />
+              </colgroup>
+              <thead>
+                <tr className="border-b border-[#e8f0eb] bg-[#f7faf8] text-[10px] font-bold uppercase tracking-wider text-[#8aa094]">
+                  <th className="px-3 py-2 font-bold">Ingredient</th>
+                  <th className="px-2 py-2 text-right font-bold">Concentration (% w/w)</th>
+                  <th className="px-2 py-2 text-right font-bold">Batch Weight (g)</th>
+                  <th className="px-2 py-2 text-right font-bold">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                  {formulation.components.map((comp, idx) => {
+                    const numericConc = parseFloat(String(comp.concentrationValue));
+                    const safeConc = Number.isFinite(numericConc) ? numericConc : 0;
+                    const calculatedGrams = Number(
+                      ((numericBatchSizeGrams * Math.max(0, safeConc)) / 100).toFixed(2)
                     );
-                  const isHighlighted = highlightedRowNames.has(comp.ingredientName || "");
+                    const isHighlighted = highlightedRowNames.has(comp.ingredientName || "");
+                    const isExpanded = expandedIngredientIdx === idx;
 
-                  return (
-                    <motion.div
-                      key={`comp-${comp.id ?? "row"}-${idx}`}
-                      layout
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.15, ease: easeOut }}
-                      className={`grid grid-cols-1 items-center gap-1.5 px-2.5 py-1.5 transition sm:grid-cols-[minmax(0,1fr)_7.5rem_5.5rem_4.25rem] sm:gap-2 ${
-                        isHighlighted
-                          ? "bg-emerald-50/80"
-                          : "bg-white hover:bg-[#f7faf8]"
-                      }`}
-                    >
-                      <div className="min-w-0">
-                        <div className="flex min-w-0 items-center gap-1.5">
+                    return (
+                      <tr
+                        key={`comp-${comp.id ?? "row"}-${idx}`}
+                        className={`border-b border-[#eef3ef] last:border-0 ${
+                          isHighlighted ? "bg-emerald-50/70" : "bg-white hover:bg-[#fbfdfb]"
+                        }`}
+                      >
+                        <td className="max-w-0 px-3 py-2 align-top">
+                          <div className="flex min-w-0 items-start gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setExpandedIngredientIdx((cur) => (cur === idx ? null : idx))
+                              }
+                              className="mt-0.5 shrink-0 rounded p-0.5 text-[#c5d4cb] transition hover:bg-[#eef4f0] hover:text-emerald-700"
+                              aria-expanded={isExpanded}
+                              aria-label={isExpanded ? "Hide details" : "View details"}
+                            >
+                              <ChevronDown
+                                className={`h-3.5 w-3.5 transition-transform ${
+                                  isExpanded ? "rotate-180 text-emerald-700" : ""
+                                }`}
+                              />
+                            </button>
+                            <div className="min-w-0 flex-1 overflow-hidden">
+                              <p className="truncate text-[13px] font-semibold leading-snug text-[#0f2c20]">
+                                {comp.ingredientName || "Untitled ingredient"}
+                              </p>
+                              <p className="mt-0.5 truncate text-[11px] text-[#8aa094]">
+                                {simplifyPurpose(comp.roleOrFunction, comp.componentType)}
+                              </p>
+                              {isExpanded && (
+                                <div className="mt-2 space-y-1 break-words rounded-lg bg-[#f7faf8] px-2.5 py-2 text-[11px] leading-relaxed text-[#52645d]">
+                                  <p className="whitespace-normal">
+                                    <span className="font-semibold text-[#8aa094]">Role: </span>
+                                    {comp.roleOrFunction || "—"}
+                                  </p>
+                                  {comp.gradeOrPurity ? (
+                                    <p className="whitespace-normal">
+                                      <span className="font-semibold text-[#8aa094]">Grade: </span>
+                                      {comp.gradeOrPurity}
+                                    </p>
+                                  ) : null}
+                                  {comp.notes ? (
+                                    <p className="whitespace-normal">{comp.notes}</p>
+                                  ) : null}
+                                  {!readOnly && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedComponentModalIdx(idx)}
+                                      className="mt-1 font-semibold text-emerald-800 hover:underline"
+                                    >
+                                      Edit details
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-2 py-2 align-middle text-right">
                           <input
-                            type="text"
-                            value={comp.ingredientName || ""}
-                            onChange={(e) =>
-                              handleUpdateComponent(idx, "ingredientName", e.target.value)
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            max="100"
+                            readOnly={readOnly}
+                            value={
+                              comp.concentrationValue !== undefined &&
+                              comp.concentrationValue !== null
+                                ? comp.concentrationValue
+                                : ""
                             }
-                            className="min-w-0 flex-1 truncate border-b border-transparent bg-transparent text-xs font-semibold text-[#0f2c20] outline-none hover:border-[#d7e4dc] focus:border-emerald-600"
+                            onChange={(e) => {
+                              if (readOnly) return;
+                              const raw = e.target.value;
+                              if (raw === "") {
+                                handleUpdateComponent(idx, "concentrationValue", 0);
+                                return;
+                              }
+                              const val = parseFloat(raw);
+                              if (!Number.isFinite(val)) return;
+                              handleUpdateComponent(
+                                idx,
+                                "concentrationValue",
+                                Math.max(0, val)
+                              );
+                            }}
+                            className={`ml-auto w-[4.75rem] rounded-md border px-2 py-1.5 text-right font-mono text-[12px] font-bold outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15 ${
+                              readOnly
+                                ? "cursor-default border-[#e8f0eb] bg-[#f8fbf9]"
+                                : "border-[#d5e3da] bg-[#fbfdfb] text-[#0f2c20]"
+                            }`}
                           />
-                          {isBotanicalActive ? (
-                            <span className="shrink-0 rounded border border-emerald-200 bg-emerald-50 px-1 py-0.5 text-[8px] font-bold text-emerald-800">
-                              Active
-                            </span>
-                          ) : comp.isVehicle ? (
-                            <span className="shrink-0 rounded border border-sky-200 bg-sky-50 px-1 py-0.5 text-[8px] font-bold text-sky-800">
-                              Vehicle
-                            </span>
-                          ) : null}
-                          {comp.inventoryStatus === "PLANNED" && (
-                            <span className="shrink-0 rounded border border-amber-200 bg-amber-50 px-1 py-0.5 text-[8px] font-semibold text-amber-800">
-                              Planned
-                            </span>
+                        </td>
+                        <td className="px-2 py-2 align-middle text-right font-mono text-[12px] font-semibold tabular-nums text-[#0f2c20]">
+                          {safeConc > 0
+                            ? calculatedGrams.toLocaleString(undefined, {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })
+                            : "0.00"}
+                        </td>
+                        <td className="px-2 py-2 align-middle text-right">
+                          {!readOnly && (
+                            <div className="inline-flex items-center justify-end gap-0.5">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedComponentModalIdx(idx)}
+                                className="rounded p-1.5 text-[#8aa094] transition hover:bg-emerald-50 hover:text-emerald-800"
+                                title="Edit"
+                              >
+                                <Edit2 className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveComponent(idx)}
+                                className="rounded p-1.5 text-[#8aa094] transition hover:bg-rose-50 hover:text-rose-600"
+                                title="Remove"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
                           )}
-                        </div>
-                        <p className="truncate text-[10px] text-[#8aa094]">
-                          {comp.roleOrFunction ||
-                            (isBotanicalActive ? "Botanical Active" : "Compounding Agent")}
-                        </p>
-                      </div>
-
-                      <div className="flex items-center gap-1">
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          max="100"
-                          value={
-                            comp.concentrationValue !== undefined &&
-                            comp.concentrationValue !== null
-                              ? comp.concentrationValue
-                              : ""
-                          }
-                          onChange={(e) => {
-                            const val = e.target.value === "" ? 0 : parseFloat(e.target.value);
-                            handleUpdateComponent(idx, "concentrationValue", val);
-                          }}
-                          className={`w-full rounded-md border px-1.5 py-1 font-mono text-[11px] font-bold outline-none focus:border-emerald-600 sm:w-[4.5rem] ${
-                            numericConc === 0 && isBotanicalActive
-                              ? "border-amber-300 bg-amber-50 text-amber-900"
-                              : "border-[#d5e3da] bg-[#fbfdfb] text-[#0f2c20]"
-                          }`}
-                        />
-                        <span className="shrink-0 text-[10px] font-semibold text-[#8aa094]">%</span>
-                      </div>
-
-                      <div className="font-mono text-[11px] font-bold text-[#0f2c20]">
-                        {numericConc > 0 ? (
-                          `${calculatedGrams.toLocaleString(undefined, {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })} g`
-                        ) : isBotanicalActive ? (
-                          <span className="font-sans text-[10px] italic font-medium text-amber-700">
-                            Pending
-                          </span>
-                        ) : comp.isPhAdjuster ? (
-                          <span className="font-sans text-[10px] italic font-medium text-[#8aa094]">
-                            q.s.
-                          </span>
-                        ) : (
-                          "0.00 g"
-                        )}
-                      </div>
-
-                      <div className="flex items-center justify-end gap-0.5">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedComponentModalIdx(idx)}
-                          className="rounded p-1 text-[#8aa094] transition hover:bg-emerald-50 hover:text-emerald-800"
-                          title="View / Edit ingredient details"
-                        >
-                          <Edit2 className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveComponent(idx)}
-                          className="rounded p-1 text-[#8aa094] transition hover:bg-rose-50 hover:text-rose-600"
-                          title="Remove ingredient"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </motion.div>
-                  );
-                })}
-              </AnimatePresence>
-            </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+              <tfoot>
+                <tr className="border-t border-[#d7e4dc] bg-[#f7faf8]">
+                  <td colSpan={4} className="px-3 py-2.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-[12px]">
+                      <p
+                        className={`font-mono font-bold tabular-nums ${
+                          hasInvalidConcentrations
+                            ? "text-rose-800"
+                            : isBalanced
+                              ? "text-emerald-900"
+                              : isOver100
+                                ? "text-rose-800"
+                                : "text-amber-900"
+                        }`}
+                      >
+                        {totalConcentrationSum.toFixed(2)}%
+                        <span className="mx-1.5 font-sans font-normal text-[#c5d4cb]">·</span>
+                        {totalCalculatedWeightGrams.toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}{" "}
+                        g
+                        <span className="mx-1.5 font-sans font-normal text-[#c5d4cb]">·</span>
+                        <span className="font-sans font-semibold">{compositionStatusLabel}</span>
+                      </p>
+                      {isBalanced && !hasInvalidConcentrations && !unassignedBotanicalWarning && (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-800">
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          Ready for batch analysis
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
           </div>
         )}
       </motion.section>
@@ -1902,10 +1751,69 @@ export default function FormulationStep5Section({
         </div>
       )}
 
+      {/* Balance to 100% confirmation */}
+      {pendingBalance && !readOnly && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+            <div>
+              <h3 className="text-sm font-bold text-[#0f2c20]">Confirm Balance to 100%</h3>
+              <p className="mt-1 text-[11px] leading-relaxed text-[#52645d]">
+                Other ingredients total{" "}
+                <strong className="font-mono">{pendingBalance.nonVehicleSum.toFixed(2)}%</strong>.
+                The q.s. vehicle will be set so the composition reaches 100%. Other ingredient
+                percentages will not change.
+              </p>
+            </div>
+            <div className="rounded-xl border border-[#e8f0eb] bg-[#f7faf8] px-3 py-2.5 text-xs text-[#0f2c20]">
+              <p className="font-semibold">{pendingBalance.vehicleName}</p>
+              <p className="mt-1 font-mono text-[12px]">
+                {pendingBalance.vehicleIdx == null ? (
+                  <>
+                    Add at <strong>{pendingBalance.proposedConc.toFixed(2)}%</strong>
+                  </>
+                ) : (
+                  <>
+                    {pendingBalance.currentConc.toFixed(2)}% →{" "}
+                    <strong>{pendingBalance.proposedConc.toFixed(2)}%</strong>
+                  </>
+                )}
+              </p>
+              <p className="mt-1 text-[11px] text-[#8aa094]">
+                ≈{" "}
+                {(
+                  (numericBatchSizeGrams * pendingBalance.proposedConc) /
+                  100
+                ).toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}{" "}
+                g at current batch size
+              </p>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPendingBalance(null)}
+                className="rounded-lg border border-[#d7e4dc] bg-white px-3 py-1.5 text-xs font-semibold text-[#52645d]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmBalance}
+                className="rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-800"
+              >
+                Apply balance
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ===================================================================== */}
       {/* 7. TEMPLATE OVERWRITE CONFIRMATION MODAL                              */}
       {/* ===================================================================== */}
-      {pendingTemplate && (
+      {pendingTemplate && !readOnly && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-md p-5 space-y-4 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-start gap-3">
@@ -1945,7 +1853,7 @@ export default function FormulationStep5Section({
       {/* ===================================================================== */}
       {/* 8. AI FORMULATION REPLACE CONFIRMATION MODAL                          */}
       {/* ===================================================================== */}
-      {isConfirmingReplace && (
+      {isConfirmingReplace && !readOnly && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-md p-5 space-y-4 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-start gap-3">

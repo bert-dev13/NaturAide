@@ -272,29 +272,30 @@ async function initDatabase() {
     const defaultPassword = "NatureAide123!";
     const hashedPassword = await bcrypt.hash(defaultPassword, saltRounds);
 
+    // Role-labeled demo accounts only — no hardcoded doctor personal names.
     const demoAccounts = [
       {
         email: "community@natureaide.test",
         password: hashedPassword,
-        name: "Maria Santos",
-        firstName: "Maria",
-        lastName: "Santos",
+        name: "Community Member",
+        firstName: "Community",
+        lastName: "Member",
         role: "COMMUNITY",
       },
       {
         email: "researcher@natureaide.test",
         password: hashedPassword,
-        name: "Dr. Aris Dela Cruz",
-        firstName: "Aris",
-        lastName: "Dela Cruz",
+        name: "Lead Researcher",
+        firstName: "Lead",
+        lastName: "Researcher",
         role: "RESEARCHER",
       },
       {
         email: "reviewer@natureaide.test",
         password: hashedPassword,
-        name: "Dr. Elena Rostova",
-        firstName: "Elena",
-        lastName: "Rostova",
+        name: "Lead Reviewer",
+        firstName: "Lead",
+        lastName: "Reviewer",
         role: "REVIEWER",
       },
     ];
@@ -632,7 +633,7 @@ async function initDatabase() {
     const commUserId = commUser[0]?.id;
 
     if (commUserId) {
-      // Save Lagundi and Turmeric for Maria Santos
+      // Save Lagundi and Turmeric for the community demo account
       await conn.query(`
         INSERT INTO saved_plants (userId, plantId, notes)
         VALUES 

@@ -7,16 +7,12 @@ import {
   CheckCircle2,
   Download,
   AlertTriangle,
-  ArrowRight,
-  ArrowLeft,
   Check,
-  ChevronLeft,
-  ChevronRight,
-  ZoomIn,
-  ZoomOut,
+  Beaker,
 } from "lucide-react";
 import ReviewerStepFeedbackSection from "./ReviewerStepFeedbackSection";
 import ReviewerResearchSummaryStep1 from "./ReviewerResearchSummaryStep1";
+import ReviewerLaboratoryResultsSection from "./ReviewerLaboratoryResultsSection";
 import { isFeedbackBelongsToStep } from "@/lib/feedback-step-filter";
 import { resolveResearchSummaryText } from "@/lib/research-summary-utils";
 import type { CompiledResearchOverview } from "@/lib/manuscript-upload-service";
@@ -55,15 +51,27 @@ const SUBMISSION_STEPS = [
     roleNumber: "03",
     roleName: "Clinical Pharmacology & Paper Review",
     roleProfession: "Clinical Pharmacologist & Medical Reviewer",
+    approveable: true,
   },
   {
     num: 2,
+    title: "Laboratory Results",
+    shortTitle: "Laboratory Results",
+    icon: Beaker,
+    roleNumber: "03",
+    roleName: "Clinical Pharmacology & Paper Review",
+    roleProfession: "Clinical Pharmacologist & Medical Reviewer",
+    approveable: true,
+  },
+  {
+    num: 3,
     title: "Uploaded Scientific Manuscript (PDF / DOCX)",
     shortTitle: "Manuscript Preview",
     icon: Upload,
     roleNumber: "03",
     roleName: "Clinical Pharmacology & Paper Review",
     roleProfession: "Scientific Peer Reviewer",
+    approveable: true,
   },
 ];
 
@@ -90,9 +98,6 @@ export default function ReviewerSubmissionSection({
     if (onStepChange) onStepChange(nextVal);
     setInternalActiveStep(nextVal);
   };
-  const [currentPage, setCurrentPage] = useState(1);
-  const [zoomScale, setZoomScale] = useState(100);
-
   const manuscript = dossier?.section3?.manuscript || dossier?.manuscript || null;
   const dossierRecord = dossier?.section3?.dossier || dossier?.dossier || {};
   const savedSummary =
@@ -120,6 +125,7 @@ export default function ReviewerSubmissionSection({
   );
 
   const currentStepConfig = SUBMISSION_STEPS[activeStep - 1] || SUBMISSION_STEPS[0];
+  const isStepApproved = approvedSteps.includes(activeStep);
 
   const stepFeedback = feedbackList.filter((f) =>
     isFeedbackBelongsToStep(f, "section3", activeStep, currentStepConfig.title)
@@ -132,7 +138,7 @@ export default function ReviewerSubmissionSection({
         {SUBMISSION_STEPS.map((step) => {
           const Icon = step.icon;
           const isCurrent = activeStep === step.num;
-          const isStepApproved = approvedSteps.includes(step.num);
+          const stepApproved = approvedSteps.includes(step.num);
           return (
             <button
               key={step.num}
@@ -141,7 +147,7 @@ export default function ReviewerSubmissionSection({
               className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-medium shrink-0 transition-all cursor-pointer ${
                 isCurrent
                   ? "bg-purple-700 text-white font-semibold shadow-xs"
-                  : isStepApproved
+                  : stepApproved
                   ? "bg-emerald-50 text-emerald-800 border border-emerald-300 font-semibold"
                   : "bg-white text-slate-700 hover:bg-slate-50 border border-slate-200/90"
               }`}
@@ -150,7 +156,7 @@ export default function ReviewerSubmissionSection({
               <span>
                 {step.num}. {step.shortTitle}
               </span>
-              {isStepApproved && (
+              {stepApproved && (
                 <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
               )}
             </button>
@@ -306,7 +312,7 @@ export default function ReviewerSubmissionSection({
             </span>
           </div>
           <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
-            {approvedSteps.includes(activeStep) ? (
+            {isStepApproved ? (
               <button
                 type="button"
                 disabled={true}
@@ -350,142 +356,119 @@ export default function ReviewerSubmissionSection({
         )}
 
         {/* ================================================================= */}
-        {/* STEP 2: UPLOADED MANUSCRIPT PREVIEW                               */}
+        {/* STEP 2: LABORATORY RESULTS (read-only, same DB records)           */}
         {/* ================================================================= */}
         {activeStep === 2 && (
+          <ReviewerLaboratoryResultsSection projectId={project.id} />
+        )}
+
+        {/* ================================================================= */}
+        {/* STEP 3: UPLOADED MANUSCRIPT PREVIEW                               */}
+        {/* ================================================================= */}
+        {activeStep === 3 && (
           <div className="space-y-5">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
               <div>
-                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                  <Upload className="w-4 h-4 text-purple-600" />
-                  <span>Step 2: Uploaded Scientific Manuscript (PDF / DOCX Viewer)</span>
+                <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                  <Upload className="h-4 w-4 text-purple-600" />
+                  Research Manuscript
                 </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Direct inspection of the researcher&apos;s complete academic manuscript and supplementary figures.
+                <p className="mt-0.5 text-xs text-slate-500">
+                  Read-only preview of the researcher&apos;s uploaded PDF or DOCX.
                 </p>
               </div>
-              {hasUploadedManuscript ? (
-                <a
-                  href={manuscriptUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  download
-                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-purple-50 text-purple-800 border border-purple-200 hover:bg-purple-100 transition-colors"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Download Manuscript</span>
-                </a>
-              ) : (
-                <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
-                  Manuscript Uploaded
-                </span>
-              )}
+              <span className="rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-600">
+                Section 3 · Step 3/3
+              </span>
             </div>
 
-            {/* Manuscript Metadata Banner */}
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-              <div className="space-y-0.5">
-                <p className="font-bold text-slate-900">
-                  {manuscript?.fileName || `${project.title.replace(/\s+/g, "_")}_Manuscript_v1.0.pdf`}
-                </p>
-                <div className="flex items-center gap-2 text-slate-500 text-[11px]">
-                  <span>Format: <strong>PDF Document</strong></span>
-                  <span>•</span>
-                  <span>Size: <strong>2.4 MB</strong></span>
-                  <span>•</span>
-                  <span>Pages: <strong>14 Pages</strong></span>
-                  <span>•</span>
-                  <span>Uploaded: <strong>Round 1 Submission</strong></span>
-                </div>
-              </div>
-
-              {/* Viewer Controls */}
-              <div className="flex items-center gap-1 self-start sm:self-auto">
-                <button
-                  type="button"
-                  onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
-                  disabled={currentPage <= 1}
-                  className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 disabled:opacity-40"
-                  aria-label="Previous Page"
-                >
-                  <ChevronLeft className="w-3.5 h-3.5 text-slate-600" />
-                </button>
-                <span className="text-xs font-mono font-medium px-2 text-slate-700">
-                  Page {currentPage} of 14
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setCurrentPage((p) => Math.min(p + 1, 14))}
-                  disabled={currentPage >= 14}
-                  className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 disabled:opacity-40"
-                  aria-label="Next Page"
-                >
-                  <ChevronRight className="w-3.5 h-3.5 text-slate-600" />
-                </button>
-                <div className="h-4 w-px bg-slate-200 mx-1" />
-                <button
-                  type="button"
-                  onClick={() => setZoomScale((z) => Math.max(z - 10, 80))}
-                  className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100"
-                  aria-label="Zoom Out"
-                >
-                  <ZoomOut className="w-3.5 h-3.5 text-slate-600" />
-                </button>
-                <span className="text-xs font-mono px-1 text-slate-600">{zoomScale}%</span>
-                <button
-                  type="button"
-                  onClick={() => setZoomScale((z) => Math.min(z + 10, 150))}
-                  className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100"
-                  aria-label="Zoom In"
-                >
-                  <ZoomIn className="w-3.5 h-3.5 text-slate-600" />
-                </button>
-              </div>
-            </div>
-
-            {/* Simulated Clean Document Reading Pane */}
-            <div className="border border-slate-200 rounded-2xl bg-slate-100 p-4 sm:p-8 flex justify-center min-h-[500px] overflow-auto">
-              <div
-                style={{ width: `${zoomScale}%`, maxWidth: "800px" }}
-                className="bg-white rounded-xl shadow-md border border-slate-300 p-8 sm:p-12 space-y-6 text-slate-800 transition-all"
-              >
-                {/* Academic Header */}
-                <div className="text-center space-y-2 border-b border-slate-200 pb-6">
-                  <h1 className="text-xl sm:text-2xl font-serif font-bold text-slate-900 leading-tight">
-                    {project.title}
-                  </h1>
-                  <p className="text-xs text-slate-600">
-                    Lead Researcher: <strong>{project.researcherName || "Principal Investigator"}</strong> · Department of Pharmaceutical Sciences
-                  </p>
-                  <p className="text-[11px] text-slate-500 italic">
-                    Affiliation: University of the Philippines / Philippine Institute of Traditional and Alternative Health Care (PITAHC)
-                  </p>
-                </div>
-
-                {/* Abstract Section */}
-                <div className="space-y-2 text-xs">
-                  <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Abstract</h2>
-                  <p className="text-slate-700 leading-relaxed text-justify">
-                    <strong>Background:</strong> {project.plantName} ({project.plantScientificName || "Vitex negundo L."}) is an established Philippine medicinal plant with documented anti-inflammatory therapeutic properties.{" "}
-                    <strong>Methods:</strong> Bioactive flavonoids were isolated via standardized hydroethanolic maceration and screened against pro-inflammatory TNF-alpha (PDB ID: 2AZ5) using AutoDock Vina. A stable topical hydrogel formulation was engineered using Carbomer 940 and evaluated across 3 replicate manufacturing batches.{" "}
-                    <strong>Results:</strong> Molecular docking identified Casticin and Isoorientin as potent antagonists (ΔG = -8.70 and -8.20 kcal/mol), engaging key dimer residues Tyr119 and Leu120. The formulated hydrogel (pH 5.82, 24,500 cP) complied with all pharmacopeial physical and microbial standards.{" "}
-                    <strong>Conclusion:</strong> The combined in-silico and formulation pipeline validates the pharmaceutical feasibility of {project.plantName} topical delivery systems.
-                  </p>
-                </div>
-
-                {/* Manuscript Section Overview */}
-                <div className="pt-4 border-t border-slate-100 space-y-3 text-xs">
-                  <h3 className="font-bold text-slate-900">Manuscript Structure &amp; Table of Contents</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
-                    <div className="p-2 rounded bg-slate-50 border border-slate-100">1. Introduction &amp; Ethnobotany (pp. 1–3)</div>
-                    <div className="p-2 rounded bg-slate-50 border border-slate-100">2. Materials &amp; Methods (pp. 4–7)</div>
-                    <div className="p-2 rounded bg-slate-50 border border-slate-100">3. In-Silico Docking Results (pp. 8–10)</div>
-                    <div className="p-2 rounded bg-slate-50 border border-slate-100">4. Formulation &amp; Batch QC (pp. 11–13)</div>
-                    <div className="p-2 rounded bg-slate-50 border border-slate-100 sm:col-span-2">5. Discussion, Limitations &amp; References (pp. 13–14)</div>
+            {hasUploadedManuscript && manuscript ? (
+              <>
+                <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4 sm:p-5">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#0f2c20] text-white">
+                        <FileText className="h-5 w-5" />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-slate-900">
+                          {manuscript.fileName || "Uploaded_Research_Paper.pdf"}
+                        </p>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-600">
+                          <span className="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 font-semibold text-slate-700">
+                            {isPdfManuscript
+                              ? "PDF"
+                              : String(manuscript.fileName || "")
+                                    .toLowerCase()
+                                    .endsWith(".docx")
+                                ? "DOCX"
+                                : "File"}
+                          </span>
+                          {manuscript.fileSize != null && (
+                            <span className="font-mono font-semibold text-slate-900">
+                              {Number(manuscript.fileSize) < 1024
+                                ? `${manuscript.fileSize} B`
+                                : Number(manuscript.fileSize) < 1024 * 1024
+                                  ? `${(Number(manuscript.fileSize) / 1024).toFixed(1)} KB`
+                                  : `${(Number(manuscript.fileSize) / (1024 * 1024)).toFixed(2)} MB`}
+                            </span>
+                          )}
+                          <span className="inline-flex items-center gap-1 font-semibold text-emerald-800">
+                            <CheckCircle2 className="h-3 w-3" />
+                            Uploaded
+                          </span>
+                          {manuscript.uploadedAt && (
+                            <span suppressHydrationWarning className="text-slate-500">
+                              {new Date(manuscript.uploadedAt).toLocaleString()}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                      <a
+                        href={manuscriptUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-semibold text-slate-700 transition hover:border-purple-300 hover:text-purple-900"
+                      >
+                        Preview
+                      </a>
+                      <a
+                        href={manuscriptUrl}
+                        download={manuscript.fileName || undefined}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-semibold text-slate-700 transition hover:border-purple-300 hover:text-purple-900"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        Download
+                      </a>
+                    </div>
                   </div>
                 </div>
+
+                {isPdfManuscript ? (
+                  <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
+                    <iframe
+                      title="Manuscript preview"
+                      src={manuscriptUrl}
+                      className="h-[640px] w-full bg-white"
+                    />
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-600">
+                    DOCX preview is available via Download. Open the file in a word processor to review full formatting.
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="rounded-xl border border-dashed border-amber-200 bg-amber-50/60 px-4 py-10 text-center">
+                <AlertTriangle className="mx-auto mb-2 h-5 w-5 text-amber-600" />
+                <p className="text-sm font-semibold text-amber-950">No manuscript uploaded</p>
+                <p className="mt-1 text-xs text-amber-800">
+                  The researcher has not uploaded a PDF or DOCX manuscript for this submission.
+                </p>
               </div>
-            </div>
+            )}
           </div>
         )}
 
@@ -498,56 +481,17 @@ export default function ReviewerSubmissionSection({
           stepNumber={activeStep}
           stepTitle={currentStepConfig.title}
           roleProfession={currentStepConfig.roleProfession}
-          isApproved={approvedSteps.includes(activeStep)}
-          onToggleApprove={() => onToggleApproveStep && onToggleApproveStep(activeStep)}
+          isApproved={isStepApproved}
+          showApproval={Boolean(currentStepConfig.approveable)}
+          onToggleApprove={() => {
+            if (onToggleApproveStep) onToggleApproveStep(activeStep);
+          }}
           feedbackList={feedbackList}
           onRefreshFeedback={onRefreshFeedback || (async () => {})}
           onDeleteFeedback={onDeleteFeedback || (async () => {})}
           onResolveFeedback={onResolveFeedback || (async () => {})}
         />
 
-        {/* Step Navigation & Action Footer */}
-        <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-3 text-xs">
-          <button
-            type="button"
-            disabled={activeStep === 1}
-            onClick={() => setActiveStep((prev: number) => Math.max(prev - 1, 1))}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-medium disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Previous Step</span>
-          </button>
-
-          {activeStep === SUBMISSION_STEPS.length ? (
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => onNavigateTab && onNavigateTab("feedback")}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold transition-all shadow-xs cursor-pointer"
-              >
-                <span>Consolidated Feedback Console</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={() => onNavigateTab && onNavigateTab("evaluation")}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-purple-700 hover:bg-purple-800 text-white font-bold shadow-xs cursor-pointer"
-              >
-                <span>Evaluation Panel</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setActiveStep((prev: number) => Math.min(prev + 1, SUBMISSION_STEPS.length))}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-purple-700 hover:bg-purple-800 text-white font-semibold transition-all shadow-xs cursor-pointer"
-            >
-              <span>Next Step ({activeStep + 1} of {SUBMISSION_STEPS.length})</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
       </div>
     </div>
   );

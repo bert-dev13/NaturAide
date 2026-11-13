@@ -339,7 +339,7 @@ export default function RegisterPage() {
                         setLastName(event.target.value);
                         clearField("lastName");
                       }}
-                      placeholder="Dela Cruz"
+                      placeholder="Last name"
                       aria-invalid={Boolean(fieldErrors.lastName)}
                       aria-describedby={fieldErrors.lastName ? "lastName-error" : undefined}
                       className="w-full min-h-12 bg-white text-base sm:text-sm text-[#143d2b] placeholder-[#a3b8ad] px-4 py-3 rounded-2xl border border-[#d6e3da] focus:border-[#16a34a] focus:ring-4 focus:ring-[#16a34a]/15 outline-none transition-all duration-200 disabled:opacity-60"

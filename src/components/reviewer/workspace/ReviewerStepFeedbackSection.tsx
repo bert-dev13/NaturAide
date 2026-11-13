@@ -30,6 +30,8 @@ export interface ReviewerStepFeedbackSectionProps {
   roleProfession: string;
   isApproved: boolean;
   onToggleApprove: () => void;
+  /** When false, hide the step-approval toggle (feedback form still shows). */
+  showApproval?: boolean;
   feedbackList: any[];
   onRefreshFeedback: () => Promise<void>;
   onDeleteFeedback: (id: number) => Promise<void>;
@@ -46,6 +48,7 @@ export default function ReviewerStepFeedbackSection({
   roleProfession,
   isApproved,
   onToggleApprove,
+  showApproval = true,
   feedbackList = [],
   onRefreshFeedback,
   onDeleteFeedback,
@@ -229,34 +232,36 @@ export default function ReviewerStepFeedbackSection({
         </div>
 
         {/* Step Approval Status Indicator & Toggle */}
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={onToggleApprove}
-            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-xs ${
-              isApproved
-                ? "bg-emerald-500 hover:bg-emerald-600 text-white border border-emerald-400"
-                : "bg-white/10 hover:bg-white/20 text-slate-200 border border-white/20"
-            }`}
-            title={
-              isApproved
-                ? `Step ${stepNumber} is currently approved. Click to revoke approval.`
-                : `Mark Step ${stepNumber} as approved.`
-            }
-          >
-            {isApproved ? (
-              <>
-                <CheckCircle2 className="w-3.5 h-3.5 text-white" />
-                <span>Step {stepNumber} Approved</span>
-              </>
-            ) : (
-              <>
-                <Clock className="w-3.5 h-3.5 text-slate-300" />
-                <span>Step {stepNumber} Pending Approval</span>
-              </>
-            )}
-          </button>
-        </div>
+        {showApproval && (
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={onToggleApprove}
+              className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-xs ${
+                isApproved
+                  ? "bg-emerald-500 hover:bg-emerald-600 text-white border border-emerald-400"
+                  : "bg-white/10 hover:bg-white/20 text-slate-200 border border-white/20"
+              }`}
+              title={
+                isApproved
+                  ? `Step ${stepNumber} is currently approved. Click to revoke approval.`
+                  : `Mark Step ${stepNumber} as approved.`
+              }
+            >
+              {isApproved ? (
+                <>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-white" />
+                  <span>Step {stepNumber} Approved</span>
+                </>
+              ) : (
+                <>
+                  <Clock className="w-3.5 h-3.5 text-slate-300" />
+                  <span>Step {stepNumber} Pending Approval</span>
+                </>
+              )}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Existing Step Findings Log (if any findings recorded on this step) */}

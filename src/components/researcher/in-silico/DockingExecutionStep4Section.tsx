@@ -68,7 +68,7 @@ interface Step4Props {
   onExhaustivenessChange?: (val: number) => void;
   numModes?: number;
   onNumModesChange?: (val: number) => void;
-  onSelectRunForVisuals: (runId: number, targetStep: 6 | 7) => void;
+  onSelectRunForVisuals: (runId: number, targetStep: 5 | 6) => void;
 }
 
 interface CombinationRow {
@@ -777,7 +777,7 @@ export default function DockingExecutionStep4Section({
                         <>
                           <button
                             type="button"
-                            onClick={() => onSelectRunForVisuals(row.runId!, 6)}
+                            onClick={() => onSelectRunForVisuals(row.runId!, 5)}
                             className="inline-flex items-center gap-0.5 rounded-lg border border-[#d7e4dc] bg-[#f7faf8] px-1.5 py-0.5 text-[9px] font-semibold text-[#52645d] hover:border-emerald-400"
                             title="2D interactions"
                           >
@@ -786,7 +786,7 @@ export default function DockingExecutionStep4Section({
                           </button>
                           <button
                             type="button"
-                            onClick={() => onSelectRunForVisuals(row.runId!, 7)}
+                            onClick={() => onSelectRunForVisuals(row.runId!, 6)}
                             className="inline-flex items-center gap-0.5 rounded-lg border border-[#d7e4dc] bg-[#f7faf8] px-1.5 py-0.5 text-[9px] font-semibold text-[#52645d] hover:border-emerald-400"
                             title="3D pose"
                           >

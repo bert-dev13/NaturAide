@@ -11,15 +11,70 @@ import {
   FlaskConical,
   RotateCcw,
   Sparkles,
-  Leaf,
   Beaker,
-  ChevronRight,
+  ChevronDown,
+  Info,
 } from "lucide-react";
 import {
   BatchQcMeasurement,
   buildDeterministicQcSuggestions,
 } from "@/lib/batch-ai-service";
 import { LiteratureItem } from "./BotanicalStep1Section";
+
+/** Compact display name for QC rows (full scientific name retained in data). */
+function shortQcTestName(test: BatchQcMeasurement): string {
+  const id = test.id;
+  if (id === "qc-appearance") return "Appearance";
+  if (id === "qc-ph") return "pH";
+  if (id === "qc-viscosity") return "Viscosity";
+  if (id === "qc-spreadability") return "Spreadability";
+  if (id === "qc-active-assay") return "Active Marker Recovery";
+  if (id === "qc-microbial-limits") return "Microbial Enumeration";
+  if (id === "qc-specified-pathogens") return "Specified Dermal Pathogens";
+  if (id === "qc-centrifuge-stability") return "Accelerated Physical Stability";
+  if (id === "qc-density") return "Density";
+  return test.testName;
+}
+
+/** Short criteria for the table; full text remains available via details. */
+function shortAcceptanceCriteria(test: BatchQcMeasurement): string {
+  const raw = (test.acceptanceCriteria || "").trim();
+  if (!raw) return "—";
+  // Drop trailing parenthetical gloss when the numeric/scientific limit remains.
+  const withoutParen = raw.replace(/\s*\([^)]*\)\s*$/, "").trim();
+  if (withoutParen.length > 0 && withoutParen.length < raw.length) return withoutParen;
+  if (raw.length <= 72) return raw;
+  return `${raw.slice(0, 70).trim()}…`;
+}
+
+function resultUnitLabel(test: BatchQcMeasurement): string | null {
+  const id = test.id;
+  if (id === "qc-ph") return "pH";
+  if (id === "qc-viscosity") return "cP";
+  if (id === "qc-spreadability") return "mm";
+  if (id === "qc-active-assay") return "%";
+  if (id === "qc-microbial-limits") return test.measurementUnit || "CFU/g";
+  if (id === "qc-density") return "g/mL";
+  return null;
+}
+
+function resolveInputType(test: BatchQcMeasurement): "number" | "text" | "select" {
+  // Prefer researcher-facing input kinds from the simplified Lab QC brief.
+  if (test.id === "qc-appearance" || test.id === "qc-centrifuge-stability") return "text";
+  if (test.id === "qc-specified-pathogens") return "select";
+  if (
+    test.id === "qc-ph" ||
+    test.id === "qc-viscosity" ||
+    test.id === "qc-spreadability" ||
+    test.id === "qc-active-assay" ||
+    test.id === "qc-density"
+  ) {
+    return "number";
+  }
+  if (test.id === "qc-microbial-limits") return "text";
+  if (test.inputType) return test.inputType;
+  return "text";
+}
 
 export interface BatchRecord {
   id: number;
@@ -66,32 +121,22 @@ interface BatchAnalysisStep6Props {
   onSaveDraft: () => Promise<boolean | void>;
   saveStatus: "idle" | "saving" | "saved" | "error";
   onProceedToInSilico?: () => void;
+  /** Reviewer / read-only mode: hide simulate/analyze and disable QC entry */
+  readOnly?: boolean;
 }
 
-// User-friendly contextual placeholders for real physical measurements
-const LAB_RESULT_PLACEHOLDERS: Record<string, string> = {
-  "qc-appearance": "Enter visual observation (e.g. Translucent amber gel)",
-  "qc-ph": "Enter measured pH (e.g. 5.50)",
-  "qc-viscosity": "Enter viscosity in cP (e.g. 3,200 cP)",
-  "qc-spreadability": "Enter mm diameter (e.g. 52 mm)",
-  "qc-active-assay": "Enter recovery % (e.g. 98.2%)",
-  "qc-microbial-limits": "Enter CFU/g (e.g. < 10 CFU/g)",
-  "qc-specified-pathogens": "Enter pathogen status (e.g. Absent in 1.0 g)",
-  "qc-centrifuge-stability": "Enter observation (e.g. No phase separation)",
-  "qc-density": "Enter density in g/mL (e.g. 1.045 g/mL)",
-};
-
-// Illustrative sample demonstration values (Non-empirical preview)
+// Illustrative sample demonstration values (Non-empirical preview).
+// Numeric tests store value only — units are shown beside the input.
 const SAMPLE_QC_VALUES: Record<string, string> = {
   "qc-appearance": "Homogeneous translucent amber gel",
   "qc-ph": "5.42",
-  "qc-viscosity": "3,250 cP",
-  "qc-spreadability": "53 mm",
-  "qc-active-assay": "98.4%",
+  "qc-viscosity": "3250",
+  "qc-spreadability": "53",
+  "qc-active-assay": "98.4",
   "qc-microbial-limits": "TAMC 12 CFU/g; TYMC <10 CFU/g",
-  "qc-specified-pathogens": "Not detected (simulated)",
-  "qc-centrifuge-stability": "No phase separation observed",
-  "qc-density": "1.045 g/mL",
+  "qc-specified-pathogens": "Absent in 1.0 g (Pass)",
+  "qc-centrifuge-stability": "No phase separation observed (Pass)",
+  "qc-density": "1.045",
 };
 
 function getSampleValueForTest(test: BatchQcMeasurement): string {
@@ -99,13 +144,13 @@ function getSampleValueForTest(test: BatchQcMeasurement): string {
   const nameLower = test.testName.toLowerCase();
   if (nameLower.includes("appearance") || nameLower.includes("color")) return "Homogeneous translucent amber gel";
   if (nameLower.includes("ph")) return "5.42";
-  if (nameLower.includes("viscosity")) return "3,250 cP";
-  if (nameLower.includes("spreadability")) return "53 mm";
-  if (nameLower.includes("assay") || nameLower.includes("recovery")) return "98.4%";
+  if (nameLower.includes("viscosity")) return "3250";
+  if (nameLower.includes("spreadability")) return "53";
+  if (nameLower.includes("assay") || nameLower.includes("recovery")) return "98.4";
   if (nameLower.includes("microbial") || nameLower.includes("tamc")) return "TAMC 12 CFU/g; TYMC <10 CFU/g";
-  if (nameLower.includes("pathogen")) return "Not detected (simulated)";
-  if (nameLower.includes("centrifuge") || nameLower.includes("stability")) return "No phase separation observed";
-  if (nameLower.includes("density")) return "1.045 g/mL";
+  if (nameLower.includes("pathogen")) return "Absent in 1.0 g (Pass)";
+  if (nameLower.includes("centrifuge") || nameLower.includes("stability")) return "No phase separation observed (Pass)";
+  if (nameLower.includes("density")) return "1.045";
   return "Compliant (Simulated Sample)";
 }
 
@@ -122,10 +167,9 @@ export default function BatchAnalysisStep6Section({
   materials = [],
   batches = [],
   onBatchesChange,
-  literatureReferences = [],
   isSaving,
-  onSaveDraft,
   saveStatus,
+  readOnly = false,
 }: BatchAnalysisStep6Props) {
   // Parse numeric default batch size (e.g. "500 g" -> 500)
   const parsedDefaultBatchSize = useMemo(() => {
@@ -332,9 +376,11 @@ export default function BatchAnalysisStep6Section({
       scientificReference: d.scientificReference,
       acceptanceCriteria: d.acceptanceCriteria,
       measuredValue: "", // STRICTLY EMPTY BY DEFAULT
-      status: "Ready",
+      status: "Ready" as const,
       analystNotes: "",
       isCustom: false,
+      inputType: d.inputType,
+      defaultOptions: d.defaultOptions,
     }));
   }, [projectId, plantName, dosageFormType, parsedDefaultBatchSize]);
 
@@ -347,6 +393,7 @@ export default function BatchAnalysisStep6Section({
   // Active mode indicator
   const [isSampleMode, setIsSampleMode] = useState<boolean>(false);
   const [sampleNotification, setSampleNotification] = useState<string | null>(null);
+  const [expandedCriteriaId, setExpandedCriteriaId] = useState<string | null>(null);
 
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [analysisResult, setAnalysisResult] = useState<string | null>(null);
@@ -364,7 +411,18 @@ export default function BatchAnalysisStep6Section({
             setAnalysisResult(parsed.report?.shortSummary || parsed.report?.aiInterpretation || null);
             setAnalysisIsSimulated(true);
           } else {
-            setRealQcTests(parsed.qcMeasurements);
+            // Merge UI metadata from catalog defaults without overwriting saved results
+            const merged = parsed.qcMeasurements.map((saved: BatchQcMeasurement) => {
+              const fallback = defaultQcTests.find((d) => d.id === saved.id);
+              return {
+                ...saved,
+                inputType: saved.inputType || fallback?.inputType,
+                defaultOptions: saved.defaultOptions || fallback?.defaultOptions,
+                acceptanceCriteria: saved.acceptanceCriteria || fallback?.acceptanceCriteria || "",
+                measurementUnit: saved.measurementUnit || fallback?.measurementUnit || "",
+              };
+            });
+            setRealQcTests(merged);
             if (parsed.report?.shortSummary) {
               setAnalysisResult(parsed.report.shortSummary);
             } else if (parsed.report?.aiInterpretation) {
@@ -378,7 +436,7 @@ export default function BatchAnalysisStep6Section({
       setAnalysisResult(null);
       setAnalysisIsSimulated(false);
     }
-  }, [selectedBatch]);
+  }, [selectedBatch, defaultQcTests]);
 
   // The active measurements currently displayed in the table
   const displayedQcTests = useMemo(() => {
@@ -405,6 +463,7 @@ export default function BatchAnalysisStep6Section({
 
   // Generate Sample Results Handler (Populates sample state ONLY)
   const handleGenerateSampleResults = () => {
+    if (readOnly) return;
     const simulated: BatchQcMeasurement[] = realQcTests.map((t) => ({
       ...t,
       measuredValue: getSampleValueForTest(t),
@@ -413,11 +472,13 @@ export default function BatchAnalysisStep6Section({
 
     setSampleQcTests(simulated);
     setIsSampleMode(true);
+    // Lab QC table is always visible; sample mode swaps displayed values in place.
     setSampleNotification("Populated illustrative sample values for all 8 tests. (Demonstration Preview)");
   };
 
   // Clear Sample Results Handler (Restores real laboratory form)
   const handleClearSampleResults = () => {
+    if (readOnly) return;
     setSampleQcTests(null);
     setIsSampleMode(false);
     setSampleNotification(null);
@@ -425,6 +486,7 @@ export default function BatchAnalysisStep6Section({
 
   // Update measurement handler (Separates real and sample writes)
   const handleUpdateTestValue = (id: string, value: string) => {
+    if (readOnly) return;
     if (isSampleMode) {
       setSampleQcTests((prev) =>
         (prev || []).map((test) =>
@@ -456,6 +518,7 @@ export default function BatchAnalysisStep6Section({
   // 5. PRIMARY ACTION: ANALYZE MY BATCH
   // =========================================================================
   const handleAnalyzeMyBatch = async () => {
+    if (readOnly) return;
     if (normalizedIngredients.length === 0) {
       setErrorMessage("No formulation ingredients found. Please complete Step 5 Formulation Builder first.");
       return;
@@ -510,106 +573,158 @@ export default function BatchAnalysisStep6Section({
   };
 
   const easeOut = [0.22, 1, 0.36, 1] as const;
+  const isMassBalanced = Math.abs(totalRecipePercentage - 100) < 0.05;
+  const hasRecipe = normalizedIngredients.length > 0;
+  const qcCompletedCount = isSampleMode ? sampleTestedCount : realTestedCount;
+  const fieldClass =
+    "h-9 w-full rounded-lg border border-[#d5e3da] bg-[#fbfdfb] px-2.5 font-mono text-[11px] text-[#0f2c20] outline-none transition focus:border-emerald-600 focus:bg-white focus:ring-2 focus:ring-emerald-600/15";
+
+  const renderQcInput = (t: BatchQcMeasurement) => {
+    const inputType = resolveInputType(t);
+    const unit = resultUnitLabel(t);
+    const missing = !(t.measuredValue && t.measuredValue.trim().length > 0);
+    const options = t.defaultOptions || [];
+    const samplePad = isSampleMode ? "pr-14" : unit ? "pr-10" : "";
+
+    if (readOnly) {
+      const display = (t.measuredValue && t.measuredValue.trim()) || "—";
+      return (
+        <div className="rounded-lg border border-[#eef4f0] bg-[#f8fbf9] px-2.5 py-1.5 font-mono text-[11px] text-[#0f2c20]">
+          {display}
+          {unit && display !== "—" ? (
+            <span className="ml-1 text-[10px] font-semibold text-[#8aa094]">{unit}</span>
+          ) : null}
+        </div>
+      );
+    }
+
+    if (inputType === "select" && options.length > 0) {
+      return (
+        <div className="relative">
+          <select
+            value={t.measuredValue}
+            onChange={(e) => handleUpdateTestValue(t.id, e.target.value)}
+            className={`${fieldClass} ${samplePad} ${
+              missing ? "border-amber-300 bg-amber-50/40" : ""
+            } ${isSampleMode ? "border-amber-300 bg-amber-50/40" : ""}`}
+            aria-label={`${shortQcTestName(t)} result`}
+          >
+            <option value="">Select result…</option>
+            {options.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
+            ))}
+            {t.measuredValue && !options.includes(t.measuredValue) ? (
+              <option value={t.measuredValue}>{t.measuredValue}</option>
+            ) : null}
+          </select>
+          {isSampleMode && (
+            <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded bg-amber-100 px-1 py-0.5 text-[9px] font-semibold text-amber-800">
+              Sample
+            </span>
+          )}
+        </div>
+      );
+    }
+
+    // text + decimal keyboard keeps legacy saved values (e.g. "3250 cP") displayable
+    // while presenting a numeric entry surface; units sit beside the field.
+    return (
+      <div className="relative">
+        <input
+          type="text"
+          inputMode={inputType === "number" ? "decimal" : "text"}
+          placeholder={missing ? "Enter result" : undefined}
+          value={t.measuredValue}
+          onChange={(e) => handleUpdateTestValue(t.id, e.target.value)}
+          className={`${fieldClass} ${samplePad} ${
+            missing ? "border-amber-300/80 bg-amber-50/30" : ""
+          } ${isSampleMode ? "border-amber-300 bg-amber-50/40" : ""}`}
+          aria-label={`${shortQcTestName(t)} result`}
+        />
+        {unit && !isSampleMode ? (
+          <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-[#8aa094]">
+            {unit}
+          </span>
+        ) : null}
+        {isSampleMode && (
+          <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded bg-amber-100 px-1 py-0.5 text-[9px] font-semibold text-amber-800">
+            Sample
+          </span>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-4">
-      {/* Compact status strip */}
-      <motion.div
+      {/* Compact page header / batch summary */}
+      <motion.section
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.28, ease: easeOut }}
-        className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[#d7e4dc]/90 bg-white px-4 py-2.5 shadow-[0_1px_2px_rgba(15,44,32,0.04)]"
+        className="rounded-2xl border border-[#d7e4dc]/90 bg-white p-3 shadow-[0_1px_2px_rgba(15,44,32,0.04)] sm:p-4"
       >
-        <div className="flex items-center gap-2 text-[11px] text-[#6d7f76]">
-          <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-800">
-            <Activity className="h-3.5 w-3.5" />
-          </span>
-          <span className="font-semibold text-[#0f2c20]">Batch Analysis</span>
-          <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-mono text-[10px] font-bold text-emerald-900">
-            {currentActivePct}% · {batchSizeGrams} g
-          </span>
-        </div>
-        <div className="text-[11px] font-semibold">
-          {saveStatus === "saving" || isSaving ? (
-            <span className="inline-flex items-center gap-1 text-amber-700">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
-              Saving...
-            </span>
-          ) : saveStatus === "saved" ? (
-            <span className="inline-flex items-center gap-1 text-emerald-800">
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              Saved
-            </span>
-          ) : (
-            <span className="text-[#8aa094]">Draft</span>
-          )}
-        </div>
-      </motion.div>
-
-      {/* Context + how-to */}
-      <motion.section
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, ease: easeOut }}
-        className="relative overflow-hidden rounded-2xl border border-[#d7e4dc]/90 bg-[linear-gradient(165deg,#ffffff_0%,#f8fbf9_100%)] p-4 shadow-[0_1px_2px_rgba(15,44,32,0.04)]"
-      >
-        <div className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-emerald-600 via-teal-400 to-cyan-300" />
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex min-w-0 items-start gap-2.5">
-            <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-800">
-              <Leaf className="h-4 w-4" />
-            </span>
-            <div className="min-w-0">
-              <h2 className="text-sm font-semibold text-[#0f2c20]">
-                {currentActivePct}% {plantName} {displayDosageForm}
-              </h2>
-              <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-[#8aa094]">
-                {batches.length > 1 ? (
-                  <select
-                    value={selectedBatchId || ""}
-                    onChange={(e) => setSelectedBatchId(Number(e.target.value))}
-                    className="rounded-md border border-[#d5e3da] bg-white px-1.5 py-0.5 font-mono text-[11px] font-semibold text-[#0f2c20] outline-none focus:border-emerald-600"
-                  >
-                    {batches.map((b) => {
-                      const conc =
-                        b.activeConcentrationPercent ||
-                        b.batchNumber.match(/(\d+)PCT/i)?.[1] ||
-                        "5";
-                      return (
-                        <option key={b.id} value={b.id}>
-                          {b.batchNumber} ({conc}% · {b.batchSizeGrams} g)
-                        </option>
-                      );
-                    })}
-                  </select>
-                ) : (
-                  <span className="font-mono font-semibold text-[#52645d]">{batchNumber}</span>
-                )}
-                <span className="text-[#d7e4dc]">·</span>
-                <span>{formVersion}</span>
-                <span className="text-[#d7e4dc]">·</span>
-                <span>{batchSizeGrams} g master batch</span>
-              </div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <h2 className="inline-flex items-center gap-2 text-sm font-bold tracking-tight text-[#0f2c20]">
+              <Activity className="h-4 w-4 text-emerald-700" />
+              Batch Analysis
+            </h2>
+            <p className="mt-0.5 truncate text-[12px] font-medium text-[#52645d]">
+              {formulationName || `${currentActivePct}% ${plantName} ${displayDosageForm}`}
+            </p>
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-[#6d7f76]">
+              {batches.length > 1 ? (
+                <select
+                  value={selectedBatchId || ""}
+                  onChange={(e) => setSelectedBatchId(Number(e.target.value))}
+                  className="rounded-md border border-[#d5e3da] bg-white px-1.5 py-0.5 font-mono text-[11px] font-semibold text-[#0f2c20] outline-none focus:border-emerald-600"
+                  aria-label="Select batch"
+                >
+                  {batches.map((b) => {
+                    const conc =
+                      b.activeConcentrationPercent ||
+                      b.batchNumber.match(/(\d+)PCT/i)?.[1] ||
+                      "5";
+                    return (
+                      <option key={b.id} value={b.id}>
+                        {b.batchNumber} ({conc}% · {b.batchSizeGrams} g)
+                      </option>
+                    );
+                  })}
+                </select>
+              ) : (
+                <span className="font-mono font-semibold text-[#0f2c20]">{batchNumber}</span>
+              )}
+              <span className="text-[#d7e4dc]">·</span>
+              <span>{formVersion}</span>
+              <span className="text-[#d7e4dc]">·</span>
+              <span>{batchSizeGrams} g</span>
+              <span className="text-[#d7e4dc]">·</span>
+              <span>{currentActivePct}% active</span>
             </div>
           </div>
-          <div className="flex flex-wrap gap-1.5">
-            {[
-              { n: "1", label: "Review recipe" },
-              { n: "2", label: "Enter lab QC" },
-              { n: "3", label: "Analyze" },
-            ].map((step, idx) => (
-              <span
-                key={step.n}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-[#d7e4dc] bg-white px-2.5 py-1 text-[10px] font-semibold text-[#52645d]"
-              >
-                <span className="inline-flex h-4 w-4 items-center justify-center rounded-md bg-emerald-600 text-[9px] font-bold text-white">
-                  {step.n}
-                </span>
-                {step.label}
-                {idx < 2 && <ChevronRight className="h-3 w-3 text-[#c5d4cb]" />}
+          {!readOnly && (
+          <div className="shrink-0 text-[11px] font-semibold">
+            {saveStatus === "saving" || isSaving ? (
+              <span className="inline-flex items-center gap-1 text-amber-700">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
+                Saving...
               </span>
-            ))}
+            ) : saveStatus === "saved" ? (
+              <span className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-emerald-800">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Saved
+              </span>
+            ) : (
+              <span className="inline-flex items-center rounded-md border border-[#d7e4dc] bg-[#f7faf8] px-2 py-0.5 text-[#6d7f76]">
+                Draft
+              </span>
+            )}
           </div>
+          )}
         </div>
 
         <AnimatePresence>
@@ -636,7 +751,7 @@ export default function BatchAnalysisStep6Section({
         </AnimatePresence>
       </motion.section>
 
-      {/* 1. Recipe */}
+      {/* Batch Recipe */}
       <motion.section
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -644,73 +759,77 @@ export default function BatchAnalysisStep6Section({
         className="space-y-2 rounded-2xl border border-[#d7e4dc]/90 bg-white p-3 shadow-[0_1px_2px_rgba(15,44,32,0.04)] sm:p-4"
       >
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#e8f0eb] pb-2.5">
-          <h3 className="inline-flex flex-wrap items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-[#52645d]">
-            <span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-emerald-600 text-[10px] font-bold text-white">
-              1
-            </span>
-            <Layers className="h-3.5 w-3.5 text-emerald-700" />
-            Batch recipe
-            <span className="font-medium normal-case tracking-normal text-[#8aa094]">
-              · {normalizedIngredients.length}{" "}
-              {normalizedIngredients.length === 1 ? "ingredient" : "ingredients"} ·{" "}
-              {batchSizeGrams} g
-            </span>
+          <h3 className="inline-flex items-center gap-2 text-sm font-bold tracking-tight text-[#0f2c20]">
+            <Layers className="h-4 w-4 text-emerald-700" />
+            Batch Recipe
           </h3>
-          {Math.abs(totalRecipePercentage - 100) < 0.05 ? (
+          {isMassBalanced ? (
             <span className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-900">
               <CheckCircle2 className="h-3 w-3" />
-              100% balanced
+              100% balanced · {totalRecipeMass.toFixed(2)} g
             </span>
           ) : (
             <span className="inline-flex items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-900">
               <AlertCircle className="h-3 w-3" />
-              {totalRecipePercentage.toFixed(1)}% of batch
+              {totalRecipePercentage.toFixed(1)}% · {totalRecipeMass.toFixed(2)} g
             </span>
           )}
         </div>
 
-        {normalizedIngredients.length > 0 ? (
-          <div className="overflow-hidden rounded-xl border border-[#d7e4dc]/90">
-            <div className="grid grid-cols-[minmax(0,1fr)_6.5rem] gap-2 border-b border-[#e8f0eb] bg-[#f7faf8] px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-wider text-[#8aa094]">
-              <span>Ingredient</span>
-              <span className="text-right">Amount</span>
-            </div>
-            <div className="divide-y divide-[#e8f0eb]">
-              {normalizedIngredients.map((ing) => (
-                <div
-                  key={ing.id}
-                  className="grid grid-cols-[minmax(0,1fr)_6.5rem] items-center gap-2 px-2.5 py-1.5 hover:bg-[#f7faf8]"
-                >
-                  <div className="min-w-0">
-                    <span className="block truncate text-xs font-semibold text-[#0f2c20]">
-                      {ing.name}
-                    </span>
-                    <span className="text-[10px] text-[#8aa094]">
-                      {ing.targetPercentage.toFixed(2)}% · {ing.role}
-                    </span>
-                  </div>
-                  <span className="text-right font-mono text-[11px] font-bold text-emerald-800">
-                    {ing.targetMassGrams.toFixed(2)} g
-                  </span>
-                </div>
-              ))}
-            </div>
-            <div className="grid grid-cols-[minmax(0,1fr)_6.5rem] gap-2 border-t border-[#e8f0eb] bg-[#f7faf8] px-2.5 py-2 text-xs font-bold text-[#0f2c20]">
-              <span>Total</span>
-              <span className="text-right font-mono">
-                {totalRecipeMass.toFixed(2)} g
-              </span>
-            </div>
+        {hasRecipe ? (
+          <div className="overflow-x-auto rounded-xl border border-[#d7e4dc]/90">
+            <table className="w-full min-w-[28rem] text-left text-xs">
+              <thead className="border-b border-[#e8f0eb] bg-[#f7faf8] text-[10px] font-bold uppercase tracking-wider text-[#8aa094]">
+                <tr>
+                  <th className="px-2.5 py-1.5 font-bold">Ingredient</th>
+                  <th className="hidden px-2.5 py-1.5 font-bold sm:table-cell">Role</th>
+                  <th className="px-2.5 py-1.5 font-bold text-right">Concentration</th>
+                  <th className="px-2.5 py-1.5 font-bold text-right">Amount</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#e8f0eb]">
+                {normalizedIngredients.map((ing) => (
+                  <tr key={ing.id} className="hover:bg-[#f7faf8]">
+                    <td className="px-2.5 py-1.5">
+                      <span className="block font-semibold text-[#0f2c20]">{ing.name}</span>
+                      <span className="text-[10px] text-[#8aa094] sm:hidden">{ing.role}</span>
+                    </td>
+                    <td className="hidden px-2.5 py-1.5 text-[11px] text-[#6d7f76] sm:table-cell">
+                      {ing.role}
+                    </td>
+                    <td className="px-2.5 py-1.5 text-right font-mono text-[11px] text-[#0f2c20]">
+                      {ing.targetPercentage.toFixed(2)}%
+                    </td>
+                    <td className="px-2.5 py-1.5 text-right font-mono text-[11px] font-semibold text-emerald-800">
+                      {ing.targetMassGrams.toFixed(2)} g
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t border-[#e8f0eb] bg-[#f7faf8] text-xs font-bold text-[#0f2c20]">
+                  <td className="px-2.5 py-2" colSpan={2}>
+                    Total
+                  </td>
+                  <td className="px-2.5 py-2 text-right font-mono">
+                    {totalRecipePercentage.toFixed(2)}%
+                  </td>
+                  <td className="px-2.5 py-2 text-right font-mono">
+                    {totalRecipeMass.toFixed(2)} g
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
           </div>
         ) : (
           <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11px] text-amber-900">
             <AlertCircle className="h-3.5 w-3.5 shrink-0 text-amber-600" />
-            No Step 5 ingredients yet — complete Formulation Development first.
+            No formulation ingredients yet — complete Formulation Development first.
           </div>
         )}
       </motion.section>
 
-      {/* 2. Lab QC — always visible */}
+      {/* Laboratory QC */}
       <motion.section
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -719,43 +838,36 @@ export default function BatchAnalysisStep6Section({
       >
         <div className="flex flex-col gap-2 border-b border-[#e8f0eb] pb-2.5 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h3 className="inline-flex flex-wrap items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-[#52645d]">
-              <span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-emerald-600 text-[10px] font-bold text-white">
-                2
-              </span>
-              <Beaker className="h-3.5 w-3.5 text-emerald-700" />
+            <h3 className="inline-flex items-center gap-2 text-sm font-bold tracking-tight text-[#0f2c20]">
+              <Beaker className="h-4 w-4 text-emerald-700" />
               Laboratory QC
-              <span className="font-medium normal-case tracking-normal text-[#8aa094]">
-                · {isSampleMode ? sampleTestedCount : realTestedCount}/{totalCount} entered
-              </span>
             </h3>
-            {isSampleMode && (
-              <span className="mt-1 inline-flex items-center gap-1 rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-semibold text-amber-800">
-                <FlaskConical className="h-2.5 w-2.5" />
-                Sample / simulated data
-              </span>
-            )}
+            <p className="mt-0.5 text-[11px] text-[#6d7f76]">
+              {qcCompletedCount} of {totalCount || 8} tests completed
+              {isSampleMode ? " · Sample preview" : ""}
+            </p>
           </div>
-          {isSampleMode ? (
-            <button
-              type="button"
-              onClick={handleClearSampleResults}
-              className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-800 hover:bg-rose-100"
-            >
-              <RotateCcw className="h-3 w-3" />
-              Clear samples
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={handleGenerateSampleResults}
-              className="inline-flex items-center gap-1 rounded-lg border border-[#d7e4dc] bg-[#f7faf8] px-2.5 py-1 text-[11px] font-semibold text-[#52645d] hover:border-emerald-400 hover:bg-emerald-50"
-              title="Fill illustrative demo values for all QC tests"
-            >
-              <Sparkles className="h-3 w-3 text-emerald-700" />
-              Generate samples
-            </button>
-          )}
+          {!readOnly &&
+            (isSampleMode ? (
+              <button
+                type="button"
+                onClick={handleClearSampleResults}
+                className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-800 hover:bg-rose-100"
+              >
+                <RotateCcw className="h-3 w-3" />
+                Clear samples
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleGenerateSampleResults}
+                className="inline-flex items-center gap-1 rounded-lg border border-[#d7e4dc] bg-[#f7faf8] px-2.5 py-1 text-[11px] font-semibold text-[#52645d] hover:border-emerald-400 hover:bg-emerald-50"
+                title="Fill illustrative demo values for all QC tests"
+              >
+                <Sparkles className="h-3 w-3 text-emerald-700" />
+                Generate Samples
+              </button>
+            ))}
         </div>
 
         <AnimatePresence>
@@ -777,85 +889,150 @@ export default function BatchAnalysisStep6Section({
           )}
         </AnimatePresence>
 
-        <div className="overflow-hidden rounded-xl border border-[#d7e4dc]/90">
-          <div className="hidden grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1.1fr)] gap-2 border-b border-[#e8f0eb] bg-[#f7faf8] px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-wider text-[#8aa094] sm:grid">
-            <span>Test</span>
-            <span>Criteria</span>
-            <span>Result</span>
-          </div>
-          <div className="divide-y divide-[#e8f0eb]">
-            {displayedQcTests.map((t) => (
-              <div
-                key={t.id}
-                className={`grid grid-cols-1 gap-1.5 px-2.5 py-2 sm:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1.1fr)] sm:items-center sm:gap-2 ${
-                  isSampleMode ? "bg-amber-50/30" : "bg-white hover:bg-[#f7faf8]"
-                }`}
-              >
-                <div className="min-w-0">
-                  <span className="block truncate text-xs font-semibold text-[#0f2c20]">
-                    {t.testName}
-                  </span>
-                  <span className="text-[10px] text-[#8aa094] sm:hidden">
-                    {t.acceptanceCriteria}
-                  </span>
-                </div>
-                <p className="hidden truncate text-[11px] text-[#6d7f76] sm:block">
-                  {t.acceptanceCriteria}
-                </p>
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder={LAB_RESULT_PLACEHOLDERS[t.id] || "Enter result"}
-                    value={t.measuredValue}
-                    onChange={(e) => handleUpdateTestValue(t.id, e.target.value)}
-                    className={`w-full rounded-lg border px-2 py-1.5 font-mono text-[11px] outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15 ${
-                      isSampleMode
-                        ? "border-amber-300 bg-amber-50/40 pr-14"
-                        : "border-[#d5e3da] bg-[#fbfdfb]"
-                    }`}
-                  />
-                  {isSampleMode && (
-                    <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 rounded bg-amber-100 px-1 py-0.5 text-[9px] font-semibold text-amber-800">
-                      Sample
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
+        <div className="overflow-x-auto rounded-xl border border-[#d7e4dc]/90">
+          <table className="w-full min-w-[36rem] text-left text-xs">
+            <thead className="border-b border-[#e8f0eb] bg-[#f7faf8] text-[10px] font-bold uppercase tracking-wider text-[#8aa094]">
+              <tr>
+                <th className="px-2.5 py-1.5 font-bold">Test</th>
+                <th className="px-2.5 py-1.5 font-bold">Acceptance criteria</th>
+                <th className="w-[12.5rem] px-2.5 py-1.5 font-bold sm:w-[14rem]">Result</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#e8f0eb]">
+              {displayedQcTests.map((t) => {
+                const missing = !(t.measuredValue && t.measuredValue.trim().length > 0);
+                const expanded = expandedCriteriaId === t.id;
+                const shortCrit = shortAcceptanceCriteria(t);
+                const showExpand =
+                  (t.acceptanceCriteria || "").length > shortCrit.length ||
+                  Boolean(t.purpose || t.recommendedMethod);
+
+                return (
+                  <tr
+                    key={t.id}
+                    className={isSampleMode ? "bg-amber-50/25" : missing ? "bg-amber-50/15" : "bg-white"}
+                  >
+                    <td className="px-2.5 py-2 align-top">
+                      <span className="font-semibold text-[#0f2c20]">{shortQcTestName(t)}</span>
+                      {missing && (
+                        <span className="mt-0.5 block text-[10px] font-medium text-amber-700">
+                          Missing
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-2.5 py-2 align-top">
+                      <div className="flex items-start gap-1">
+                        <span className="text-[11px] leading-snug text-[#52645d]">{shortCrit}</span>
+                        {showExpand && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setExpandedCriteriaId(expanded ? null : t.id)
+                            }
+                            className="mt-0.5 shrink-0 rounded p-0.5 text-[#8aa094] hover:bg-[#eef4f0] hover:text-[#52645d]"
+                            title="Show full criteria"
+                            aria-expanded={expanded}
+                          >
+                            {expanded ? (
+                              <ChevronDown className="h-3.5 w-3.5" />
+                            ) : (
+                              <Info className="h-3.5 w-3.5" />
+                            )}
+                          </button>
+                        )}
+                      </div>
+                      <AnimatePresence>
+                        {expanded && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: "auto" }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="mt-1 space-y-0.5 overflow-hidden text-[10px] leading-relaxed text-[#6d7f76]"
+                          >
+                            <p>{t.acceptanceCriteria}</p>
+                            {t.purpose ? <p>Purpose: {t.purpose}</p> : null}
+                            {t.recommendedMethod ? (
+                              <p>Method: {t.recommendedMethod}</p>
+                            ) : null}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </td>
+                    <td className="px-2.5 py-2 align-top">{renderQcInput(t)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       </motion.section>
 
-      {/* 3. Analyze */}
+      {/* Analyze Batch */}
       <motion.section
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3, delay: 0.12, ease: easeOut }}
         className="space-y-3 rounded-2xl border border-[#d7e4dc]/90 bg-white p-3 shadow-[0_1px_2px_rgba(15,44,32,0.04)] sm:p-4"
       >
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h3 className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-[#52645d]">
-              <span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-emerald-600 text-[10px] font-bold text-white">
-                3
-              </span>
-              <FlaskConical className="h-3.5 w-3.5 text-emerald-700" />
-              Analyze batch
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0 space-y-2">
+            <h3 className="inline-flex items-center gap-2 text-sm font-bold tracking-tight text-[#0f2c20]">
+              <FlaskConical className="h-4 w-4 text-emerald-700" />
+              Analyze Batch
             </h3>
-            <p className="mt-1 text-[11px] text-[#8aa094]">
-              Validate mass balance and review laboratory readiness.
-            </p>
+            <div className="flex flex-wrap gap-1.5 text-[10px] font-semibold">
+              <span
+                className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 ${
+                  hasRecipe
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                    : "border-amber-200 bg-amber-50 text-amber-900"
+                }`}
+              >
+                {hasRecipe ? (
+                  <CheckCircle2 className="h-3 w-3" />
+                ) : (
+                  <AlertCircle className="h-3 w-3" />
+                )}
+                Batch: {hasRecipe ? "Recipe ready" : "Missing recipe"}
+              </span>
+              <span
+                className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 ${
+                  qcCompletedCount === totalCount && totalCount > 0
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                    : "border-[#d7e4dc] bg-[#f7faf8] text-[#52645d]"
+                }`}
+              >
+                QC: {qcCompletedCount} of {totalCount || 8} completed
+              </span>
+              <span
+                className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 ${
+                  isMassBalanced
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                    : "border-amber-200 bg-amber-50 text-amber-900"
+                }`}
+              >
+                Mass balance: {isMassBalanced ? "100%" : `${totalRecipePercentage.toFixed(1)}%`}
+              </span>
+            </div>
           </div>
-          <button
-            type="button"
-            onClick={handleAnalyzeMyBatch}
-            disabled={isAnalyzing || normalizedIngredients.length === 0}
-            className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-700 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-800 disabled:opacity-50"
-          >
-            <FlaskConical className={`h-3.5 w-3.5 ${isAnalyzing ? "animate-spin" : ""}`} />
-            {isAnalyzing ? "Analyzing..." : "Analyze My Batch"}
-          </button>
+          {!readOnly && (
+            <button
+              type="button"
+              onClick={handleAnalyzeMyBatch}
+              disabled={isAnalyzing || !hasRecipe}
+              className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-emerald-700 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-800 disabled:opacity-50"
+            >
+              <FlaskConical className={`h-3.5 w-3.5 ${isAnalyzing ? "animate-spin" : ""}`} />
+              {isAnalyzing ? "Analyzing..." : "Analyze My Batch"}
+            </button>
+          )}
         </div>
+
+        {!hasRecipe && (
+          <p className="text-[11px] text-amber-800">
+            Complete Formulation Development and ensure ingredients sum to 100% before analyzing.
+          </p>
+        )}
 
         <AnimatePresence>
           {analysisResult && (
@@ -863,14 +1040,14 @@ export default function BatchAnalysisStep6Section({
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              className={`space-y-2.5 rounded-xl border p-3 text-xs ${
+              className={`space-y-2 rounded-xl border p-3 text-xs ${
                 analysisIsSimulated
                   ? "border-amber-200 bg-amber-50/70 text-amber-950"
                   : "border-[#e8f0eb] bg-[#f7faf8] text-[#52645d]"
               }`}
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="inline-flex items-center gap-1.5 text-[11px] font-bold">
+                <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-[#0f2c20]">
                   {analysisIsSimulated ? (
                     <>
                       <FlaskConical className="h-3.5 w-3.5 text-amber-600" />
@@ -879,16 +1056,14 @@ export default function BatchAnalysisStep6Section({
                   ) : (
                     <>
                       <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-                      Batch analysis
+                      Analysis result
                     </>
                   )}
                 </span>
                 <span className="rounded-md border border-[#d7e4dc] bg-white px-2 py-0.5 font-mono text-[10px] text-[#6d7f76]">
                   {analysisIsSimulated
-                    ? `Simulated ${activeTestedCount}/${totalCount}`
-                    : activeTestedCount > 0
-                      ? `${activeTestedCount}/${totalCount} tests`
-                      : "0 physical tests"}
+                    ? `Simulated · ${activeTestedCount}/${totalCount}`
+                    : `${activeTestedCount}/${totalCount} tests entered`}
                 </span>
               </div>
               <p className="leading-relaxed text-[11px] text-[#0f2c20]">{analysisResult}</p>
@@ -909,14 +1084,16 @@ export default function BatchAnalysisStep6Section({
                 </div>
                 <div>
                   <span className="block text-[#8aa094]">Balance</span>
-                  <span className="font-bold text-emerald-800">100%</span>
+                  <span className="font-bold text-emerald-800">
+                    {isMassBalanced ? "100%" : `${totalRecipePercentage.toFixed(1)}%`}
+                  </span>
                 </div>
               </div>
-              <p className="text-[10px] italic text-[#8aa094]">
-                {analysisIsSimulated
-                  ? "Illustrative simulation only — not for regulatory release."
-                  : "Based on calculated composition; confirm with bench QC before release."}
-              </p>
+              {analysisIsSimulated && (
+                <p className="text-[10px] italic text-[#8aa094]">
+                  Illustrative simulation only — not for regulatory release.
+                </p>
+              )}
             </motion.div>
           )}
         </AnimatePresence>

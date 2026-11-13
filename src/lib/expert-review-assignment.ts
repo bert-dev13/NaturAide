@@ -168,6 +168,44 @@ export async function ensureReviewTables() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
 
+  // One-time: before Lab became approveable, Section 3 manuscript approvals were step 2.
+  // Remap those rows to step 3 so Lab can own step 2 going forward.
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS natureaide_meta (
+        metaKey VARCHAR(64) NOT NULL,
+        metaValue VARCHAR(255) NULL,
+        updatedAt DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
+          ON UPDATE CURRENT_TIMESTAMP(3),
+        PRIMARY KEY (metaKey)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+    const [flags]: any = await pool.query(
+      `SELECT metaValue FROM natureaide_meta WHERE metaKey = 's3_manuscript_step_remap_v1' LIMIT 1`
+    );
+    if (!flags.length) {
+      // Drop conflicting legacy step-2 rows when step 3 already exists for the project
+      await pool.query(`
+        DELETE rsa2 FROM review_step_approvals rsa2
+        INNER JOIN review_step_approvals rsa3
+          ON rsa3.projectId = rsa2.projectId
+         AND rsa3.sectionKey = 'section3'
+         AND rsa3.stepNumber = 3
+        WHERE rsa2.sectionKey = 'section3' AND rsa2.stepNumber = 2
+      `);
+      await pool.query(`
+        UPDATE review_step_approvals
+        SET stepNumber = 3
+        WHERE sectionKey = 'section3' AND stepNumber = 2
+      `);
+      await pool.query(
+        `INSERT INTO natureaide_meta (metaKey, metaValue) VALUES ('s3_manuscript_step_remap_v1', 'done')`
+      );
+    }
+  } catch (migrateErr) {
+    console.warn("Section 3 manuscript step remap skipped:", migrateErr);
+  }
+
   // Ensure default verified reviewer has all 5 specialties seeded if not explicitly configured yet
   try {
     const defaultId = await findDefaultExpertReviewerId();
@@ -220,8 +258,8 @@ export interface ProjectApprovedSteps {
 
 export const SECTION_TOTAL_STEPS: Record<"section1" | "section2" | "section3", number> = {
   section1: 6,
-  section2: 8,
-  section3: 2,
+  section2: 7, // Target Protein → Results & Interpretation (legacy step 8 removed)
+  section3: 3, // Research Summary, Laboratory Results, Manuscript
 };
 
 export const SECTION_TO_AREA_MAP: Record<"section1" | "section2" | "section3", string> = {
@@ -229,6 +267,140 @@ export const SECTION_TO_AREA_MAP: Record<"section1" | "section2" | "section3", s
   section2: "bioinformatics",
   section3: "pharmacology",
 };
+
+export function countValidSectionSteps(steps: number[] | undefined | null, totalSteps: number): number {
+  return new Set(
+    (steps || [])
+      .map(Number)
+      .filter((n) => Number.isFinite(n) && n >= 1 && n <= totalSteps)
+  ).size;
+}
+
+function areaKeyMatchValues(areaKey: string): string[] {
+  const norm = normalizeReviewAreaKey(areaKey);
+  const area = EXPERT_REVIEW_AREAS.find((a) => a.key === norm);
+  const values = new Set<string>([norm, ...(area?.aliases || [])]);
+  return Array.from(values);
+}
+
+async function markAreaCoverageApproved(params: {
+  projectId: number;
+  submissionId: number;
+  areaKey: string;
+  reviewerId: number;
+  sectionKey: "section1" | "section2" | "section3";
+  totalSteps: number;
+}): Promise<void> {
+  const { projectId, submissionId, areaKey, reviewerId, sectionKey, totalSteps } = params;
+  const matchKeys = areaKeyMatchValues(areaKey);
+
+  await pool.query(
+    `UPDATE review_area_coverage
+     SET status = 'APPROVED', reviewerId = ?, updatedAt = CURRENT_TIMESTAMP(3)
+     WHERE submissionId = ? AND LOWER(REPLACE(areaKey, '-', '_')) IN (?)`,
+    [reviewerId, submissionId, matchKeys.map((k) => k.toLowerCase().replace(/-/g, "_"))]
+  );
+  await pool.query(
+    `UPDATE review_assignments
+     SET status = 'COMPLETED', reviewerId = ?, completedAt = CURRENT_TIMESTAMP(3), updatedAt = CURRENT_TIMESTAMP(3)
+     WHERE submissionId = ? AND LOWER(REPLACE(specialtyNeeded, '-', '_')) IN (?)`,
+    [reviewerId, submissionId, matchKeys.map((k) => k.toLowerCase().replace(/-/g, "_"))]
+  );
+  const normKey = normalizeReviewAreaKey(areaKey);
+  await pool.query(
+    `INSERT INTO professional_reviews (
+       submissionId, projectId, reviewerId, areaKey, assessment, comments, status, submittedAt
+     ) VALUES (?, ?, ?, ?, 'ACCEPTABLE', ?, 'SUBMITTED', CURRENT_TIMESTAMP(3))
+     ON DUPLICATE KEY UPDATE
+       assessment = 'ACCEPTABLE',
+       status = 'SUBMITTED',
+       updatedAt = CURRENT_TIMESTAMP(3)`,
+    [
+      submissionId,
+      projectId,
+      reviewerId,
+      normKey,
+      `All ${totalSteps} steps in ${sectionKey.toUpperCase()} approved by specialist reviewer.`,
+    ]
+  );
+  // Full step approval closes open findings for this specialty
+  await pool.query(
+    `UPDATE review_feedback
+     SET status = 'RESOLVED', resolvedAt = CURRENT_TIMESTAMP(3), updatedAt = CURRENT_TIMESTAMP(3)
+     WHERE projectId = ?
+       AND LOWER(REPLACE(areaKey, '-', '_')) IN (?)
+       AND status IN ('OPEN', 'IN_REVIEW', 'IN_PROGRESS', 'PENDING', 'ADDRESSED')`,
+    [projectId, matchKeys.map((k) => k.toLowerCase().replace(/-/g, "_"))]
+  );
+}
+
+/**
+ * When every current section step is approved but coverage still says Pending/In Review
+ * (e.g. after SECTION_TOTAL_STEPS shrinks), promote coverage to APPROVED.
+ */
+export async function syncCoverageFromStepApprovals(
+  projectId: number,
+  submissionId: number,
+  approvedSteps?: ProjectApprovedSteps
+): Promise<boolean> {
+  await ensureReviewTables();
+  const steps = approvedSteps || (await getProjectApprovedSteps(projectId));
+  const [covRows]: any = await pool.query(
+    "SELECT id, areaKey, reviewerId, status FROM review_area_coverage WHERE submissionId = ?",
+    [submissionId]
+  );
+  const [stepReviewerRows]: any = await pool.query(
+    `SELECT sectionKey, reviewerId FROM review_step_approvals
+     WHERE projectId = ? AND reviewerId IS NOT NULL
+     ORDER BY approvedAt DESC`,
+    [projectId]
+  );
+  const reviewerBySection: Partial<Record<"section1" | "section2" | "section3", number>> = {};
+  for (const row of stepReviewerRows || []) {
+    const sk = row.sectionKey as "section1" | "section2" | "section3";
+    if (sk && !reviewerBySection[sk] && row.reviewerId) {
+      reviewerBySection[sk] = Number(row.reviewerId);
+    }
+  }
+
+  let healed = false;
+  for (const sectionKey of ["section1", "section2", "section3"] as const) {
+    const totalSteps = SECTION_TOTAL_STEPS[sectionKey];
+    const validCount = countValidSectionSteps(steps[sectionKey], totalSteps);
+    if (validCount < totalSteps) continue;
+
+    const areaKey = SECTION_TO_AREA_MAP[sectionKey];
+    const matchKeys = new Set(areaKeyMatchValues(areaKey).map((k) => k.toLowerCase().replace(/-/g, "_")));
+    const cov = (covRows || []).find((r: any) =>
+      matchKeys.has(String(r.areaKey || "").toLowerCase().replace(/-/g, "_"))
+    );
+    const covStatus = String(cov?.status || "").toUpperCase();
+    if (covStatus === "APPROVED" || covStatus === "COMPLETED" || covStatus === "REVISION_REQUIRED") {
+      continue;
+    }
+
+    const reviewerId =
+      Number(cov?.reviewerId) ||
+      reviewerBySection[sectionKey] ||
+      null;
+    if (!reviewerId) continue;
+
+    await markAreaCoverageApproved({
+      projectId,
+      submissionId,
+      areaKey,
+      reviewerId,
+      sectionKey,
+      totalSteps,
+    });
+    healed = true;
+  }
+
+  if (healed) {
+    await evaluateOverallApproval(submissionId, projectId);
+  }
+  return healed;
+}
 
 /**
  * Fetch persistent step approvals for a project from MySQL database.
@@ -309,71 +481,70 @@ export async function toggleStepApproval(
 
   // 4. Fetch updated step list for this section & project
   const allApproved = await getProjectApprovedSteps(projectId);
-  const secSteps = allApproved[sectionKey] || [];
   const totalSteps = SECTION_TOTAL_STEPS[sectionKey];
-  const isSectionFullyApproved = secSteps.length >= totalSteps;
+  const secSteps = (allApproved[sectionKey] || []).filter(
+    (n) => Number(n) >= 1 && Number(n) <= totalSteps
+  );
+  const approvedCount = new Set(secSteps.map(Number)).size;
+  const isSectionFullyApproved = approvedCount >= totalSteps;
   const areaKey = SECTION_TO_AREA_MAP[sectionKey];
 
   // 5. Update section-level coverage & assignments in DB
   if (effectiveSubId && areaKey) {
     if (isSectionFullyApproved) {
-      // Mark as APPROVED in review_area_coverage
-      await pool.query(
-        `UPDATE review_area_coverage
-         SET status = 'APPROVED', reviewerId = ?, updatedAt = CURRENT_TIMESTAMP(3)
-         WHERE submissionId = ? AND areaKey = ?`,
-        [reviewerId, effectiveSubId, areaKey]
-      );
-      // Mark as COMPLETED in review_assignments
-      await pool.query(
-        `UPDATE review_assignments
-         SET status = 'COMPLETED', reviewerId = ?, completedAt = CURRENT_TIMESTAMP(3), updatedAt = CURRENT_TIMESTAMP(3)
-         WHERE submissionId = ? AND specialtyNeeded = ?`,
-        [reviewerId, effectiveSubId, areaKey]
-      );
-      // Upsert professional_reviews
-      await pool.query(
-        `INSERT INTO professional_reviews (
-           submissionId, projectId, reviewerId, areaKey, assessment, comments, status, submittedAt
-         ) VALUES (?, ?, ?, ?, 'ACCEPTABLE', ?, 'SUBMITTED', CURRENT_TIMESTAMP(3))
-         ON DUPLICATE KEY UPDATE
-           assessment = 'ACCEPTABLE',
-           status = 'SUBMITTED',
-           updatedAt = CURRENT_TIMESTAMP(3)`,
-        [
-          effectiveSubId,
-          projectId,
-          reviewerId,
-          areaKey,
-          `All ${totalSteps} steps in ${sectionKey.toUpperCase()} approved by specialist reviewer.`,
-        ]
-      );
+      await markAreaCoverageApproved({
+        projectId,
+        submissionId: Number(effectiveSubId),
+        areaKey,
+        reviewerId,
+        sectionKey,
+        totalSteps,
+      });
     } else {
+      const matchKeys = areaKeyMatchValues(areaKey).map((k) =>
+        k.toLowerCase().replace(/-/g, "_")
+      );
       // Revert if previously approved but now missing steps
       await pool.query(
         `UPDATE review_area_coverage
          SET status = 'IN_REVIEW', reviewerId = ?, updatedAt = CURRENT_TIMESTAMP(3)
-         WHERE submissionId = ? AND areaKey = ? AND status = 'APPROVED'`,
-        [reviewerId, effectiveSubId, areaKey]
+         WHERE submissionId = ? AND LOWER(REPLACE(areaKey, '-', '_')) IN (?) AND status = 'APPROVED'`,
+        [reviewerId, effectiveSubId, matchKeys]
       );
       await pool.query(
         `UPDATE review_assignments
          SET status = 'IN_REVIEW', updatedAt = CURRENT_TIMESTAMP(3)
-         WHERE submissionId = ? AND specialtyNeeded = ? AND status = 'COMPLETED'`,
-        [effectiveSubId, areaKey]
+         WHERE submissionId = ? AND LOWER(REPLACE(specialtyNeeded, '-', '_')) IN (?) AND status = 'COMPLETED'`,
+        [effectiveSubId, matchKeys]
       );
     }
 
     await evaluateOverallApproval(effectiveSubId, projectId);
   }
 
-  const sectionApprovedPercent = Math.round((secSteps.length / totalSteps) * 100);
-  const p1 = Math.round((allApproved.section1.length / SECTION_TOTAL_STEPS.section1) * 100);
-  const p2 = Math.round((allApproved.section2.length / SECTION_TOTAL_STEPS.section2) * 100);
-  const p3 = Math.round((allApproved.section3.length / SECTION_TOTAL_STEPS.section3) * 100);
+  const sectionApprovedPercent = Math.round((approvedCount / totalSteps) * 100);
+  const p1 = Math.round(
+    (countValidSectionSteps(allApproved.section1, SECTION_TOTAL_STEPS.section1) /
+      SECTION_TOTAL_STEPS.section1) *
+      100
+  );
+  const p2 = Math.round(
+    (countValidSectionSteps(allApproved.section2, SECTION_TOTAL_STEPS.section2) /
+      SECTION_TOTAL_STEPS.section2) *
+      100
+  );
+  const p3 = Math.round(
+    (countValidSectionSteps(allApproved.section3, SECTION_TOTAL_STEPS.section3) /
+      SECTION_TOTAL_STEPS.section3) *
+      100
+  );
   const overallApprovedPercent = Math.round((p1 + p2 + p3) / 3);
 
-  const sectionStatus = isSectionFullyApproved ? "Approved" : secSteps.length > 0 ? "In Review" : "Pending";
+  const sectionStatus = isSectionFullyApproved
+    ? "Approved"
+    : approvedCount > 0
+      ? "In Review"
+      : "Pending";
   const overallStatus = overallApprovedPercent === 100 ? "Approved" : "Under Review";
 
   return {
@@ -418,34 +589,14 @@ export async function approveAllSectionSteps(
 
   const areaKey = SECTION_TO_AREA_MAP[sectionKey];
   if (effectiveSubId && areaKey) {
-    await pool.query(
-      `UPDATE review_area_coverage
-       SET status = 'APPROVED', reviewerId = ?, updatedAt = CURRENT_TIMESTAMP(3)
-       WHERE submissionId = ? AND areaKey = ?`,
-      [reviewerId, effectiveSubId, areaKey]
-    );
-    await pool.query(
-      `UPDATE review_assignments
-       SET status = 'COMPLETED', reviewerId = ?, completedAt = CURRENT_TIMESTAMP(3), updatedAt = CURRENT_TIMESTAMP(3)
-       WHERE submissionId = ? AND specialtyNeeded = ?`,
-      [reviewerId, effectiveSubId, areaKey]
-    );
-    await pool.query(
-      `INSERT INTO professional_reviews (
-         submissionId, projectId, reviewerId, areaKey, assessment, comments, status, submittedAt
-       ) VALUES (?, ?, ?, ?, 'ACCEPTABLE', ?, 'SUBMITTED', CURRENT_TIMESTAMP(3))
-       ON DUPLICATE KEY UPDATE
-         assessment = 'ACCEPTABLE',
-         status = 'SUBMITTED',
-         updatedAt = CURRENT_TIMESTAMP(3)`,
-      [
-        effectiveSubId,
-        projectId,
-        reviewerId,
-        areaKey,
-        `All ${total} steps in ${sectionKey.toUpperCase()} approved by specialist reviewer.`,
-      ]
-    );
+    await markAreaCoverageApproved({
+      projectId,
+      submissionId: Number(effectiveSubId),
+      areaKey,
+      reviewerId,
+      sectionKey,
+      totalSteps: total,
+    });
     await evaluateOverallApproval(effectiveSubId, projectId);
   }
 

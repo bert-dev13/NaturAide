@@ -14,9 +14,9 @@ async function testFullFlow() {
   });
 
   const projectId = 1;
-  const researcherId = 2; // Dr. Aris Dela Cruz
-  const reviewerId = 3;   // Dr. Elena Rostova
-  const communityId = 1;  // Maria Santos
+  const researcherId = 2; // researcher@natureaide.test
+  const reviewerId = 3;   // reviewer@natureaide.test
+  const communityId = 1;  // community@natureaide.test
 
   // 1. Verify Researcher owns Project 1
   const [pRows] = await pool.query("SELECT id, title, researcherId, status, currentStage FROM research_projects WHERE id = ?", [projectId]);

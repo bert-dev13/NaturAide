@@ -14,7 +14,6 @@ import {
   Copy,
   Plus,
   X,
-  Info,
   Leaf,
   ChevronRight,
 } from "lucide-react";
@@ -97,10 +96,19 @@ interface BotanicalStep1SectionProps {
   onSave: () => Promise<void>;
   onSelectPlant: (plant: PlantRecord) => Promise<void>;
   onRefreshData?: () => void;
+  /** Reviewer / read-only mode: hide plant change, part toggles, study compound toggles */
+  readOnly?: boolean;
 }
 
 const easeOut = [0.22, 1, 0.36, 1] as const;
 const LIT_PAGE_SIZE = 6;
+
+type ProfileTab = "uses" | "preparation" | "parts" | "source";
+
+function truncate(text: string, max = 160) {
+  if (!text || text.length <= max) return text;
+  return `${text.slice(0, max).trim()}…`;
+}
 
 export default function BotanicalStep1Section({
   project,
@@ -113,6 +121,7 @@ export default function BotanicalStep1Section({
   onToggleStudyCompound,
   scientificLiterature = [],
   onSelectPlant,
+  readOnly = false,
 }: BotanicalStep1SectionProps) {
   const [plantDropdownOpen, setPlantDropdownOpen] = useState(false);
   const [plantSearchQuery, setPlantSearchQuery] = useState("");
@@ -142,11 +151,13 @@ export default function BotanicalStep1Section({
   }, [allPlants, plantSearchQuery]);
 
   const handleChoosePlant = (plant: PlantRecord) => {
+    if (readOnly) return;
     setPlantDropdownOpen(false);
     setPlantSearchQuery("");
     onSelectPlant(plant);
   };
 
+  const [profileTab, setProfileTab] = useState<ProfileTab>("uses");
   const [showFullProfileModal, setShowFullProfileModal] = useState(false);
   const [customPartInput, setCustomPartInput] = useState("");
   const [showCustomPartField, setShowCustomPartField] = useState(false);
@@ -160,12 +171,10 @@ export default function BotanicalStep1Section({
   }, [plantData?.partsStudied]);
 
   const togglePart = (part: string) => {
-    let updated: string[];
-    if (selectedPartsList.includes(part)) {
-      updated = selectedPartsList.filter((p: string) => p !== part);
-    } else {
-      updated = [...selectedPartsList, part];
-    }
+    if (readOnly) return;
+    const updated = selectedPartsList.includes(part)
+      ? selectedPartsList.filter((p: string) => p !== part)
+      : [...selectedPartsList, part];
     onUpdatePlantData({
       ...plantData,
       partsStudied: updated.join(", "),
@@ -173,13 +182,13 @@ export default function BotanicalStep1Section({
   };
 
   const addCustomPart = () => {
+    if (readOnly) return;
     const clean = customPartInput.trim();
     if (!clean) return;
     if (!selectedPartsList.includes(clean)) {
-      const updated = [...selectedPartsList, clean];
       onUpdatePlantData({
         ...plantData,
-        partsStudied: updated.join(", "),
+        partsStudied: [...selectedPartsList, clean].join(", "),
       });
     }
     setCustomPartInput("");
@@ -221,6 +230,7 @@ export default function BotanicalStep1Section({
   const [litSearch, setLitSearch] = useState("");
   const [selectedLitModal, setSelectedLitModal] = useState<LiteratureItem | null>(null);
   const [litVisibleCount, setLitVisibleCount] = useState(LIT_PAGE_SIZE);
+  const [expandedLitId, setExpandedLitId] = useState<string | number | null>(null);
 
   const filteredLiterature = useMemo(() => {
     if (!litSearch.trim()) return scientificLiterature;
@@ -245,102 +255,88 @@ export default function BotanicalStep1Section({
     verifiedPlant?.traditionalPreparations ||
     plantData?.ethnobotanicalNotes ||
     "Not documented";
+  const sourceText =
+    verifiedPlant?.pharmacopeiaStatus ||
+    verifiedPlant?.sourceOrg ||
+    "Philippine Herbal Pharmacopeia";
 
-  const jumpLinks = [
-    { id: "identity", label: "Identity" },
-    { id: "profile", label: "Profile" },
-    { id: "parts", label: "Plant Parts" },
-    { id: "compounds", label: "Compounds" },
-    { id: "literature", label: "Literature" },
+  const profileTabs: { id: ProfileTab; label: string }[] = [
+    { id: "uses", label: "Traditional Uses" },
+    { id: "preparation", label: "Preparation" },
+    { id: "parts", label: "Documented Parts" },
+    { id: "source", label: "Source" },
   ];
 
-  const scrollTo = (id: string) => {
-    document.getElementById(`botanical-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
+  const activeProfileBody =
+    profileTab === "uses"
+      ? traditionalUsesText
+      : profileTab === "preparation"
+        ? traditionalPrepText
+        : profileTab === "source"
+          ? sourceText
+          : null;
 
   return (
     <div className="space-y-4">
-      {/* Jump nav */}
-      <div className="sticky top-0 z-10 -mx-1 flex items-center gap-1.5 overflow-x-auto rounded-2xl border border-[#d7e4dc]/90 bg-white/95 px-2.5 py-2 shadow-[0_1px_2px_rgba(15,44,32,0.04)] backdrop-blur-sm scrollbar-none">
-        {jumpLinks.map((link) => (
-          <button
-            key={link.id}
-            type="button"
-            onClick={() => scrollTo(link.id)}
-            className="shrink-0 rounded-xl border border-[#e8f0eb] bg-[#f7faf8] px-2.5 py-1.5 text-[11px] font-semibold text-[#52645d] transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-900"
-          >
-            {link.label}
-          </button>
-        ))}
-        <div className="ml-auto hidden shrink-0 items-center gap-2 px-1 text-[11px] text-[#8aa094] sm:flex">
-          <span className="font-semibold text-emerald-800">{studyCompoundNames.length}</span>
-          compounds selected
-          <span className="text-[#d7e4dc]">·</span>
-          <span className="font-semibold text-teal-800">{selectedPartsList.length}</span>
-          parts
-        </div>
-      </div>
-
       {/* Plant identity */}
       <motion.section
-        id="botanical-identity"
-        initial={{ opacity: 0, y: 10 }}
+        initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, ease: easeOut }}
-        className="relative overflow-hidden rounded-2xl border border-[#d7e4dc]/90 bg-[linear-gradient(165deg,#ffffff_0%,#f8fbf9_100%)] p-4 shadow-[0_1px_2px_rgba(15,44,32,0.04)] sm:p-5"
+        transition={{ duration: 0.28, ease: easeOut }}
+        className="relative overflow-hidden rounded-2xl border border-[#d7e4dc]/90 bg-white p-4 shadow-[0_1px_2px_rgba(15,44,32,0.04)] sm:p-5"
       >
-        <div className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-emerald-600 via-teal-400 to-cyan-300" />
+        <div className="absolute inset-y-0 left-0 w-1 bg-emerald-600" />
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex min-w-0 items-center gap-3.5">
-            <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-2xl border border-[#d7e4dc] bg-[#edf5f0] shadow-sm">
+          <div className="flex min-w-0 items-center gap-4">
+            <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-2xl border border-[#d7e4dc] bg-[#edf5f0] shadow-sm sm:h-24 sm:w-24">
               {verifiedPlant?.imageUrl ? (
                 <Image
                   src={verifiedPlant.imageUrl}
                   alt={verifiedPlant.commonName}
                   fill
-                  sizes="64px"
+                  sizes="96px"
                   className="object-cover"
                 />
               ) : (
                 <div className="flex h-full w-full items-center justify-center text-emerald-700">
-                  <Sprout className="h-7 w-7" />
+                  <Sprout className="h-8 w-8" />
                 </div>
               )}
             </div>
-            <div className="min-w-0 space-y-1">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <h2 className="truncate text-base font-semibold tracking-tight text-[#0f2c20] sm:text-lg">
-                  {verifiedPlant?.commonName || project.plantName}
-                </h2>
-                {verifiedPlant?.isPitahc ? (
-                  <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-900">
-                    PITAHC Endorsed
-                  </span>
-                ) : (
-                  <span className="rounded-md border border-teal-200 bg-teal-50 px-2 py-0.5 text-[10px] font-bold text-teal-900">
-                    Verified Species
-                  </span>
-                )}
-                {verifiedPlant?.family && verifiedPlant.family !== "Not documented" && (
-                  <span className="rounded-md border border-[#d7e4dc] bg-white px-2 py-0.5 font-mono text-[10px] font-semibold text-[#5f7468]">
-                    {verifiedPlant.family}
-                  </span>
-                )}
-              </div>
-              <p className="text-xs font-medium italic text-[#6d7f76]">
+            <div className="min-w-0 space-y-1.5">
+              <h2 className="text-xl font-bold tracking-tight text-[#0f2c20] sm:text-2xl">
+                {verifiedPlant?.commonName || project.plantName}
+              </h2>
+              <p className="text-sm italic text-[#6d7f76]">
                 {verifiedPlant?.scientificName ||
                   project.plantScientificName ||
                   "Binomial unassigned"}
               </p>
+              <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                {verifiedPlant?.isPitahc ? (
+                  <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-bold text-emerald-900">
+                    PITAHC Endorsed
+                  </span>
+                ) : (
+                  <span className="rounded-full border border-teal-200 bg-teal-50 px-2 py-0.5 font-bold text-teal-900">
+                    Verified Species
+                  </span>
+                )}
+                {verifiedPlant?.family && verifiedPlant.family !== "Not documented" && (
+                  <span className="rounded-full border border-[#d7e4dc] bg-[#f7faf8] px-2 py-0.5 font-semibold text-[#5f7468]">
+                    {verifiedPlant.family}
+                  </span>
+                )}
+              </div>
               {verifiedPlant?.localNames && verifiedPlant.localNames !== "Not documented" && (
                 <p className="line-clamp-1 text-[11px] text-[#8aa094]">
-                  <span className="font-semibold text-[#6d7f76]">Local:</span>{" "}
-                  {verifiedPlant.localNames}
+                  Local names: {verifiedPlant.localNames}
                 </p>
               )}
             </div>
           </div>
 
+          {!readOnly && (
           <div className="relative shrink-0" ref={plantDropdownRef}>
             <button
               type="button"
@@ -348,12 +344,12 @@ export default function BotanicalStep1Section({
                 setPlantDropdownOpen(!plantDropdownOpen);
                 setTimeout(() => plantInputRef.current?.focus(), 50);
               }}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-[#d7e4dc] bg-white px-3 py-2 text-xs font-semibold text-[#0f2c20] shadow-sm transition hover:border-emerald-400 hover:bg-emerald-50"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[#d7e4dc] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#52645d] transition hover:border-emerald-400 hover:text-[#0f2c20]"
             >
               <Search className="h-3.5 w-3.5 text-emerald-700" />
               Change Plant
               <ChevronDown
-                className={`h-3.5 w-3.5 text-[#8aa094] transition ${plantDropdownOpen ? "rotate-180" : ""}`}
+                className={`h-3.5 w-3.5 transition ${plantDropdownOpen ? "rotate-180" : ""}`}
               />
             </button>
 
@@ -363,7 +359,7 @@ export default function BotanicalStep1Section({
                   initial={{ opacity: 0, y: -6 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -6 }}
-                  className="absolute right-0 z-40 mt-1.5 w-80 overflow-hidden rounded-2xl border border-[#d7e4dc] bg-white shadow-xl sm:w-96"
+                  className="absolute right-0 z-40 mt-1.5 w-80 overflow-hidden rounded-xl border border-[#d7e4dc] bg-white shadow-xl sm:w-96"
                 >
                   <div className="flex items-center gap-2 border-b border-[#e8f0eb] bg-[#f7faf8] p-2.5">
                     <Search className="h-3.5 w-3.5 shrink-0 text-[#8aa094]" />
@@ -372,14 +368,9 @@ export default function BotanicalStep1Section({
                       type="text"
                       value={plantSearchQuery}
                       onChange={(e) => setPlantSearchQuery(e.target.value)}
-                      placeholder="Search common, scientific, or local name..."
+                      placeholder="Search plants..."
                       className="w-full border-0 bg-transparent text-xs text-[#0f2c20] outline-none placeholder:text-[#8aa094]"
                     />
-                    {plantSearchQuery && (
-                      <button type="button" onClick={() => setPlantSearchQuery("")}>
-                        <X className="h-3 w-3 text-[#8aa094]" />
-                      </button>
-                    )}
                   </div>
                   <div className="max-h-64 divide-y divide-[#eef4f0] overflow-y-auto text-xs">
                     {filteredPlants.length > 0 ? (
@@ -414,97 +405,107 @@ export default function BotanicalStep1Section({
                         );
                       })
                     ) : (
-                      <div className="p-4 text-center text-[#8aa094]">
-                        No plants matching &ldquo;{plantSearchQuery}&rdquo;
-                      </div>
+                      <div className="p-4 text-center text-[#8aa094]">No matching plants</div>
                     )}
                   </div>
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
+          )}
         </div>
       </motion.section>
 
-      {/* Botanical profile */}
+      {/* Botanical information — compact tabs */}
       <motion.section
-        id="botanical-profile"
-        initial={{ opacity: 0, y: 10 }}
+        initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.04, ease: easeOut }}
+        transition={{ duration: 0.28, delay: 0.04, ease: easeOut }}
         className="rounded-2xl border border-[#d7e4dc]/90 bg-white p-4 shadow-[0_1px_2px_rgba(15,44,32,0.04)] sm:p-5"
       >
-        <div className="mb-3 flex flex-col gap-1 border-b border-[#e8f0eb] pb-2.5 sm:flex-row sm:items-center sm:justify-between">
-          <h3 className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-[#52645d]">
-            <Info className="h-3.5 w-3.5 text-emerald-700" />
-            Botanical Profile &amp; Pharmacopeial Knowledge
-          </h3>
-          <span className="text-[10px] text-[#8aa094]">
-            Source: {verifiedPlant?.pharmacopeiaStatus || "Philippine Herbal Pharmacopeia"}
-          </span>
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h3 className="text-sm font-bold tracking-tight text-[#0f2c20]">Botanical Information</h3>
+          <button
+            type="button"
+            onClick={() => setShowFullProfileModal(true)}
+            className="text-[11px] font-semibold text-emerald-800 hover:underline"
+          >
+            View Details
+          </button>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          {[
-            { title: "Documented Traditional Uses", body: traditionalUsesText },
-            { title: "Traditional Preparation & Extraction", body: traditionalPrepText },
-          ].map((card) => (
-            <div
-              key={card.title}
-              className="rounded-xl border border-[#e8f0eb] bg-[linear-gradient(145deg,#f4f8f5_0%,#ffffff_55%)] p-3.5"
+        <div className="mb-3 flex gap-1 overflow-x-auto scrollbar-none">
+          {profileTabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setProfileTab(tab.id)}
+              className={`shrink-0 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition ${
+                profileTab === tab.id
+                  ? "bg-[#0f2c20] text-white"
+                  : "bg-[#f7faf8] text-[#52645d] hover:bg-emerald-50 hover:text-emerald-900"
+              }`}
             >
-              <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#8aa094]">
-                {card.title}
-              </p>
-              <p className="mt-1.5 line-clamp-3 text-xs leading-relaxed text-[#52645d]">{card.body}</p>
-              {card.body.length > 140 && (
-                <button
-                  type="button"
-                  onClick={() => setShowFullProfileModal(true)}
-                  className="mt-2 inline-flex items-center gap-0.5 text-[11px] font-semibold text-emerald-800 hover:underline"
-                >
-                  View More
-                  <ChevronRight className="h-3 w-3" />
-                </button>
-              )}
-            </div>
+              {tab.label}
+            </button>
           ))}
         </div>
 
-        {verifiedPlant?.documentedParts && verifiedPlant.documentedParts.length > 0 && (
-          <div className="mt-3 flex flex-wrap items-center gap-1.5">
-            <span className="text-[11px] font-semibold text-[#6d7f76]">Documented parts:</span>
-            {verifiedPlant.documentedParts.map((part) => (
-              <span
-                key={part}
-                className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-900"
-              >
-                {part}
-              </span>
-            ))}
-          </div>
-        )}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={profileTab}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.18 }}
+            className="rounded-xl border border-[#eef4f0] bg-[#fbfdfb] p-3.5"
+          >
+            {profileTab === "parts" ? (
+              verifiedPlant?.documentedParts?.length ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {verifiedPlant.documentedParts.map((part) => (
+                    <span
+                      key={part}
+                      className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-900"
+                    >
+                      {part}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-[#8aa094]">No documented parts on record.</p>
+              )
+            ) : (
+              <p className="text-xs leading-relaxed text-[#52645d]">
+                {truncate(String(activeProfileBody || "Not documented"))}
+                {String(activeProfileBody || "").length > 160 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowFullProfileModal(true)}
+                    className="ml-1 font-semibold text-emerald-800 hover:underline"
+                  >
+                    more
+                  </button>
+                )}
+              </p>
+            )}
+          </motion.div>
+        </AnimatePresence>
       </motion.section>
 
-      {/* Plant parts */}
+      {/* Experimental plant parts — compact chips */}
       <motion.section
-        id="botanical-parts"
-        initial={{ opacity: 0, y: 10 }}
+        initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.08, ease: easeOut }}
+        transition={{ duration: 0.28, delay: 0.08, ease: easeOut }}
         className="rounded-2xl border border-[#d7e4dc]/90 bg-white p-4 shadow-[0_1px_2px_rgba(15,44,32,0.04)] sm:p-5"
       >
-        <div className="mb-3 flex flex-col gap-2 border-b border-[#e8f0eb] pb-2.5 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h3 className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-[#52645d]">
-              <Leaf className="h-3.5 w-3.5 text-emerald-700" />
-              Experimental Plant Parts
-            </h3>
-            <p className="mt-0.5 text-[11px] text-[#8aa094]">
-              Select anatomical parts investigated. Literature-suggested parts show a badge.
-            </p>
-          </div>
-          <span className="shrink-0 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 font-mono text-[11px] font-bold text-emerald-900">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h3 className="inline-flex items-center gap-1.5 text-sm font-bold tracking-tight text-[#0f2c20]">
+            <Leaf className="h-4 w-4 text-emerald-700" />
+            Experimental Plant Parts
+          </h3>
+          <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-mono text-[11px] font-bold text-emerald-900">
             {selectedPartsList.length} selected
           </span>
         </div>
@@ -514,21 +515,33 @@ export default function BotanicalStep1Section({
             if (part === "Other") return null;
             const isSelected = selectedPartsList.includes(part);
             const isDocumented = verifiedPlant?.documentedParts?.includes(part);
-            return (
+            const chipClass = `inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${
+              isSelected
+                ? "border-emerald-600 bg-emerald-600 text-white shadow-sm"
+                : "border-[#d7e4dc] bg-white text-[#52645d]" +
+                  (readOnly ? "" : " hover:border-emerald-300 hover:bg-emerald-50")
+            }`;
+            return readOnly ? (
+              <span key={part} className={chipClass}>
+                {isSelected && <Check className="h-3 w-3" />}
+                {part}
+                {isDocumented && !isSelected && (
+                  <span className="rounded bg-emerald-50 px-1 text-[8px] font-bold text-emerald-700">
+                    Lit
+                  </span>
+                )}
+              </span>
+            ) : (
               <button
                 key={part}
                 type="button"
                 onClick={() => togglePart(part)}
-                className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition ${
-                  isSelected
-                    ? "border-emerald-600 bg-emerald-600 text-white shadow-sm"
-                    : "border-[#d7e4dc] bg-white text-[#52645d] hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-900"
-                }`}
+                className={chipClass}
               >
-                {isSelected && <Check className="h-3.5 w-3.5" />}
+                {isSelected && <Check className="h-3 w-3" />}
                 {part}
                 {isDocumented && !isSelected && (
-                  <span className="rounded bg-emerald-50 px-1 text-[9px] font-bold text-emerald-700">
+                  <span className="rounded bg-emerald-50 px-1 text-[8px] font-bold text-emerald-700">
                     Lit
                   </span>
                 )}
@@ -538,85 +551,89 @@ export default function BotanicalStep1Section({
 
           {selectedPartsList
             .filter((p) => !STANDARD_PLANT_PARTS.includes(p as any))
-            .map((customPart) => (
-              <button
-                key={customPart}
-                type="button"
-                onClick={() => togglePart(customPart)}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-600 bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm"
-              >
-                <Check className="h-3.5 w-3.5" />
-                {customPart}
-                <X className="h-3 w-3 opacity-80" />
-              </button>
-            ))}
+            .map((customPart) =>
+              readOnly ? (
+                <span
+                  key={customPart}
+                  className="inline-flex items-center gap-1 rounded-full border border-emerald-600 bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white"
+                >
+                  <Check className="h-3 w-3" />
+                  {customPart}
+                </span>
+              ) : (
+                <button
+                  key={customPart}
+                  type="button"
+                  onClick={() => togglePart(customPart)}
+                  className="inline-flex items-center gap-1 rounded-full border border-emerald-600 bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white"
+                >
+                  <Check className="h-3 w-3" />
+                  {customPart}
+                  <X className="h-3 w-3 opacity-80" />
+                </button>
+              )
+            )}
 
-          {!showCustomPartField && (
+          {!readOnly && !showCustomPartField ? (
             <button
               type="button"
               onClick={() => setShowCustomPartField(true)}
-              className="inline-flex items-center gap-1 rounded-xl border border-dashed border-[#c5d4cb] bg-white px-3 py-1.5 text-xs font-semibold text-[#6d7f76] hover:border-emerald-400 hover:text-emerald-800"
+              className="inline-flex items-center gap-1 rounded-full border border-dashed border-[#c5d4cb] px-2.5 py-1 text-[11px] font-semibold text-[#6d7f76] hover:border-emerald-400 hover:text-emerald-800"
             >
-              <Plus className="h-3.5 w-3.5" />
-              Other Part...
+              <Plus className="h-3 w-3" />
+              Other
             </button>
-          )}
+          ) : !readOnly ? (
+            <div className="flex w-full flex-wrap items-center gap-2 pt-1">
+              <input
+                type="text"
+                value={customPartInput}
+                onChange={(e) => setCustomPartInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addCustomPart();
+                  }
+                }}
+                placeholder="Custom plant part..."
+                className="h-8 w-48 rounded-lg border border-[#d5e3da] bg-[#fbfdfb] px-2.5 text-xs outline-none focus:border-emerald-600"
+                autoFocus
+              />
+              <button
+                type="button"
+                onClick={addCustomPart}
+                className="rounded-lg bg-[#0f2c20] px-2.5 py-1.5 text-[11px] font-semibold text-white"
+              >
+                Add
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowCustomPartField(false)}
+                className="text-[11px] font-medium text-[#8aa094]"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : null}
         </div>
-
-        {showCustomPartField && (
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <input
-              type="text"
-              value={customPartInput}
-              onChange={(e) => setCustomPartInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  addCustomPart();
-                }
-              }}
-              placeholder="e.g. Inflorescence, Petiole..."
-              className="h-9 w-64 rounded-xl border border-[#d5e3da] bg-[#fbfdfb] px-3 text-xs outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15"
-              autoFocus
-            />
-            <button
-              type="button"
-              onClick={addCustomPart}
-              className="rounded-xl bg-[#0f2c20] px-3 py-2 text-xs font-semibold text-white hover:bg-[#164533]"
-            >
-              Add Part
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowCustomPartField(false)}
-              className="text-xs font-medium text-[#8aa094] hover:text-[#0f2c20]"
-            >
-              Cancel
-            </button>
-          </div>
-        )}
       </motion.section>
 
-      {/* Phytochemicals */}
+      {/* Phytochemicals — compact list */}
       <motion.section
-        id="botanical-compounds"
-        initial={{ opacity: 0, y: 10 }}
+        initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.12, ease: easeOut }}
+        transition={{ duration: 0.28, delay: 0.12, ease: easeOut }}
         className="rounded-2xl border border-[#d7e4dc]/90 bg-white p-4 shadow-[0_1px_2px_rgba(15,44,32,0.04)] sm:p-5"
       >
-        <div className="mb-3 flex flex-col gap-3 border-b border-[#e8f0eb] pb-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h3 className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-[#52645d]">
-              <Dna className="h-3.5 w-3.5 text-teal-700" />
+            <h3 className="inline-flex items-center gap-1.5 text-sm font-bold tracking-tight text-[#0f2c20]">
+              <Dna className="h-4 w-4 text-teal-700" />
               Phytochemical Constituents
             </h3>
             <p className="mt-0.5 text-[11px] text-[#8aa094]">
               {verifiedPhytochemicals.length} cataloged ·{" "}
-              <span className="font-semibold text-teal-800">
-                {studyCompoundNames.length} selected
-              </span>{" "}
-              for Section 2 docking
+              <span className="font-semibold text-teal-800">{studyCompoundNames.length} selected</span>
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -624,17 +641,17 @@ export default function BotanicalStep1Section({
               <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#8aa094]" />
               <input
                 type="text"
-                placeholder="Search compounds..."
+                placeholder="Search..."
                 value={phytoSearch}
                 onChange={(e) => setPhytoSearch(e.target.value)}
-                className="h-9 w-40 rounded-xl border border-[#d5e3da] bg-[#fbfdfb] pl-8 pr-2 text-xs outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15 sm:w-48"
+                className="h-8 w-36 rounded-lg border border-[#d5e3da] bg-[#fbfdfb] pl-8 pr-2 text-xs outline-none focus:border-emerald-600 sm:w-44"
               />
             </div>
             {phytoClasses.length > 0 && (
               <select
                 value={phytoClassFilter}
                 onChange={(e) => setPhytoClassFilter(e.target.value)}
-                className="h-9 rounded-xl border border-[#d5e3da] bg-white px-2 text-xs text-[#52645d] outline-none focus:border-emerald-600"
+                className="h-8 rounded-lg border border-[#d5e3da] bg-white px-2 text-xs text-[#52645d] outline-none"
               >
                 <option value="ALL">All Classes</option>
                 {phytoClasses.map((cls) => (
@@ -648,101 +665,94 @@ export default function BotanicalStep1Section({
         </div>
 
         {filteredPhytochemicals.length > 0 ? (
-          <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-3">
-            {filteredPhytochemicals.map((comp, index) => {
+          <div className="max-h-[28rem] divide-y divide-[#eef4f0] overflow-y-auto rounded-xl border border-[#eef4f0]">
+            {filteredPhytochemicals.map((comp) => {
               const isSelected = studyCompoundNames.includes(comp.compoundName);
+              const mw =
+                typeof comp.molecularWeight === "number"
+                  ? comp.molecularWeight.toFixed(1)
+                  : comp.molecularWeight || "—";
               return (
-                <motion.div
+                <div
                   key={comp.id}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.25, delay: Math.min(index * 0.03, 0.2) }}
-                  className={`flex flex-col justify-between gap-2.5 rounded-2xl border p-3.5 transition ${
-                    isSelected
-                      ? "border-teal-300 bg-[linear-gradient(165deg,#f0fdfa_0%,#ffffff_70%)] shadow-[0_0_0_1px_rgba(45,212,191,0.25)]"
-                      : "border-[#e8f0eb] bg-[#fbfdfb] hover:border-emerald-300"
+                  className={`flex items-center gap-2.5 px-3 py-2.5 transition ${
+                    isSelected ? "bg-teal-50/70" : "bg-white hover:bg-[#f7faf8]"
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="truncate text-xs font-semibold text-[#0f2c20]">
-                          {comp.compoundName}
-                        </span>
-                        <span className="rounded border border-[#d7e4dc] bg-white px-1.5 py-0.5 font-mono text-[10px] text-[#5f7468]">
-                          {comp.molecularFormula}
-                        </span>
-                      </div>
-                      <p className="mt-1 font-mono text-[10px] text-[#8aa094]">
-                        MW:{" "}
-                        {typeof comp.molecularWeight === "number"
-                          ? comp.molecularWeight.toFixed(2)
-                          : comp.molecularWeight || "N/A"}{" "}
-                        ·{" "}
-                        <span className="font-sans font-semibold text-teal-800">
-                          {comp.compoundClass || "Metabolite"}
-                        </span>
-                      </p>
-                    </div>
+                  {readOnly ? (
                     <span
-                      className={`shrink-0 rounded-md px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
+                      aria-hidden
+                      className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border ${
                         isSelected
-                          ? "bg-teal-600 text-white"
-                          : "bg-[#edf5f0] text-[#6d7f76]"
+                          ? "border-teal-600 bg-teal-600 text-white"
+                          : "border-[#c5d4cb] bg-white text-transparent"
                       }`}
                     >
-                      {isSelected ? "In Study" : "Available"}
+                      {isSelected ? <Check className="h-3 w-3" /> : null}
                     </span>
-                  </div>
-                  <div className="flex items-center justify-between gap-2 border-t border-[#e8f0eb] pt-2.5">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedPhytoModal(comp)}
-                      className="text-[11px] font-semibold text-[#6d7f76] hover:text-[#0f2c20]"
-                    >
-                      View Details
-                    </button>
+                  ) : (
                     <button
                       type="button"
                       onClick={() => onToggleStudyCompound(comp)}
-                      className={`inline-flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-semibold transition ${
+                      aria-pressed={isSelected}
+                      className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border transition ${
                         isSelected
-                          ? "bg-teal-700 text-white hover:bg-teal-600"
-                          : "border border-[#d7e4dc] bg-white text-[#0f2c20] hover:border-teal-400 hover:bg-teal-50"
+                          ? "border-teal-600 bg-teal-600 text-white"
+                          : "border-[#c5d4cb] bg-white text-transparent hover:border-teal-400"
                       }`}
                     >
-                      {isSelected ? <Check className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
-                      {isSelected ? "Selected" : "Select"}
+                      <Check className="h-3 w-3" />
                     </button>
+                  )}
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                      <span className="truncate text-xs font-bold text-[#0f2c20]">
+                        {comp.compoundName}
+                      </span>
+                      <span className="font-mono text-[10px] text-[#6d7f76]">
+                        {comp.molecularFormula}
+                      </span>
+                      <span className="text-[10px] text-[#8aa094]">MW {mw}</span>
+                    </div>
+                    <p className="truncate text-[10px] text-teal-800/80">
+                      {comp.compoundClass || "Metabolite"}
+                    </p>
                   </div>
-                </motion.div>
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPhytoModal(comp)}
+                    className="shrink-0 text-[11px] font-semibold text-[#6d7f76] hover:text-[#0f2c20]"
+                  >
+                    Details
+                  </button>
+                </div>
               );
             })}
           </div>
         ) : (
-          <div className="rounded-xl border border-dashed border-[#d7e4dc] bg-[#f7faf8] p-8 text-center text-xs text-[#8aa094]">
+          <div className="rounded-xl border border-dashed border-[#d7e4dc] bg-[#f7faf8] p-6 text-center text-xs text-[#8aa094]">
             No phytochemicals match filter criteria.
           </div>
         )}
       </motion.section>
 
-      {/* Literature */}
+      {/* Literature — compact list */}
       <motion.section
-        id="botanical-literature"
-        initial={{ opacity: 0, y: 10 }}
+        initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.16, ease: easeOut }}
+        transition={{ duration: 0.28, delay: 0.16, ease: easeOut }}
         className="rounded-2xl border border-[#d7e4dc]/90 bg-white p-4 shadow-[0_1px_2px_rgba(15,44,32,0.04)] sm:p-5"
       >
-        <div className="mb-3 flex flex-col gap-3 border-b border-[#e8f0eb] pb-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h3 className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-[#52645d]">
-              <BookOpen className="h-3.5 w-3.5 text-emerald-700" />
+            <h3 className="inline-flex items-center gap-1.5 text-sm font-bold tracking-tight text-[#0f2c20]">
+              <BookOpen className="h-4 w-4 text-emerald-700" />
               Scientific Literature
             </h3>
             <p className="mt-0.5 text-[11px] text-[#8aa094]">
-              {scientificLiterature.length} references · showing {visibleLiterature.length} of{" "}
-              {filteredLiterature.length}
+              {scientificLiterature.length} references
             </p>
           </div>
           <div className="relative">
@@ -752,95 +762,117 @@ export default function BotanicalStep1Section({
               placeholder="Search references..."
               value={litSearch}
               onChange={(e) => setLitSearch(e.target.value)}
-              className="h-9 w-48 rounded-xl border border-[#d5e3da] bg-[#fbfdfb] pl-8 pr-2 text-xs outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15 sm:w-56"
+              className="h-8 w-48 rounded-lg border border-[#d5e3da] bg-[#fbfdfb] pl-8 pr-2 text-xs outline-none focus:border-emerald-600 sm:w-56"
             />
           </div>
         </div>
 
         {visibleLiterature.length > 0 ? (
-          <div className="space-y-2">
-            {visibleLiterature.map((lit, index) => (
-              <motion.article
-                key={lit.id}
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.22, delay: Math.min(index * 0.02, 0.15) }}
-                className="rounded-xl border border-[#e8f0eb] bg-[linear-gradient(180deg,#ffffff_0%,#fbfdfb_100%)] p-3.5 transition hover:border-emerald-300"
-              >
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="min-w-0">
-                    <h4 className="line-clamp-2 text-xs font-semibold leading-snug text-[#0f2c20]">
-                      {lit.title}
-                    </h4>
-                    <p className="mt-1 text-[11px] text-[#8aa094]">
-                      <span className="font-medium text-[#52645d]">{lit.authors}</span> ·{" "}
-                      {lit.journalOrPublisher} ({lit.publicationYear})
-                    </p>
+          <div className="space-y-1.5">
+            {visibleLiterature.map((lit) => {
+              const expanded = expandedLitId === lit.id;
+              return (
+                <article
+                  key={lit.id}
+                  className="rounded-xl border border-[#eef4f0] bg-[#fbfdfb] px-3 py-2.5"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <h4 className="line-clamp-2 text-xs font-bold leading-snug text-[#0f2c20]">
+                        {lit.title}
+                      </h4>
+                      <p className="mt-0.5 text-[10px] text-[#8aa094]">
+                        {lit.publicationYear}
+                        {lit.journalOrPublisher ? ` · ${lit.journalOrPublisher}` : ""}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1">
+                      {lit.doi && (
+                        <a
+                          href={`https://doi.org/${lit.doi}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold text-emerald-800"
+                        >
+                          DOI
+                        </a>
+                      )}
+                      {lit.pubmedId && (
+                        <a
+                          href={`https://pubmed.ncbi.nlm.nih.gov/${lit.pubmedId}/`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="rounded border border-teal-200 bg-teal-50 px-1.5 py-0.5 text-[9px] font-bold text-teal-800"
+                        >
+                          PubMed
+                        </a>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex shrink-0 items-center gap-1.5">
-                    {lit.doi && (
-                      <a
-                        href={`https://doi.org/${lit.doi}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-0.5 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-800"
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setExpandedLitId(expanded ? null : lit.id)
+                    }
+                    className="mt-1.5 inline-flex items-center gap-0.5 text-[11px] font-semibold text-emerald-800 hover:underline"
+                  >
+                    {expanded ? "Hide details" : "Details"}
+                    <ChevronDown
+                      className={`h-3 w-3 transition ${expanded ? "rotate-180" : ""}`}
+                    />
+                  </button>
+
+                  <AnimatePresence initial={false}>
+                    {expanded && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.18 }}
+                        className="overflow-hidden"
                       >
-                        DOI
-                        <ExternalLink className="h-2.5 w-2.5" />
-                      </a>
+                        <div className="mt-2 space-y-2 border-t border-[#eef4f0] pt-2 text-[11px] text-[#52645d]">
+                          <p>
+                            <span className="font-semibold text-[#6d7f76]">Authors:</span>{" "}
+                            {lit.authors}
+                          </p>
+                          {lit.studyType && (
+                            <p>
+                              <span className="font-semibold text-[#6d7f76]">Type:</span>{" "}
+                              {lit.studyType}
+                            </p>
+                          )}
+                          {lit.shortSummary && (
+                            <button
+                              type="button"
+                              onClick={() => setSelectedLitModal(lit)}
+                              className="inline-flex items-center gap-0.5 font-semibold text-emerald-800 hover:underline"
+                            >
+                              View abstract
+                              <ChevronRight className="h-3 w-3" />
+                            </button>
+                          )}
+                        </div>
+                      </motion.div>
                     )}
-                    {lit.pubmedId && (
-                      <a
-                        href={`https://pubmed.ncbi.nlm.nih.gov/${lit.pubmedId}/`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-0.5 rounded-md border border-teal-200 bg-teal-50 px-2 py-0.5 text-[10px] font-semibold text-teal-800"
-                      >
-                        PubMed
-                        <ExternalLink className="h-2.5 w-2.5" />
-                      </a>
-                    )}
-                  </div>
-                </div>
-                <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-[#eef4f0] pt-2">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    {lit.studyType && (
-                      <span className="rounded-md border border-[#d7e4dc] bg-white px-2 py-0.5 text-[10px] font-medium text-[#52645d]">
-                        {lit.studyType}
-                      </span>
-                    )}
-                    {lit.verification_source && (
-                      <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">
-                        {lit.verification_source}
-                      </span>
-                    )}
-                  </div>
-                  {lit.shortSummary && (
-                    <button
-                      type="button"
-                      onClick={() => setSelectedLitModal(lit)}
-                      className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-emerald-800 hover:underline"
-                    >
-                      View Abstract
-                      <ChevronRight className="h-3 w-3" />
-                    </button>
-                  )}
-                </div>
-              </motion.article>
-            ))}
+                  </AnimatePresence>
+                </article>
+              );
+            })}
 
             {litVisibleCount < filteredLiterature.length && (
               <button
                 type="button"
                 onClick={() => setLitVisibleCount((n) => n + LIT_PAGE_SIZE)}
-                className="w-full rounded-xl border border-[#d7e4dc] bg-[#f7faf8] py-2.5 text-xs font-semibold text-[#0f2c20] transition hover:border-emerald-400 hover:bg-emerald-50"
+                className="w-full rounded-xl border border-[#d7e4dc] bg-[#f7faf8] py-2 text-xs font-semibold text-[#0f2c20] hover:bg-emerald-50"
               >
-                Show more references ({filteredLiterature.length - litVisibleCount} remaining)
+                Show more ({filteredLiterature.length - litVisibleCount} remaining)
               </button>
             )}
           </div>
         ) : (
-          <div className="rounded-xl border border-dashed border-[#d7e4dc] bg-[#f7faf8] p-8 text-center text-xs text-[#8aa094]">
+          <div className="rounded-xl border border-dashed border-[#d7e4dc] bg-[#f7faf8] p-6 text-center text-xs text-[#8aa094]">
             No references matching &ldquo;{litSearch}&rdquo;
           </div>
         )}
@@ -861,7 +893,7 @@ export default function BotanicalStep1Section({
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.96 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-xl space-y-4 rounded-2xl border border-[#d7e4dc] bg-white p-5 shadow-2xl"
+              className="max-h-[85vh] w-full max-w-xl space-y-4 overflow-y-auto rounded-2xl border border-[#d7e4dc] bg-white p-5 shadow-2xl"
             >
               <div className="flex items-start justify-between border-b border-[#e8f0eb] pb-3">
                 <div>
@@ -876,7 +908,7 @@ export default function BotanicalStep1Section({
                 <button
                   type="button"
                   onClick={() => setShowFullProfileModal(false)}
-                  className="rounded-lg p-1 text-[#8aa094] hover:bg-[#edf5f0] hover:text-[#0f2c20]"
+                  className="rounded-lg p-1 text-[#8aa094] hover:bg-[#edf5f0]"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -884,7 +916,7 @@ export default function BotanicalStep1Section({
               <div className="space-y-3 text-xs">
                 <div className="rounded-xl border border-[#e8f0eb] bg-[#f7faf8] p-3">
                   <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-[#8aa094]">
-                    Traditional Medicinal Indications
+                    Traditional Uses
                   </p>
                   <p className="whitespace-pre-wrap leading-relaxed text-[#52645d]">
                     {traditionalUsesText}
@@ -892,18 +924,52 @@ export default function BotanicalStep1Section({
                 </div>
                 <div className="rounded-xl border border-[#e8f0eb] bg-[#f7faf8] p-3">
                   <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-[#8aa094]">
-                    Preparation &amp; Ethnobotanical Administration
+                    Preparation
                   </p>
                   <p className="whitespace-pre-wrap leading-relaxed text-[#52645d]">
                     {traditionalPrepText}
                   </p>
+                </div>
+                {verifiedPlant?.documentedParts?.length ? (
+                  <div className="rounded-xl border border-[#e8f0eb] bg-[#f7faf8] p-3">
+                    <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-[#8aa094]">
+                      Documented Parts
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {verifiedPlant.documentedParts.map((part) => (
+                        <span
+                          key={part}
+                          className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-900"
+                        >
+                          {part}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                <div className="rounded-xl border border-[#e8f0eb] bg-[#f7faf8] p-3">
+                  <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-[#8aa094]">
+                    Source
+                  </p>
+                  <p className="leading-relaxed text-[#52645d]">{sourceText}</p>
+                  {verifiedPlant?.sourceUrl && (
+                    <a
+                      href={verifiedPlant.sourceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-1.5 inline-flex items-center gap-1 font-semibold text-emerald-800 hover:underline"
+                    >
+                      Open source
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  )}
                 </div>
               </div>
               <div className="flex justify-end">
                 <button
                   type="button"
                   onClick={() => setShowFullProfileModal(false)}
-                  className="rounded-xl bg-[#edf5f0] px-4 py-2 text-xs font-semibold text-[#0f2c20] hover:bg-[#e2eee7]"
+                  className="rounded-xl bg-[#edf5f0] px-4 py-2 text-xs font-semibold text-[#0f2c20]"
                 >
                   Close
                 </button>
@@ -1000,7 +1066,28 @@ export default function BotanicalStep1Section({
                   <ExternalLink className="h-3 w-3" />
                 </a>
               )}
-              <div className="flex justify-end">
+              <div className="flex justify-between gap-2">
+                {!readOnly && (
+                  <button
+                    type="button"
+                    onClick={() => onToggleStudyCompound(selectedPhytoModal)}
+                    className={`rounded-xl px-3 py-2 text-xs font-semibold ${
+                      studyCompoundNames.includes(selectedPhytoModal.compoundName)
+                        ? "bg-teal-700 text-white"
+                        : "bg-[#0f2c20] text-white"
+                    }`}
+                  >
+                    {studyCompoundNames.includes(selectedPhytoModal.compoundName)
+                      ? "Selected for Study"
+                      : "Select for Study"}
+                  </button>
+                )}
+                {readOnly &&
+                  studyCompoundNames.includes(selectedPhytoModal.compoundName) && (
+                    <span className="rounded-xl bg-teal-50 px-3 py-2 text-xs font-semibold text-teal-900">
+                      Selected for Study
+                    </span>
+                  )}
                 <button
                   type="button"
                   onClick={() => setSelectedPhytoModal(null)}
@@ -1029,7 +1116,7 @@ export default function BotanicalStep1Section({
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.96 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-2xl space-y-4 rounded-2xl border border-[#d7e4dc] bg-white p-5 shadow-2xl"
+              className="max-h-[85vh] w-full max-w-2xl space-y-4 overflow-y-auto rounded-2xl border border-[#d7e4dc] bg-white p-5 shadow-2xl"
             >
               <div className="flex items-start justify-between gap-3 border-b border-[#e8f0eb] pb-3">
                 <div className="min-w-0">
@@ -1051,7 +1138,7 @@ export default function BotanicalStep1Section({
               </div>
               <div className="rounded-xl border border-[#e8f0eb] bg-[#f7faf8] p-3.5 text-xs">
                 <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-[#8aa094]">
-                  Study Abstract &amp; Findings
+                  Abstract
                 </p>
                 <p className="whitespace-pre-wrap leading-relaxed text-[#52645d]">
                   {selectedLitModal.shortSummary ||

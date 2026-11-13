@@ -110,8 +110,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         return NextResponse.json({ success: true, suggestions: ranked });
       }
       case "add-target": {
+        // Return the target immediately; avoid blocking checkbox selection on a full workspace rebuild.
         const added = await addVerifiedTarget(projectId, String(body.pdbId || ""));
-        return NextResponse.json({ success: true, ...added, workspace: await loadDockingWorkspace(projectId) });
+        return NextResponse.json({ success: true, ...added });
       }
       case "remove-target": {
         await removeTarget(projectId, Number(body.targetId));

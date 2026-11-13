@@ -21,7 +21,8 @@ export interface ResearchStepItem {
 
 export interface ResearchStepFooterNavProps {
   projectId: number;
-  sectionNumber: 1 | 2 | 3;
+  /** Display section number in the 4-section workspace (1–3 use this footer; 4 is approval). */
+  sectionNumber: 1 | 2 | 3 | 4;
   sectionTitle: string;
   steps: ResearchStepItem[];
   activeStep: number;
@@ -33,6 +34,10 @@ export interface ResearchStepFooterNavProps {
   saveStatus?: "idle" | "saving" | "saved" | "unsaved" | "error";
   saveMessage?: string;
   isStepComplete?: boolean;
+  /** When true, Next Step is disabled (e.g. required selection missing). */
+  disableNext?: boolean;
+  /** Short explanation shown when Next is disabled. */
+  nextDisabledReason?: string;
   nextLabelOverride?: { full: string; short: string };
   className?: string;
 }
@@ -51,6 +56,8 @@ export default function ResearchStepFooterNav({
   saveStatus: externalSaveStatus,
   saveMessage,
   isStepComplete = false,
+  disableNext = false,
+  nextDisabledReason,
   nextLabelOverride,
   className = "",
 }: ResearchStepFooterNavProps) {
@@ -73,6 +80,7 @@ export default function ResearchStepFooterNav({
       if (sectionNumber === 1) return { full: "Previous Step", short: "Prev" };
       if (sectionNumber === 2) return { full: "Back to Section 1", short: "Sec 1" };
       if (sectionNumber === 3) return { full: "Back to Section 2", short: "Sec 2" };
+      if (sectionNumber === 4) return { full: "Back to Section 3", short: "Sec 3" };
     }
     return { full: "Previous Step", short: "Prev" };
   };
@@ -83,7 +91,7 @@ export default function ResearchStepFooterNav({
     if (isLastStepOfSection) {
       if (sectionNumber === 1) return { full: "Proceed to Section 2 →", short: "Sec 2 →" };
       if (sectionNumber === 2) return { full: "Proceed to Section 3 →", short: "Sec 3 →" };
-      if (sectionNumber === 3) return { full: "Complete Research", short: "Complete" };
+      if (sectionNumber === 3) return { full: "Proceed to Section 4 →", short: "Sec 4 →" };
     }
     return { full: "Next Step", short: "Next" };
   };
@@ -136,7 +144,7 @@ export default function ResearchStepFooterNav({
           if (sectionNumber === 2) {
             router.push(`/researcher/projects/${projectId}/formulation-rd?step=6`);
           } else if (sectionNumber === 3) {
-            router.push(`/researcher/projects/${projectId}/in-silico?step=8`);
+            router.push(`/researcher/projects/${projectId}/in-silico`);
           }
         } else {
           onStepChange(activeStep - 1);
@@ -149,6 +157,7 @@ export default function ResearchStepFooterNav({
           } else if (sectionNumber === 2) {
             router.push(`/researcher/projects/${projectId}/submission`);
           } else if (sectionNumber === 3) {
+            // Paper Submission last step → submit / approval
             if (onSubmitFinal) {
               await onSubmitFinal();
             } else {
@@ -159,7 +168,7 @@ export default function ResearchStepFooterNav({
               if (submitTarget) {
                 submitTarget.scrollIntoView({ behavior: "smooth", block: "center" });
               } else {
-                window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+                router.push(`/researcher/projects/${projectId}/completion`);
               }
             }
           }
@@ -301,12 +310,12 @@ export default function ResearchStepFooterNav({
               type="button"
               onClick={handleManualSave}
               disabled={isSaving}
-              className="inline-flex items-center justify-center gap-1 sm:gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 hover:border-slate-300 shadow-2xs transition-all cursor-pointer active:scale-98 disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-1 sm:gap-1.5 px-2.5 sm:px-3.5 py-2 rounded-xl text-xs font-semibold bg-[#edf5f0] hover:bg-[#e2eee7] text-[#0f2c20] border border-emerald-200/80 shadow-2xs transition-all cursor-pointer active:scale-98 disabled:opacity-50"
             >
               {isSaving ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-500" />
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-700" />
               ) : (
-                <Save className="w-3.5 h-3.5 text-slate-600" />
+                <Save className="w-3.5 h-3.5 text-emerald-800" />
               )}
               <span className="hidden sm:inline">{isSaving ? "Saving..." : "Save Draft"}</span>
               <span className="sm:hidden">{isSaving ? "..." : "Save"}</span>
@@ -314,25 +323,37 @@ export default function ResearchStepFooterNav({
           )}
 
           {/* Next Step Button / Section Transition Button */}
-          <button
-            type="button"
-            onClick={() => handleNavigate("next")}
-            disabled={isSaving || (isLastStepOfSection && sectionNumber === 3 && !canSubmitFinal)}
-            className={`inline-flex items-center justify-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-1.5 rounded-xl text-xs font-semibold shadow-xs transition-all cursor-pointer active:scale-98 disabled:opacity-50 ${
-              isLastStepOfSection && sectionNumber === 3
-                ? "bg-indigo-600 hover:bg-indigo-700 text-white"
-                : "bg-emerald-600 hover:bg-emerald-700 text-white"
-            }`}
-          >
-            {isLastStepOfSection && sectionNumber === 3 ? (
-              <ClipboardCheck className="w-3.5 h-3.5" />
+          <div className="flex flex-col items-end gap-0.5">
+            <button
+              type="button"
+              onClick={() => handleNavigate("next")}
+              disabled={
+                isSaving ||
+                disableNext ||
+                (isLastStepOfSection && sectionNumber === 3 && !canSubmitFinal)
+              }
+              title={disableNext ? nextDisabledReason || "Complete this step to continue" : undefined}
+              className={`inline-flex items-center justify-center gap-1 sm:gap-1.5 px-3.5 sm:px-5 py-2 rounded-xl text-xs font-bold shadow-sm transition-all cursor-pointer active:scale-98 disabled:cursor-not-allowed disabled:opacity-50 ${
+                isLastStepOfSection && sectionNumber === 3
+                  ? "bg-indigo-600 hover:bg-indigo-700 text-white"
+                  : "bg-[#0f2c20] hover:bg-[#164533] text-white"
+              }`}
+            >
+              {isLastStepOfSection && sectionNumber === 3 ? (
+                <ClipboardCheck className="w-3.5 h-3.5" />
+              ) : null}
+              <span className="hidden sm:inline">{nextText.full}</span>
+              <span className="sm:hidden">{nextText.short}</span>
+              {!(isLastStepOfSection && sectionNumber === 3) && (
+                <ArrowRight className="w-3.5 h-3.5" />
+              )}
+            </button>
+            {disableNext && nextDisabledReason ? (
+              <span className="hidden max-w-[14rem] text-right text-[10px] font-medium text-amber-700 sm:block">
+                {nextDisabledReason}
+              </span>
             ) : null}
-            <span className="hidden sm:inline">{nextText.full}</span>
-            <span className="sm:hidden">{nextText.short}</span>
-            {!(isLastStepOfSection && sectionNumber === 3) && (
-              <ArrowRight className="w-3.5 h-3.5" />
-            )}
-          </button>
+          </div>
         </div>
       </div>
     </aside>

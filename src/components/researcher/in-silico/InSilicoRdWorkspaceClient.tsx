@@ -7,7 +7,6 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Cpu,
-  Dna,
   Target,
   FlaskConical,
   Activity,
@@ -19,11 +18,9 @@ import {
   Info,
   X,
 } from "lucide-react";
-import PhytochemicalSelectorModal from "./PhytochemicalSelectorModal";
 import ResearchStepFooterNav from "@/components/researcher/ResearchStepFooterNav";
 
-// 8 Modular Step Section Components
-import PhytochemicalStep1Section from "./PhytochemicalStep1Section";
+// 7 Modular Step Section Components (Section 1 compounds reused automatically)
 import TargetProteinStep2Section from "./TargetProteinStep2Section";
 import ScreeningStep3Section from "./ScreeningStep3Section";
 import DockingExecutionStep4Section from "./DockingExecutionStep4Section";
@@ -33,6 +30,14 @@ import Molecular3DStep7Section from "./Molecular3DStep7Section";
 import InterpretationStep8Section from "./InterpretationStep8Section";
 import type { LiteratureReferenceItem } from "./ScientificReferencesSection";
 import ResearcherStepRevisionBanner from "@/components/researcher/ResearcherStepRevisionBanner";
+import { lookupTargetByPdbId } from "@/lib/target-protein-catalog";
+
+/** Clamp Section 2 step URLs to the 7-step workflow; map legacy step=8 → 7. */
+function mapSection2Step(raw: number | undefined): number {
+  if (!raw || Number.isNaN(raw)) return 1;
+  if (raw >= 8) return 7; // legacy Results & Interpretation (old step 8)
+  return Math.min(7, Math.max(1, raw));
+}
 
 interface Props {
   project: {
@@ -57,26 +62,27 @@ export default function InSilicoRdWorkspaceClient({
   screenResults: initialScreenResults = [],
   dockingWorkspace: initialDockingWorkspace,
   synthesis: initialSynthesis,
-  availableCompounds = [],
+  availableCompounds: _availableCompounds = [],
   scientificLiterature = [],
   initialStep = 1,
 }: Props) {
   const router = useRouter();
-  const [activeStep, setActiveStep] = useState<number>(initialStep || 1);
+  const [activeStep, setActiveStep] = useState<number>(() => mapSection2Step(initialStep));
 
   useEffect(() => {
-    if (initialStep && initialStep >= 1 && initialStep <= 8) {
-      setActiveStep(initialStep);
-    }
+    setActiveStep(mapSection2Step(initialStep));
   }, [initialStep]);
 
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
+  const [ligandStatus, setLigandStatus] = useState<{
+    total: number;
+    structureReady: number;
+    missingStructure: number;
+    message: string;
+  } | null>(null);
 
-  // Modal controls
-  const [showPhytoModal, setShowPhytoModal] = useState<boolean>(false);
-
-  // 1. Phytochemicals State
+  // Section 1 phytochemicals (research_compounds) — auto-activated as docking ligands
   const [compounds, setCompounds] = useState<any[]>(initialCompounds);
 
   // 2. Target Proteins & Docking Workspace State
@@ -96,6 +102,7 @@ export default function InSilicoRdWorkspaceClient({
 
   // 5, 6, 7. Active Run for 2D/3D Visualization
   const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
+  const [selectedPose, setSelectedPose] = useState<number>(1);
   const [structureData, setStructureData] = useState<{
     receptorPdb: string;
     ligandPdbqt: string;
@@ -112,15 +119,50 @@ export default function InSilicoRdWorkspaceClient({
   );
 
   const STEPS = [
-    { number: 1, title: "Phytochemical Selection", icon: Dna },
-    { number: 2, title: "Target Protein Selection", icon: Target },
-    { number: 3, title: "In-Silico Screening", icon: FlaskConical },
-    { number: 4, title: "Molecular Docking Execution", icon: Play },
-    { number: 5, title: "Binding Affinity Results", icon: Activity },
-    { number: 6, title: "2D Interaction Visualization", icon: Atom },
-    { number: 7, title: "3D Molecular Visualization", icon: Layers },
-    { number: 8, title: "Results & Interpretation", icon: Info },
+    { number: 1, title: "Target Protein Selection", icon: Target },
+    { number: 2, title: "In-Silico Screening", icon: FlaskConical },
+    { number: 3, title: "Molecular Docking Execution", icon: Play },
+    { number: 4, title: "Binding Affinity Results", icon: Activity },
+    { number: 5, title: "2D Interaction Visualization", icon: Atom },
+    { number: 6, title: "3D Molecular Visualization", icon: Layers },
+    { number: 7, title: "Results & Interpretation", icon: Info },
   ];
+
+  // Auto-activate structure-ready Section 1 compounds as docking ligands (no duplicate records)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        // Soft-fill missing SMILES/formula from catalog when possible
+        await fetch(`/api/researcher/projects/${project.id}/in-silico`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "enrich-from-section1-catalog" }),
+        });
+        const res = await fetch(`/api/researcher/projects/${project.id}/in-silico`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "ensure-section1-ligands" }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (cancelled || !res.ok) return;
+        if (Array.isArray(data.compounds)) setCompounds(data.compounds);
+        if (data.counts) {
+          setLigandStatus({
+            total: Number(data.counts.total || 0),
+            structureReady: Number(data.counts.structureReady || 0),
+            missingStructure: Number(data.counts.missingStructure || 0),
+            message: String(data.message || ""),
+          });
+        }
+      } catch {
+        // Non-blocking — workspace still loads with initial compounds
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [project.id]);
 
   // Refresh docking workspace data (quiet — no banner / remount)
   const refreshWorkspace = async () => {
@@ -133,20 +175,36 @@ export default function InSilicoRdWorkspaceClient({
     } catch {}
   };
 
-  // Poll only while jobs are active; depend on a cheap flag so checkbox toggles
-  // don't tear down / recreate the interval every render.
+  // Poll only while docking jobs are active. Once runs have terminal outcomes,
+  // do not keep polling forever just because receptor/ligand prep still says PREPARING.
   const hasActiveDockingJob = useMemo(() => {
     const activeStatuses = ["QUEUED", "PREPARING", "DOCKING", "PROCESSING", "RUNNING"];
+    const terminalStatuses = ["COMPLETED", "FAILED", "TIMED_OUT", "CANCELLED"];
+    const runs = workspace?.runs || [];
+    const jobs = workspace?.jobs || [];
+
+    const runsActive = runs.some((r: any) =>
+      activeStatuses.includes(String(r.jobStatus).toUpperCase())
+    );
+    const jobsActive = jobs.some(
+      (j: any) =>
+        activeStatuses.includes(String(j.status).toUpperCase()) || j.active
+    );
+    if (runsActive || jobsActive) return true;
+
+    const hasTerminalResults = runs.some((r: any) => {
+      const status = String(r.jobStatus || "").toUpperCase();
+      return (
+        terminalStatuses.includes(status) ||
+        (r.bindingAffinity !== null && r.bindingAffinity !== undefined)
+      );
+    });
+    // Results page is done — stop the interval even if prep flags linger.
+    if (hasTerminalResults) return false;
+
     return (
       Boolean(workspace?.busy) ||
-      workspace?.runs?.some((r: any) =>
-        activeStatuses.includes(String(r.jobStatus).toUpperCase())
-      ) ||
-      workspace?.jobs?.some(
-        (j: any) =>
-          activeStatuses.includes(String(j.status).toUpperCase()) || j.active
-      ) ||
-      workspace?.targets?.some(
+      (workspace?.targets || []).some(
         (t: any) => t.prepStatus === "PREPARING" || t.status === "PREPARING"
       )
     );
@@ -174,8 +232,8 @@ export default function InSilicoRdWorkspaceClient({
     }
 
     if (!selectedRunId) return;
-    // Skip heavy structure fetch while browsing earlier steps
-    if (activeStep < 6) return;
+    // Skip heavy structure fetch while browsing earlier steps (2D starts at step 5)
+    if (activeStep < 5) return;
 
     let cancelled = false;
     const loadStructures = async () => {
@@ -216,7 +274,8 @@ export default function InSilicoRdWorkspaceClient({
     }
 
     setIsAddingTarget(true);
-    // Optimistic row so the checkbox sticks immediately
+    const curated = lookupTargetByPdbId(clean);
+    // Optimistic row so the checkbox sticks immediately (Selected, not a blocking spinner)
     const optimisticId = -Date.now();
     setWorkspace((prev: any) => ({
       ...prev,
@@ -225,8 +284,13 @@ export default function InSilicoRdWorkspaceClient({
         {
           id: optimisticId,
           pdbId: clean,
-          targetName: clean,
-          prepStatus: "PREPARING",
+          targetName: curated?.targetName || clean,
+          geneOrProtein: curated?.geneOrProtein || null,
+          organism: curated?.organism || null,
+          resolution: curated?.resolution || null,
+          method: curated?.method || null,
+          prepStatus: "QUEUED",
+          status: "SELECTED",
           _optimistic: true,
         },
       ],
@@ -240,7 +304,23 @@ export default function InSilicoRdWorkspaceClient({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to add target");
-      if (data.workspace) setWorkspace(data.workspace);
+
+      if (data.target) {
+        setWorkspace((prev: any) => ({
+          ...prev,
+          targets: [
+            ...(prev?.targets || []).filter(
+              (t: any) => t.id !== optimisticId && String(t.pdbId).toUpperCase() !== clean
+            ),
+            data.target,
+          ],
+        }));
+      } else if (data.workspace) {
+        setWorkspace(data.workspace);
+      }
+
+      // Soft refresh so prep status / engine state catch up without blocking the checkbox
+      void refreshWorkspace();
     } catch (e: any) {
       // Roll back optimistic row
       setWorkspace((prev: any) => ({
@@ -292,9 +372,11 @@ export default function InSilicoRdWorkspaceClient({
   // STEP 3 SCREENING HANDLERS
   // ---------------------------------------------------------------------------
   const handleRunScreening = async () => {
+    if (isScreening) {
+      throw new Error("Screening is already running. Wait for the current job to finish.");
+    }
     if (compounds.length === 0) {
-      alert("Please select at least one phytochemical compound first.");
-      return;
+      throw new Error("No phytochemical compounds found. Identify compounds in Section 1 first.");
     }
     setIsScreening(true);
     setMessage(null);
@@ -320,30 +402,29 @@ export default function InSilicoRdWorkspaceClient({
       });
     } catch (e: any) {
       setMessage({ text: e.message || "Screening failed", type: "error" });
+      throw e;
     } finally {
       setIsScreening(false);
     }
   };
 
   const handleToggleDocking = async (compoundId: number, selected: boolean) => {
-    try {
-      const res = await fetch(`/api/researcher/projects/${project.id}/in-silico`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "toggle-docking",
-          compoundId,
-          selectedForDocking: selected,
-        }),
-      });
-      if (res.ok) {
-        setCompounds((prev: any[]) =>
-          prev.map((c) => (c.id === compoundId ? { ...c, selectedForDocking: selected ? 1 : 0 } : c))
-        );
-      }
-    } catch (e) {
-      console.error("Failed to toggle docking candidate:", e);
+    const res = await fetch(`/api/researcher/projects/${project.id}/in-silico`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "toggle-docking",
+        compoundId,
+        selectedForDocking: selected,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || "Failed to update docking selection.");
     }
+    setCompounds((prev: any[]) =>
+      prev.map((c) => (c.id === compoundId ? { ...c, selectedForDocking: selected ? 1 : 0 } : c))
+    );
   };
 
   // ---------------------------------------------------------------------------
@@ -410,9 +491,11 @@ export default function InSilicoRdWorkspaceClient({
   };
 
   // ---------------------------------------------------------------------------
-  // STEP 8 INTERPRETATION HANDLERS
+  // STEP 7 INTERPRETATION HANDLERS
   // ---------------------------------------------------------------------------
-  const handleSaveSynthesis = async () => {
+  const [interpretationDirty, setInterpretationDirty] = useState(false);
+
+  const handleSaveSynthesis = async (): Promise<boolean> => {
     setIsSaving(true);
     setMessage(null);
     try {
@@ -427,21 +510,26 @@ export default function InSilicoRdWorkspaceClient({
         }),
       });
       if (!res.ok) throw new Error("Failed to save computational interpretation");
-      setMessage({ text: "In-Silico computational synthesis saved successfully!", type: "success" });
+      setMessage({
+        text: "Interpretation saved and synchronized with Section 3.",
+        type: "success",
+      });
+      setInterpretationDirty(false);
+      return true;
     } catch (e: any) {
       setMessage({ text: e.message, type: "error" });
+      return false;
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleSaveActiveStep = async (): Promise<boolean> => {
+    if (activeStep === 7) {
+      return handleSaveSynthesis();
+    }
     setIsSaving(true);
     try {
-      if (activeStep === 8) {
-        await handleSaveSynthesis();
-        return true;
-      }
       const res = await fetch(`/api/researcher/projects/${project.id}/in-silico`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -454,7 +542,7 @@ export default function InSilicoRdWorkspaceClient({
         const d = await res.json().catch(() => ({}));
         throw new Error(d.error || `Failed to save Step ${activeStep} draft`);
       }
-      setMessage({ text: `Step ${activeStep} specifications saved to database.`, type: "success" });
+      setMessage({ text: `Step ${activeStep} draft saved.`, type: "success" });
       return true;
     } catch (e: any) {
       setMessage({ text: e.message || "Save error", type: "error" });
@@ -463,6 +551,17 @@ export default function InSilicoRdWorkspaceClient({
       setIsSaving(false);
     }
   };
+
+  const screenedCompoundsCount = useMemo(() => {
+    const names = new Set<string>();
+    for (const r of screenResults) {
+      const key = String(r.compoundName || r.compoundId || "")
+        .trim()
+        .toLowerCase();
+      if (key) names.add(key);
+    }
+    return names.size > 0 ? names.size : compounds.length;
+  }, [screenResults, compounds]);
 
   // Active running jobs count
   const activeRunningCount = useMemo(() => {
@@ -502,7 +601,7 @@ export default function InSilicoRdWorkspaceClient({
                 </Link>
                 <span className="text-emerald-700">/</span>
                 <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-emerald-200">
-                  Section 2 · Step {String(activeStep).padStart(2, "0")} / 08
+                  Section 2 · Step {String(activeStep).padStart(2, "0")} / 07
                 </span>
                 <span
                   className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
@@ -637,18 +736,6 @@ export default function InSilicoRdWorkspaceClient({
           transition={{ duration: 0.18 }}
         >
           {activeStep === 1 && (
-            <PhytochemicalStep1Section
-              projectId={project.id}
-              plantName={project.plantName}
-              compounds={compounds}
-              availableCompounds={availableCompounds}
-              onCompoundsChange={setCompounds}
-              onOpenAddModal={() => setShowPhytoModal(true)}
-              onRefreshWorkspace={refreshWorkspace}
-            />
-          )}
-
-          {activeStep === 2 && (
             <TargetProteinStep2Section
               projectId={project.id}
               plantName={project.plantName}
@@ -659,10 +746,11 @@ export default function InSilicoRdWorkspaceClient({
               onAddTarget={handleAddTarget}
               onRemoveTarget={handleRemoveTarget}
               isAddingTarget={isAddingTarget}
+              ligandStatus={ligandStatus}
             />
           )}
 
-          {activeStep === 3 && (
+          {activeStep === 2 && (
             <ScreeningStep3Section
               projectId={project.id}
               compounds={compounds}
@@ -670,11 +758,11 @@ export default function InSilicoRdWorkspaceClient({
               onRunScreening={handleRunScreening}
               isScreening={isScreening}
               onToggleDocking={handleToggleDocking}
-              onNextStep={() => setActiveStep(4)}
+              onNextStep={() => setActiveStep(3)}
             />
           )}
 
-          {activeStep === 4 && (
+          {activeStep === 3 && (
             <DockingExecutionStep4Section
               projectId={project.id}
               plantName={project.plantName}
@@ -683,7 +771,7 @@ export default function InSilicoRdWorkspaceClient({
               onRunAllDocking={handleRunAllDocking}
               onRetryFailed={handleRetryFailedDocking}
               onRunSingleDocking={handleRunSingleDocking}
-              onNavigateToResults={() => setActiveStep(5)}
+              onNavigateToResults={() => setActiveStep(4)}
               isRunningDocking={isRunningDocking}
               exhaustiveness={exhaustiveness}
               onExhaustivenessChange={setExhaustiveness}
@@ -696,11 +784,15 @@ export default function InSilicoRdWorkspaceClient({
             />
           )}
 
-          {activeStep === 5 && (
+          {activeStep === 4 && (
             <BindingAffinityStep5Section
               projectId={project.id}
               plantName={project.plantName}
               runs={workspace?.runs || []}
+              workspace={workspace}
+              compounds={compounds}
+              onRetryFailed={handleRetryFailedDocking}
+              onRefreshWorkspace={refreshWorkspace}
               onSelectRunForVisuals={(runId, targetStep) => {
                 setSelectedRunId(runId);
                 setActiveStep(targetStep);
@@ -708,47 +800,63 @@ export default function InSilicoRdWorkspaceClient({
             />
           )}
 
-          {activeStep === 6 && (
+          {activeStep === 5 && (
             <Interaction2DStep6Section
               projectId={project.id}
               plantName={project.plantName}
               runs={workspace?.runs || []}
               selectedRunId={selectedRunId}
               onSelectRunId={setSelectedRunId}
+              selectedPose={selectedPose}
+              onSelectPose={setSelectedPose}
               structureData={structureData}
               isLoadingStructures={isLoadingStructures}
-              onNavigateTo3D={() => setActiveStep(7)}
+              onNavigateTo3D={() => setActiveStep(6)}
             />
           )}
 
-          {activeStep === 7 && (
+          {activeStep === 6 && (
             <Molecular3DStep7Section
               projectId={project.id}
               plantName={project.plantName}
               runs={workspace?.runs || []}
               selectedRunId={selectedRunId}
               onSelectRunId={setSelectedRunId}
+              selectedPose={selectedPose}
+              onSelectPose={setSelectedPose}
               structureData={structureData}
               isLoadingStructures={isLoadingStructures}
+              onNavigateTo2D={() => setActiveStep(5)}
             />
           )}
 
-          {activeStep === 8 && (
+          {activeStep === 7 && (
             <InterpretationStep8Section
               projectId={project.id}
               plantName={project.plantName}
-              compoundsCount={compounds.length}
+              compoundsCount={screenedCompoundsCount}
               targetsCount={workspace?.targets?.length || 0}
               completedRunsCount={
-                (workspace?.runs || []).filter((r: any) => r.bindingAffinity !== null).length
+                (workspace?.runs || []).filter(
+                  (r: any) => r.bindingAffinity !== null && r.bindingAffinity !== undefined
+                ).length
               }
-              topRuns={(workspace?.runs || []).filter((r: any) => r.bindingAffinity !== null)}
+              topRuns={(workspace?.runs || []).filter(
+                (r: any) => r.bindingAffinity !== null && r.bindingAffinity !== undefined
+              )}
+              allRuns={workspace?.runs || []}
+              isLoadingResults={!workspace}
               synthesisText={synthesisText}
               onSynthesisTextChange={setSynthesisText}
               limitationsText={limitationsText}
               onLimitationsTextChange={setLimitationsText}
               onSaveSynthesis={handleSaveSynthesis}
               isSaving={isSaving}
+              onDirtyChange={setInterpretationDirty}
+              onSelectRunForVisuals={(runId, targetStep) => {
+                setSelectedRunId(runId);
+                setActiveStep(targetStep);
+              }}
               onProceedToSection3={() =>
                 router.push(`/researcher/projects/${project.id}/submission`)
               }
@@ -756,23 +864,6 @@ export default function InSilicoRdWorkspaceClient({
           )}
         </motion.div>
       </AnimatePresence>
-
-      {/* Phytochemical Selector Modal */}
-      {showPhytoModal && (
-        <PhytochemicalSelectorModal
-          isOpen={showPhytoModal}
-          projectId={project.id}
-          plantName={project.plantName}
-          plantScientificName={project.plantScientificName}
-          existingCompoundNames={compounds.map((c) => c.compoundName)}
-          onClose={() => setShowPhytoModal(false)}
-          onCompoundAdded={async (newComp: any) => {
-            setCompounds([...compounds, newComp]);
-            setShowPhytoModal(false);
-            refreshWorkspace();
-          }}
-        />
-      )}
 
       {/* Centralized Sticky Footer Step Navigation */}
       <ResearchStepFooterNav
@@ -784,6 +875,26 @@ export default function InSilicoRdWorkspaceClient({
         onStepChange={setActiveStep}
         onSaveDraft={handleSaveActiveStep}
         isSaving={isSaving || isRunningDocking}
+        disableNext={
+          (activeStep === 1 && (workspace?.targets || []).length === 0) ||
+          (activeStep === 2 &&
+            (screenResults.length === 0 ||
+              !compounds.some(
+                (c: any) => c.selectedForDocking === 1 || c.selectedForDocking === true
+              )))
+        }
+        nextDisabledReason={
+          activeStep === 1 && (workspace?.targets || []).length === 0
+            ? "Select at least one target protein to continue"
+            : activeStep === 2 && screenResults.length === 0
+              ? "Run in-silico screening before continuing to docking"
+              : activeStep === 2 &&
+                  !compounds.some(
+                    (c: any) => c.selectedForDocking === 1 || c.selectedForDocking === true
+                  )
+                ? "Select at least one screened compound for Molecular Docking Execution"
+                : undefined
+        }
         saveStatus={
           isSaving || isRunningDocking
             ? "saving"
@@ -791,7 +902,9 @@ export default function InSilicoRdWorkspaceClient({
             ? "saved"
             : message?.type === "error"
             ? "error"
-            : "idle"
+            : activeStep === 7 && interpretationDirty
+              ? "unsaved"
+              : "idle"
         }
       />
     </div>

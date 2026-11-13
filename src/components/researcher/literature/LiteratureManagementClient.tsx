@@ -1168,7 +1168,7 @@ export default function LiteratureManagementClient({
                       type="text"
                       value={newAuthors}
                       onChange={(e) => setNewAuthors(e.target.value)}
-                      placeholder="e.g. Reyes, A. et al."
+                      placeholder="e.g. Author A., Author B. et al."
                       className="w-full p-2.5 rounded-xl border border-[#dde6df] bg-white text-xs text-[#0f2c20] focus:outline-none focus:border-[#16a34a]"
                     />
                   </div>

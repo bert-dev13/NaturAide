@@ -91,7 +91,46 @@ export async function ensureV2ResearchSchema() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-    // 4. research_manuscripts (Step 3 of Section 3)
+    // 4. research_laboratory_results (inside Paper Submission – empirical lab findings)
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS research_laboratory_results (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        projectId INT NOT NULL,
+        createdByUserId INT NULL,
+        testCategory VARCHAR(80) NOT NULL,
+        testName VARCHAR(255) NOT NULL,
+        resultValue TEXT NOT NULL,
+        unit VARCHAR(100) NULL,
+        dateConducted DATE NULL,
+        remarks TEXT NULL,
+        reportFileUrl VARCHAR(500) NULL,
+        reportFileName VARCHAR(255) NULL,
+        createdAt DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        updatedAt DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+        INDEX idx_rlr_project (projectId),
+        INDEX idx_rlr_category (testCategory)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    // Soft-add report columns for existing deployments
+    try {
+      await connection.query(`
+        ALTER TABLE research_laboratory_results
+        ADD COLUMN reportFileUrl VARCHAR(500) NULL
+      `);
+    } catch {
+      // Column may already exist
+    }
+    try {
+      await connection.query(`
+        ALTER TABLE research_laboratory_results
+        ADD COLUMN reportFileName VARCHAR(255) NULL
+      `);
+    } catch {
+      // Column may already exist
+    }
+
+    // 5. research_manuscripts (Paper Submission)
     await connection.query(`
       CREATE TABLE IF NOT EXISTS research_manuscripts (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -112,8 +151,7 @@ export async function ensureV2ResearchSchema() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-    // 5. Expand research_projects status enum or allow V2 statuses if needed
-    // Check current status column
+    // 6. Expand research_projects status enum or allow V2 statuses if needed
     try {
       await connection.query(`
         ALTER TABLE research_projects

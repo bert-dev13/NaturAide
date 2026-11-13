@@ -31,7 +31,7 @@ export default async function ResearchPaperSubmissionPage({
   await ensureManuscriptUploadColumns();
 
   const sp = (await searchParams) || {};
-  const requestedStep = sp.step ? Math.min(2, Math.max(1, parseInt(sp.step, 10))) : null;
+  const requestedStep = sp.step ? Math.min(3, Math.max(1, parseInt(sp.step, 10))) : null;
 
   // Load project
   const [projectRows]: any = await pool.query(

@@ -928,15 +928,38 @@ async function executeRun(runId: number) {
   }
 }
 
+function mapTargetRow(row: any) {
+  return {
+    id: Number(row.id),
+    pdbId: String(row.pdbId || "").toUpperCase(),
+    targetName: cleanTargetProteinName(row.targetName, row.pdbId),
+    geneOrProtein: row.geneOrProtein || null,
+    organism: row.organism || null,
+    resolution:
+      json<any>(row.structureMeta, {}).resolution != null
+        ? String(json<any>(row.structureMeta, {}).resolution)
+        : null,
+    method: json<any>(row.structureMeta, {}).method || null,
+    prepStatus: row.prepStatus || null,
+    status: row.prepStatus === "PREPARING" ? "PREPARING" : row.status || null,
+    boundLigand: null,
+    chains: row.geneOrProtein || null,
+    notes: null,
+    sourceUrl: row.sourceUrl || null,
+  };
+}
+
 export async function addVerifiedTarget(projectId: number, pdbId: string) {
   await ensureDockingSchema();
   const hit = await describeStructure(pdbId);
   if (!hit) throw new DockingRequestError(`PDB ${pdbId} could not be retrieved from RCSB.`, 422);
   const [dupe]: any = await pool.query(
-    `SELECT id FROM docking_targets WHERE projectId = ? AND pdbId = ? LIMIT 1`,
+    `SELECT * FROM docking_targets WHERE projectId = ? AND pdbId = ? LIMIT 1`,
     [projectId, hit.pdbId]
   );
-  if (dupe.length) return { targetId: dupe[0].id, created: false };
+  if (dupe.length) {
+    return { targetId: dupe[0].id, created: false, pdbId: hit.pdbId, target: mapTargetRow(dupe[0]) };
+  }
   const meta = {
     title: hit.title,
     description: hit.description,
@@ -962,8 +985,24 @@ export async function addVerifiedTarget(projectId: number, pdbId: string) {
       JSON.stringify(meta),
     ]
   );
-  scheduleReceptor(projectId, inserted.insertId);
-  return { targetId: inserted.insertId, created: true, pdbId: hit.pdbId };
+  const targetId = Number(inserted.insertId);
+  scheduleReceptor(projectId, targetId);
+  return {
+    targetId,
+    created: true,
+    pdbId: hit.pdbId,
+    target: mapTargetRow({
+      id: targetId,
+      pdbId: hit.pdbId,
+      targetName: hit.description,
+      geneOrProtein: hit.gene,
+      organism: hit.organism,
+      structureMeta: JSON.stringify(meta),
+      prepStatus: "PREPARING",
+      status: "STRUCTURE_VERIFIED",
+      sourceUrl: hit.rcsbUrl,
+    }),
+  };
 }
 
 export async function removeTarget(projectId: number, targetId: number) {
@@ -1389,9 +1428,11 @@ export async function loadDockingWorkspace(projectId: number) {
     const hasRecordedStructure = Boolean(String(compound.smiles || "").trim() || prep?.smiles);
     const needsOptimization = Boolean(file.ok && file.hasDummyHydroxylBranches);
     const preparationReady = prep?.status === "READY" && file.ok && !needsOptimization;
-    const preparing = prep?.status === "PREPARING" || queue().ligands.has(compound.id);
+    const ligandInFlight = queue().ligands.has(compound.id);
+    const preparing = prep?.status === "PREPARING" || ligandInFlight;
     const canAutoPrepare = (hasRecordedStructure || Boolean(compound.pubchemId)) && prep?.status !== "FAILED";
-    if ((!prep || needsOptimization) && !preparing && canAutoPrepare && engineInfo.available) {
+    // Reschedule if PREPARING was left stale after a process restart (not in-flight).
+    if ((!prep || needsOptimization || prep?.status === "PREPARING") && !ligandInFlight && canAutoPrepare && engineInfo.available) {
       scheduleLigand(projectId, compound.id);
     }
     let issue: string | null = null;
@@ -1433,10 +1474,12 @@ export async function loadDockingWorkspace(projectId: number) {
     const pdbRetrieved = target.status === "STRUCTURE_VERIFIED" && Boolean(target.pdbId && target.sourceUrl);
     const receptorPrepared = target.prepStatus === "READY" && file.ok;
     const vinaCompatible = receptorPrepared && engineInfo.available;
-    const preparing = target.prepStatus === "PREPARING" || queue().receptors.has(target.id);
+    const receptorInFlight = queue().receptors.has(target.id);
+    const preparing = target.prepStatus === "PREPARING" || receptorInFlight;
     const ready = pdbRetrieved && receptorPrepared && vinaCompatible && Boolean(grid && settings && !validateSearchBox(grid, settings!));
     const canAutoPrepare = Boolean(target.pdbId) && target.prepStatus !== "FAILED" && !(receptorPrepared && !grid);
-    if (!receptorPrepared && !preparing && canAutoPrepare && engineInfo.available) {
+    // Reschedule if PREPARING was left stale after a process restart (not in-flight).
+    if (!receptorPrepared && !receptorInFlight && canAutoPrepare && engineInfo.available) {
       scheduleReceptor(projectId, target.id);
     }
     let issue: string | null = null;
@@ -1460,6 +1503,7 @@ export async function loadDockingWorkspace(projectId: number) {
       vinaCompatible,
       gridConfigured: Boolean(grid && settings && !validateSearchBox(grid, settings)),
       canAutoPrepare,
+      prepStatus: preparing ? "PREPARING" : receptorPrepared ? "READY" : target.prepStatus || "NOT_READY",
       status: ready ? "READY" : preparing ? "PREPARING" : "NOT_READY",
       issue,
       grid,

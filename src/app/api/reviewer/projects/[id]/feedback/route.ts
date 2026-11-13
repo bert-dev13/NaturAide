@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import pool from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { normalizeReviewAreaKey, expertReviewAreaLabel } from "@/lib/expert-review-areas";
+import { revisionDeepLinks } from "@/lib/revision-notification-links";
 
 export async function GET(
   request: Request,
@@ -147,6 +148,7 @@ export async function POST(
         const researcherId = proj.researcherId;
 
         if (researcherId && researcherId !== session.id) {
+          const { researcherLink } = revisionDeepLinks(sectionName, projectId);
           await pool.query(
             `INSERT INTO review_notifications (userId, type, title, message, link, isRead, createdAt)
              VALUES (?, 'REVISION_REQUIRED', ?, ?, ?, 0, CURRENT_TIMESTAMP(3))`,
@@ -154,7 +156,7 @@ export async function POST(
               researcherId,
               `New Review Feedback · ${sectionName}`,
               `Reviewer noted: "${cleanTitle}". ${cleanComment.slice(0, 140)}${cleanComment.length > 140 ? "..." : ""}`,
-              `/researcher/revisions?projectId=${projectId}`,
+              researcherLink,
             ]
           );
 

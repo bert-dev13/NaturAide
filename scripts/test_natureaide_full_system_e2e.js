@@ -203,7 +203,7 @@ async function runMasterE2E() {
     console.log("\n--- TEST 4 — Disabled Account Enforcement ---");
     try {
       const admAuth = await login(ACCOUNTS.admin.email, ACCOUNTS.admin.password);
-      const testUserId = 1; // Community user (Maria Santos)
+      const testUserId = 1; // community@natureaide.test
 
       // 1. Capture current status
       const [uRows] = await db.query("SELECT status FROM users WHERE id = ?", [testUserId]);
@@ -511,7 +511,7 @@ async function runMasterE2E() {
     try {
       const admAuth = await login(ACCOUNTS.admin.email, ACCOUNTS.admin.password);
       const revAuth = await login(ACCOUNTS.reviewer.email, ACCOUNTS.reviewer.password);
-      const reviewerProfileId = 1; // Dr. Elena Rostova
+      const reviewerProfileId = 1; // reviewer@natureaide.test
       const reviewerUserId = 3;
 
       const suspRes = await fetch(`${BASE_URL}/api/admin/reviewers/${reviewerProfileId}/suspend`, {

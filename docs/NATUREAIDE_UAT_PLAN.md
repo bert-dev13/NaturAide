@@ -118,9 +118,9 @@ This testing phase shifts the focus from automated code verification to **human-
 
 | Role | Email | Password | Assigned Persona / Profile |
 |---|---|---|---|
-| **COMMUNITY** | `community@natureaide.test` | `NatureAide123!` | Maria Santos (Citizen / Herbal Consumer) |
-| **RESEARCHER** | `researcher@natureaide.test` | `NatureAide123!` | Dr. Aris Dela Cruz (Lead Botanical Pharmacognosist) |
-| **REVIEWER** | `reviewer@natureaide.test` | `NatureAide123!` | Dr. Elena Rostova, RPh, PhD (Lead Clinical Pharmacist, PITAHC Evaluator) |
+| **COMMUNITY** | `community@natureaide.test` | `NatureAide123!` | Community Member |
+| **RESEARCHER** | `researcher@natureaide.test` | `NatureAide123!` | Lead Researcher |
+| **REVIEWER** | `reviewer@natureaide.test` | `NatureAide123!` | Lead Reviewer |
 | **ADMIN** | `admin@natureaide.test` | `NatureAide123!` | System Administrator (NatureAide Governance Officer) |
 
 ---

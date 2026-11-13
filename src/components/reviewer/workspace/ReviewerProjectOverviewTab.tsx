@@ -57,7 +57,7 @@ export default function ReviewerProjectOverviewTab({
               {" · "}
               <strong className="text-white">{project.plantName}</strong>{" "}
               <span className="italic font-serif text-blue-100/70">
-                ({project.plantScientificName || "Vitex negundo L."})
+                ({project.plantScientificName || "Scientific name not recorded"})
               </span>
             </p>
           </div>
@@ -248,7 +248,7 @@ export default function ReviewerProjectOverviewTab({
         <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 text-xs text-slate-800 leading-relaxed">
           {dossier?.executiveSummary ||
             dossier?.abstract ||
-            "This scientific study explores the phytochemistry, in-silico molecular docking mechanisms, and topical pharmaceutical formulation of Vitex negundo L. (Lagundi). The research validates bioactivities against pro-inflammatory cytokine targets while developing a physically stable, standardized hydrogel delivery vehicle."}
+            "No executive summary has been saved for this project yet."}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
@@ -308,21 +308,21 @@ export default function ReviewerProjectOverviewTab({
                   className="flex items-center gap-1.5 hover:text-emerald-700 cursor-pointer font-medium"
                 >
                   <ArrowRight className="w-3 h-3 text-emerald-600 shrink-0" />
-                  <span>Section 1 Step 1: Botanical Specimen &amp; Voucher</span>
+                  <span>Section 1 Step 1: Plant Information</span>
                 </li>
                 <li
                   onClick={() => onNavigateTab("section1")}
                   className="flex items-center gap-1.5 hover:text-emerald-700 cursor-pointer font-medium"
                 >
                   <ArrowRight className="w-3 h-3 text-emerald-600 shrink-0" />
-                  <span>Section 1 Step 2: Extraction &amp; Solvent Optimization</span>
+                  <span>Section 1 Step 3: Extraction</span>
                 </li>
                 <li
                   onClick={() => onNavigateTab("section1")}
                   className="flex items-center gap-1.5 hover:text-emerald-700 cursor-pointer font-medium"
                 >
                   <ArrowRight className="w-3 h-3 text-emerald-600 shrink-0" />
-                  <span>Section 1 Step 3: Bioactive Constituents Screening</span>
+                  <span>Section 1 Step 5: Formulation Development</span>
                 </li>
                 <li
                   onClick={() => onNavigateTab("section3")}
@@ -365,28 +365,28 @@ export default function ReviewerProjectOverviewTab({
                   className="flex items-center gap-1.5 hover:text-indigo-700 cursor-pointer font-medium"
                 >
                   <ArrowRight className="w-3 h-3 text-indigo-600 shrink-0" />
-                  <span>Section 2 Step 2: Ligand Library &amp; Lipinski Rule of 5</span>
+                  <span>Section 2 Step 2: In-Silico Screening &amp; ADMET</span>
                 </li>
                 <li
                   onClick={() => onNavigateTab("section2")}
                   className="flex items-center gap-1.5 hover:text-indigo-700 cursor-pointer font-medium"
                 >
                   <ArrowRight className="w-3 h-3 text-indigo-600 shrink-0" />
-                  <span>Section 2 Step 3: Screening &amp; Grid Box Coordinates</span>
+                  <span>Section 2 Step 3: Molecular Docking Execution</span>
                 </li>
                 <li
                   onClick={() => onNavigateTab("section2")}
                   className="flex items-center gap-1.5 hover:text-indigo-700 cursor-pointer font-medium"
                 >
                   <ArrowRight className="w-3 h-3 text-indigo-600 shrink-0" />
-                  <span>Section 2 Step 4: Molecular Docking Logs (Vina)</span>
+                  <span>Section 2 Step 4: Binding Affinity Results</span>
                 </li>
                 <li
                   onClick={() => onNavigateTab("section2")}
                   className="flex items-center gap-1.5 hover:text-indigo-700 cursor-pointer font-medium"
                 >
                   <ArrowRight className="w-3 h-3 text-indigo-600 shrink-0" />
-                  <span>Section 2 Step 7: Pharmacophore 2D Interaction Maps</span>
+                  <span>Section 2 Step 6: 3D Molecular Visualization</span>
                 </li>
               </ul>
             </div>
@@ -415,21 +415,21 @@ export default function ReviewerProjectOverviewTab({
                   className="flex items-center gap-1.5 hover:text-purple-700 cursor-pointer font-medium"
                 >
                   <ArrowRight className="w-3 h-3 text-purple-600 shrink-0" />
-                  <span>Section 2 Step 5: Binding Energy &amp; Affinity Ranking</span>
+                  <span>Section 2 Step 4: Binding Affinity Results</span>
                 </li>
                 <li
                   onClick={() => onNavigateTab("section2")}
                   className="flex items-center gap-1.5 hover:text-purple-700 cursor-pointer font-medium"
                 >
                   <ArrowRight className="w-3 h-3 text-purple-600 shrink-0" />
-                  <span>Section 2 Step 6: Molecular Interactions &amp; H-Bonds</span>
+                  <span>Section 2 Step 5: 2D Interaction Visualization</span>
                 </li>
                 <li
                   onClick={() => onNavigateTab("section2")}
                   className="flex items-center gap-1.5 hover:text-purple-700 cursor-pointer font-medium"
                 >
                   <ArrowRight className="w-3 h-3 text-purple-600 shrink-0" />
-                  <span>Section 2 Step 8: Scientific Results Interpretation</span>
+                  <span>Section 2 Step 7: Results &amp; Interpretation</span>
                 </li>
                 <li
                   onClick={() => onNavigateTab("section3")}
@@ -465,28 +465,28 @@ export default function ReviewerProjectOverviewTab({
                   className="flex items-center gap-1.5 hover:text-blue-700 cursor-pointer font-medium"
                 >
                   <ArrowRight className="w-3 h-3 text-blue-600 shrink-0" />
-                  <span>Section 1 Step 4: Materials &amp; Excipients Inventory</span>
+                  <span>Section 1 Step 2: Product Selection</span>
                 </li>
                 <li
                   onClick={() => onNavigateTab("section1")}
                   className="flex items-center gap-1.5 hover:text-blue-700 cursor-pointer font-medium"
                 >
                   <ArrowRight className="w-3 h-3 text-blue-600 shrink-0" />
-                  <span>Section 1 Step 5: Formulation Composition &amp; Builder</span>
+                  <span>Section 1 Step 4: Ingredients</span>
                 </li>
                 <li
                   onClick={() => onNavigateTab("section1")}
                   className="flex items-center gap-1.5 hover:text-blue-700 cursor-pointer font-medium"
                 >
                   <ArrowRight className="w-3 h-3 text-blue-600 shrink-0" />
-                  <span>Section 1 Step 6: Batch Analysis &amp; QC (pH, Viscosity)</span>
+                  <span>Section 1 Step 5: Formulation Development</span>
                 </li>
                 <li
                   onClick={() => onNavigateTab("section1")}
                   className="flex items-center gap-1.5 hover:text-blue-700 cursor-pointer font-medium"
                 >
                   <ArrowRight className="w-3 h-3 text-blue-600 shrink-0" />
-                  <span>Section 1 Step 7: Laboratory Protocol &amp; SOP</span>
+                  <span>Section 1 Step 6: Batch Analysis</span>
                 </li>
               </ul>
             </div>
@@ -515,21 +515,21 @@ export default function ReviewerProjectOverviewTab({
                   className="flex items-center gap-1.5 hover:text-rose-700 cursor-pointer font-medium"
                 >
                   <ArrowRight className="w-3 h-3 text-rose-600 shrink-0" />
-                  <span>Section 1 Step 8: Safety &amp; Toxicity Evaluation</span>
+                  <span>Section 1 Step 6: Batch Analysis &amp; QC review</span>
                 </li>
                 <li
-                  onClick={() => onNavigateTab("section1")}
+                  onClick={() => onNavigateTab("section3")}
                   className="flex items-center gap-1.5 hover:text-rose-700 cursor-pointer font-medium"
                 >
                   <ArrowRight className="w-3 h-3 text-rose-600 shrink-0" />
-                  <span>Section 1 Step 8: Dermal Irritation Index (PDII)</span>
+                  <span>Section 3 Step 1: Research Summary safety review</span>
                 </li>
                 <li
-                  onClick={() => onNavigateTab("section1")}
+                  onClick={() => onNavigateTab("section3")}
                   className="flex items-center gap-1.5 hover:text-rose-700 cursor-pointer font-medium"
                 >
                   <ArrowRight className="w-3 h-3 text-rose-600 shrink-0" />
-                  <span>Section 1 Step 8: Preservative Efficacy (USP &lt;51&gt;)</span>
+                  <span>Section 3 Step 2: Manuscript clinical risk review</span>
                 </li>
                 <li
                   onClick={() => onNavigateTab("section3")}

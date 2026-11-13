@@ -124,19 +124,6 @@ const DEFAULT_PLANTS_CATALOG: CatalogPlant[] = [
   },
 ];
 
-const THERAPEUTIC_AREAS = [
-  "Anti-inflammatory",
-  "Antimicrobial",
-  "Cardiovascular",
-  "Dermatological",
-  "Gastrointestinal",
-  "Metabolic",
-  "Neurological",
-  "Renal",
-  "Respiratory",
-  "Other",
-] as const;
-
 interface NewResearchModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -156,15 +143,13 @@ export default function NewResearchModal({
   const [internalCatalog, setInternalCatalog] = useState<CatalogPlant[]>([]);
   const [internalLoading, setInternalLoading] = useState(false);
 
-  // Form Fields
+  // Form Fields — only plant + title are collected at creation time.
+  // researchObjective, areaOfInterest, and researchQuestion remain nullable DB columns
+  // and can be filled later via project update / research documentation surfaces.
   const [title, setTitle] = useState("");
-  const [objective, setObjective] = useState("");
   const [selectedPlant, setSelectedPlant] = useState<CatalogPlant | null>(null);
   const [isCustomPlant, setIsCustomPlant] = useState(false);
   const [customPlantName, setCustomPlantName] = useState("");
-  const [therapeuticArea, setTherapeuticArea] = useState<string>("Anti-inflammatory");
-  const [customTherapeuticArea, setCustomTherapeuticArea] = useState("");
-  const [researchQuestion, setResearchQuestion] = useState("");
 
   // Track if user manually typed or modified the title
   const [isTitleUserEdited, setIsTitleUserEdited] = useState(false);
@@ -315,13 +300,9 @@ export default function NewResearchModal({
   useEffect(() => {
     if (!isOpen) {
       setTitle("");
-      setObjective("");
       setSelectedPlant(null);
       setIsCustomPlant(false);
       setCustomPlantName("");
-      setTherapeuticArea("Anti-inflammatory");
-      setCustomTherapeuticArea("");
-      setResearchQuestion("");
       setIsTitleUserEdited(false);
       setIsPlantDropdownOpen(false);
       setPlantSearchQuery("");
@@ -359,20 +340,10 @@ export default function NewResearchModal({
     setCreatingProject(true);
 
     try {
-      const resolvedArea =
-        therapeuticArea === "Other"
-          ? customTherapeuticArea.trim() || "Herbal Pharmacology & Natural Products"
-          : therapeuticArea;
-
       const payload = {
         title: title.trim(),
-        researchObjective: objective.trim() || undefined,
-        shortDescription: objective.trim().slice(0, 200) || undefined,
         plantId: isCustomPlant ? undefined : selectedPlant?.id || undefined,
         plantCustomName: isCustomPlant ? customPlantName.trim() : undefined,
-        researchQuestion: researchQuestion.trim() || undefined,
-        areaOfInterest: resolvedArea,
-        expectedOutcome: "Empirical scientific dossier & validation benchmarks",
       };
 
       const res = await fetch("/api/researcher/projects", {
@@ -419,10 +390,10 @@ export default function NewResearchModal({
             exit={{ opacity: 0, scale: 0.98, y: 8 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
             onClick={(e) => e.stopPropagation()}
-            className="relative w-full max-w-3xl sm:max-w-[780px] lg:max-w-[820px] bg-white rounded-xl shadow-2xl border border-slate-200/90 overflow-hidden z-10 flex flex-col max-h-[88vh] my-4 sm:my-8"
+            className="relative w-full max-w-lg sm:max-w-xl bg-white rounded-xl shadow-2xl border border-slate-200/90 overflow-hidden z-10 flex flex-col max-h-[88vh] my-4 sm:my-8"
           >
-            {/* 1. HEADER */}
-            <div className="px-6 py-5 sm:px-7 sm:py-5.5 border-b border-slate-200/80 bg-white flex items-start justify-between shrink-0">
+            {/* 1. HEADER — keep above form/dropdown stacking */}
+            <div className="relative z-20 px-6 py-5 sm:px-7 sm:py-5 border-b border-slate-200/80 bg-white flex items-start justify-between shrink-0">
               <div className="flex items-center gap-3.5">
                 <div className="w-10 h-10 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-800 shrink-0">
                   <FlaskConical className="w-5 h-5 text-emerald-700" strokeWidth={2} />
@@ -432,7 +403,7 @@ export default function NewResearchModal({
                     Start New Research Investigation
                   </h2>
                   <p className="text-sm text-slate-500 mt-0.5">
-                    Create a research workspace for a medicinal plant investigation.
+                    Choose a plant and title to open a research workspace.
                   </p>
                 </div>
               </div>
@@ -452,7 +423,7 @@ export default function NewResearchModal({
             <form
               id="new-research-form"
               onSubmit={handleSubmit}
-              className="px-6 py-6 sm:px-7 space-y-6 overflow-y-auto flex-1 custom-scrollbar text-slate-900"
+              className="px-6 py-5 sm:px-7 space-y-5 overflow-y-auto flex-1 custom-scrollbar text-slate-900"
             >
               {serverError && (
                 <div className="p-3.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs font-medium flex items-center gap-2.5">
@@ -478,9 +449,9 @@ export default function NewResearchModal({
                 </div>
 
                 {!isCustomPlant ? (
-                  <div className="relative" ref={dropdownRef}>
+                  <div className="space-y-2" ref={dropdownRef}>
                     {/* Collapsed Selected State vs Search Trigger */}
-                    {selectedPlant ? (
+                    {selectedPlant && !isPlantDropdownOpen ? (
                       <div className="flex items-center justify-between px-3.5 py-2.5 bg-slate-50/80 border border-slate-200 rounded-lg hover:border-slate-300 transition-colors">
                         <div className="flex flex-wrap sm:flex-nowrap items-baseline sm:items-center gap-x-2.5 gap-y-1 min-w-0 pr-2">
                           <span className="text-sm font-semibold text-slate-900">
@@ -503,7 +474,7 @@ export default function NewResearchModal({
                         <div className="flex items-center gap-1 shrink-0 ml-auto">
                           <button
                             type="button"
-                            onClick={() => setIsPlantDropdownOpen((prev) => !prev)}
+                            onClick={() => setIsPlantDropdownOpen(true)}
                             disabled={creatingProject}
                             className="px-2.5 py-1 text-xs font-medium text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 rounded transition-colors cursor-pointer"
                           >
@@ -525,115 +496,124 @@ export default function NewResearchModal({
                         type="button"
                         onClick={() => setIsPlantDropdownOpen((prev) => !prev)}
                         disabled={creatingProject || isLoading}
+                        aria-expanded={isPlantDropdownOpen}
                         className={`w-full h-11 px-3.5 py-2.5 bg-white border text-left rounded-lg text-sm flex items-center justify-between transition-all cursor-pointer ${
                           fieldErrors.plant
                             ? "border-rose-400 focus:ring-2 focus:ring-rose-500/20"
-                            : "border-slate-300 hover:border-slate-400 focus:ring-2 focus:ring-emerald-600/15 focus:border-emerald-600"
+                            : isPlantDropdownOpen
+                              ? "border-emerald-600 ring-2 ring-emerald-600/15"
+                              : "border-slate-300 hover:border-slate-400 focus:ring-2 focus:ring-emerald-600/15 focus:border-emerald-600"
                         }`}
                       >
-                        <span className="text-slate-500 text-sm">
+                        <span className={`text-sm ${selectedPlant ? "font-medium text-slate-900" : "text-slate-500"}`}>
                           {isLoading
                             ? "Loading botanical catalog..."
-                            : "Search or select a medicinal plant"}
+                            : selectedPlant
+                              ? selectedPlant.commonName
+                              : "Search or select a medicinal plant"}
                         </span>
-                        <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
+                        <ChevronDown
+                          className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${
+                            isPlantDropdownOpen ? "rotate-180" : ""
+                          }`}
+                        />
                       </button>
                     )}
 
-                    {/* DROPDOWN POPOVER */}
-                    <AnimatePresence>
+                    {/* In-flow plant panel — expands layout instead of covering title/footer */}
+                    <AnimatePresence initial={false}>
                       {isPlantDropdownOpen && (
                         <motion.div
-                          initial={{ opacity: 0, y: -4 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -4 }}
-                          transition={{ duration: 0.15 }}
-                          className="absolute z-30 left-0 right-0 mt-1.5 bg-white border border-slate-200 rounded-lg shadow-xl overflow-hidden"
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          exit={{ opacity: 0, height: 0 }}
+                          transition={{ duration: 0.18 }}
+                          className="overflow-hidden"
                         >
-                          {/* Search Input */}
-                          <div className="p-2 border-b border-slate-100 bg-slate-50/50">
-                            <div className="relative flex items-center">
-                              <Search className="w-4 h-4 text-slate-400 absolute left-3 pointer-events-none" />
-                              <input
-                                ref={searchInputRef}
-                                type="text"
-                                value={plantSearchQuery}
-                                onChange={(e) => setPlantSearchQuery(e.target.value)}
-                                placeholder="Search by common name, scientific taxon, or category..."
-                                className="w-full h-9 pl-9 pr-3 text-xs sm:text-sm bg-white border border-slate-200 rounded-md text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600"
-                              />
-                              {plantSearchQuery && (
-                                <button
-                                  type="button"
-                                  onClick={() => setPlantSearchQuery("")}
-                                  className="absolute right-2.5 p-0.5 text-slate-400 hover:text-slate-600 cursor-pointer"
-                                >
-                                  <X className="w-3.5 h-3.5" />
-                                </button>
+                          <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
+                            <div className="p-2 border-b border-slate-100 bg-slate-50/50">
+                              <div className="relative flex items-center">
+                                <Search className="w-4 h-4 text-slate-400 absolute left-3 pointer-events-none" />
+                                <input
+                                  ref={searchInputRef}
+                                  type="text"
+                                  value={plantSearchQuery}
+                                  onChange={(e) => setPlantSearchQuery(e.target.value)}
+                                  placeholder="Search by common or scientific name..."
+                                  className="w-full h-9 pl-9 pr-3 text-xs sm:text-sm bg-white border border-slate-200 rounded-md text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600"
+                                />
+                                {plantSearchQuery && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setPlantSearchQuery("")}
+                                    className="absolute right-2.5 p-0.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="max-h-44 overflow-y-auto divide-y divide-slate-100 custom-scrollbar">
+                              {filteredPlants.length === 0 ? (
+                                <div className="py-5 px-4 text-center">
+                                  <p className="text-xs text-slate-500">
+                                    No plants match &ldquo;{plantSearchQuery}&rdquo;
+                                  </p>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setIsCustomPlant(true);
+                                      setCustomPlantName(plantSearchQuery);
+                                      setIsPlantDropdownOpen(false);
+                                    }}
+                                    className="mt-2 text-xs font-medium text-emerald-700 hover:underline cursor-pointer"
+                                  >
+                                    Use &ldquo;{plantSearchQuery}&rdquo; as a custom specimen
+                                  </button>
+                                </div>
+                              ) : (
+                                filteredPlants.map((plant) => {
+                                  const isSelected = selectedPlant?.id === plant.id;
+                                  return (
+                                    <div
+                                      key={plant.id}
+                                      onClick={() => handleSelectPlant(plant)}
+                                      className={`px-3.5 py-2.5 flex items-center justify-between hover:bg-emerald-50/60 cursor-pointer transition-colors ${
+                                        isSelected ? "bg-emerald-50/40" : ""
+                                      }`}
+                                    >
+                                      <div className="min-w-0 pr-3">
+                                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                          <span className="text-sm font-medium text-slate-900">
+                                            {plant.commonName}
+                                          </span>
+                                          <span className="text-xs italic text-slate-500">
+                                            {plant.scientificName}
+                                          </span>
+                                        </div>
+                                        {plant.category && (
+                                          <div className="text-[11px] text-slate-400 mt-0.5 truncate">
+                                            {plant.category}
+                                          </div>
+                                        )}
+                                      </div>
+
+                                      <div className="flex items-center gap-2 shrink-0">
+                                        {Boolean(plant.is_pitahc) && (
+                                          <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200/70 rounded px-1.5 py-0.5 tracking-wide">
+                                            PITAHC
+                                          </span>
+                                        )}
+                                        {isSelected && (
+                                          <Check className="w-4 h-4 text-emerald-700 ml-1" />
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })
                               )}
                             </div>
-                          </div>
-
-                          {/* Options List */}
-                          <div className="max-h-60 overflow-y-auto divide-y divide-slate-100 custom-scrollbar">
-                            {filteredPlants.length === 0 ? (
-                              <div className="py-6 px-4 text-center">
-                                <p className="text-xs text-slate-500">
-                                  No plants match &ldquo;{plantSearchQuery}&rdquo;
-                                </p>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setIsCustomPlant(true);
-                                    setCustomPlantName(plantSearchQuery);
-                                    setIsPlantDropdownOpen(false);
-                                  }}
-                                  className="mt-2 text-xs font-medium text-emerald-700 hover:underline cursor-pointer"
-                                >
-                                  Use &ldquo;{plantSearchQuery}&rdquo; as a custom specimen
-                                </button>
-                              </div>
-                            ) : (
-                              filteredPlants.map((plant) => {
-                                const isSelected = selectedPlant?.id === plant.id;
-                                return (
-                                  <div
-                                    key={plant.id}
-                                    onClick={() => handleSelectPlant(plant)}
-                                    className={`px-3.5 py-2.5 flex items-center justify-between hover:bg-emerald-50/60 cursor-pointer transition-colors ${
-                                      isSelected ? "bg-emerald-50/40" : ""
-                                    }`}
-                                  >
-                                    <div className="min-w-0 pr-3">
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-sm font-medium text-slate-900">
-                                          {plant.commonName}
-                                        </span>
-                                        <span className="text-xs italic text-slate-500">
-                                          {plant.scientificName}
-                                        </span>
-                                      </div>
-                                      {plant.category && (
-                                        <div className="text-[11px] text-slate-400 mt-0.5 truncate">
-                                          {plant.category}
-                                        </div>
-                                      )}
-                                    </div>
-
-                                    <div className="flex items-center gap-2 shrink-0">
-                                      {Boolean(plant.is_pitahc) && (
-                                        <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200/70 rounded px-1.5 py-0.5 tracking-wide">
-                                          PITAHC
-                                        </span>
-                                      )}
-                                      {isSelected && (
-                                        <Check className="w-4 h-4 text-emerald-700 ml-1" />
-                                      )}
-                                    </div>
-                                  </div>
-                                );
-                              })
-                            )}
                           </div>
                         </motion.div>
                       )}
@@ -658,9 +638,6 @@ export default function NewResearchModal({
                           : "border-slate-300 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15"
                       }`}
                     />
-                    <p className="text-[11px] text-slate-500">
-                      Specify the botanical taxon, binomial nomenclature, or novel specimen identifier.
-                    </p>
                   </div>
                 )}
 
@@ -706,73 +683,10 @@ export default function NewResearchModal({
                   </p>
                 )}
               </div>
-
-              {/* FIELD 3: PRIMARY RESEARCH OBJECTIVE */}
-              <div className="space-y-2">
-                <label className="text-xs sm:text-sm font-medium text-slate-800">
-                  Primary Research Objective
-                </label>
-                <textarea
-                  rows={3}
-                  value={objective}
-                  onChange={(e) => setObjective(e.target.value)}
-                  placeholder="Describe the primary objective of this investigation..."
-                  disabled={creatingProject}
-                  className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15 resize-none transition-colors leading-relaxed"
-                />
-              </div>
-
-              {/* FIELD 4 & 5: RESEARCH CONTEXT (2-Column Grid on desktop, stacked on mobile) */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
-                {/* Therapeutic Area */}
-                <div className="space-y-2">
-                  <label className="text-xs sm:text-sm font-medium text-slate-800">
-                    Therapeutic Area
-                  </label>
-                  <select
-                    value={therapeuticArea}
-                    onChange={(e) => setTherapeuticArea(e.target.value)}
-                    disabled={creatingProject}
-                    className="w-full h-11 px-3 py-2.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15 transition-colors cursor-pointer"
-                  >
-                    {THERAPEUTIC_AREAS.map((area) => (
-                      <option key={area} value={area}>
-                        {area}
-                      </option>
-                    ))}
-                  </select>
-
-                  {therapeuticArea === "Other" && (
-                    <input
-                      type="text"
-                      value={customTherapeuticArea}
-                      onChange={(e) => setCustomTherapeuticArea(e.target.value)}
-                      placeholder="Specify therapeutic domain..."
-                      disabled={creatingProject}
-                      className="w-full h-10 px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15 transition-colors mt-2"
-                    />
-                  )}
-                </div>
-
-                {/* Core Research Question */}
-                <div className="space-y-2">
-                  <label className="text-xs sm:text-sm font-medium text-slate-800">
-                    Core Research Question
-                  </label>
-                  <input
-                    type="text"
-                    value={researchQuestion}
-                    onChange={(e) => setResearchQuestion(e.target.value)}
-                    placeholder="What specific question will this investigation address?"
-                    disabled={creatingProject}
-                    className="w-full h-11 px-3.5 py-2.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15 transition-colors"
-                  />
-                </div>
-              </div>
             </form>
 
-            {/* 3. STICKY FOOTER ACTIONS */}
-            <div className="border-t border-slate-200/90 bg-slate-50/80 px-6 py-4 sm:px-7 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 shrink-0">
+            {/* 3. STICKY FOOTER ACTIONS — stay above plant list stacking */}
+            <div className="relative z-20 border-t border-slate-200/90 bg-slate-50/80 px-6 py-4 sm:px-7 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 shrink-0">
               <span className="text-xs text-slate-500 font-normal">
                 Required fields are marked with <span className="text-rose-500">*</span>
               </span>

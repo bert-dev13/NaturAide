@@ -76,7 +76,7 @@ async function migrate() {
     `);
     console.log('Table reviewer_verification_logs checked/created.');
 
-    // 4. Ensure initial credential and log for existing verified reviewer (user 3, Dr. Elena Rostova)
+    // 4. Ensure initial credential and log for existing verified reviewer (user 3)
     const [existingCreds] = await pool.query('SELECT * FROM reviewer_credentials WHERE reviewerId = 3');
     if (existingCreds.length === 0) {
       await pool.query(`

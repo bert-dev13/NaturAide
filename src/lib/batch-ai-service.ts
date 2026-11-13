@@ -73,6 +73,9 @@ export interface BatchQcMeasurement {
   status: "Ready" | "In Progress" | "Measured" | "Not Tested" | "Pass" | "Fail" | "Inconclusive";
   analystNotes?: string;
   isCustom?: boolean;
+  /** UI hint only — not used for pass/fail validation */
+  inputType?: "number" | "text" | "select";
+  defaultOptions?: string[];
 }
 
 export interface BatchAnalysisEvaluationContext {

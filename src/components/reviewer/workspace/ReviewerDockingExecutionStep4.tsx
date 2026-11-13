@@ -12,7 +12,6 @@ import {
   AlertTriangle,
   AlertCircle,
   Clock,
-  ChevronRight,
   Compass,
   Box,
   ArrowRight,
@@ -27,7 +26,7 @@ interface Props {
   compounds: any[];
   targets: any[];
   runs: DockingRunItem[];
-  onSelectRunForVisuals: (runId: number, targetStep: 6 | 7) => void;
+  onSelectRunForVisuals: (runId: number, targetStep: 5 | 6) => void;
   onNavigateToResults?: () => void;
 }
 
@@ -404,24 +403,9 @@ export default function ReviewerDockingExecutionStep4({
               </p>
             </div>
           </div>
-          <div className="flex flex-wrap gap-1.5">
-            {[
-              { n: "1", label: "Inspect pairs" },
-              { n: "2", label: "Check scores" },
-              { n: "3", label: "Open visuals" },
-            ].map((step, idx) => (
-              <span
-                key={step.n}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-semibold text-slate-600"
-              >
-                <span className="inline-flex h-4 w-4 items-center justify-center rounded-md bg-blue-600 text-[9px] font-bold text-white">
-                  {step.n}
-                </span>
-                {step.label}
-                {idx < 2 && <ChevronRight className="h-3 w-3 text-slate-300" />}
-              </span>
-            ))}
-          </div>
+          <span className="rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-600">
+            Read-only · Section 2 · Step 3/7
+          </span>
         </div>
 
         <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -651,7 +635,7 @@ export default function ReviewerDockingExecutionStep4({
                         <>
                           <button
                             type="button"
-                            onClick={() => onSelectRunForVisuals(row.runId!, 6)}
+                            onClick={() => onSelectRunForVisuals(row.runId!, 5)}
                             className="inline-flex items-center gap-0.5 rounded-lg border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[9px] font-semibold text-slate-600 hover:border-blue-300 hover:text-blue-900"
                             title="Open 2D interactions"
                           >
@@ -660,7 +644,7 @@ export default function ReviewerDockingExecutionStep4({
                           </button>
                           <button
                             type="button"
-                            onClick={() => onSelectRunForVisuals(row.runId!, 7)}
+                            onClick={() => onSelectRunForVisuals(row.runId!, 6)}
                             className="inline-flex items-center gap-0.5 rounded-lg border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[9px] font-semibold text-slate-600 hover:border-blue-300 hover:text-blue-900"
                             title="Open 3D pose"
                           >

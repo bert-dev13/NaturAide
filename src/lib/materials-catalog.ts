@@ -321,6 +321,164 @@ export const FUNCTIONAL_ROLES = [
   "Other / Custom",
 ] as const;
 
+/** Researcher-facing role labels for the simplified Add Ingredient form. */
+export type SimpleIngredientRoleKey =
+  | "MAIN"
+  | "GELLING"
+  | "PH_ADJUSTER"
+  | "MOISTURIZER"
+  | "BASE"
+  | "SOLVENT"
+  | "PRESERVATIVE"
+  | "TESTING"
+  | "OTHER";
+
+export interface SimpleIngredientRoleOption {
+  key: SimpleIngredientRoleKey;
+  label: string;
+  /** Technical materialType stored in research_materials */
+  materialType: MaterialTypeKey;
+  /** Technical functionDescription stored when not using a custom Other value */
+  functionDescription: string;
+}
+
+export const SIMPLE_INGREDIENT_ROLES: SimpleIngredientRoleOption[] = [
+  {
+    key: "MAIN",
+    label: "Main Ingredient",
+    materialType: "ACTIVE_BOTANICAL",
+    functionDescription: "Botanical Active",
+  },
+  {
+    key: "GELLING",
+    label: "Gelling Agent",
+    materialType: "EXCIPIENT",
+    functionDescription: "Gelling Agent",
+  },
+  {
+    key: "PH_ADJUSTER",
+    label: "pH Adjuster",
+    materialType: "EXCIPIENT",
+    functionDescription: "pH Adjuster",
+  },
+  {
+    key: "MOISTURIZER",
+    label: "Moisturizer / Humectant",
+    materialType: "EXCIPIENT",
+    functionDescription: "Humectant",
+  },
+  {
+    key: "BASE",
+    label: "Base Ingredient",
+    materialType: "EXCIPIENT",
+    functionDescription: "Hydrophilic Vehicle",
+  },
+  {
+    key: "SOLVENT",
+    label: "Solvent",
+    materialType: "SOLVENT",
+    functionDescription: "Extraction Solvent",
+  },
+  {
+    key: "PRESERVATIVE",
+    label: "Preservative",
+    materialType: "PRESERVATIVE",
+    functionDescription: "Preservative",
+  },
+  {
+    key: "TESTING",
+    label: "Testing Reference",
+    materialType: "ANALYTICAL_STANDARD",
+    functionDescription: "Analytical Reference",
+  },
+  {
+    key: "OTHER",
+    label: "Other",
+    materialType: "EXCIPIENT",
+    functionDescription: "Other / Custom",
+  },
+];
+
+/** Map stored materialType + functionDescription back to a simple role key. */
+export function resolveSimpleIngredientRole(
+  materialType?: string | null,
+  functionDescription?: string | null
+): { key: SimpleIngredientRoleKey; customLabel: string } {
+  const roleText = String(functionDescription || "").trim();
+  const roleLower = roleText.toLowerCase();
+  const type = String(materialType || "").toUpperCase();
+
+  if (
+    type === "ACTIVE_BOTANICAL" ||
+    roleLower.includes("botanical active") ||
+    roleLower.includes("main ingredient") ||
+    roleLower.includes("therapeutic constituent")
+  ) {
+    return { key: "MAIN", customLabel: "" };
+  }
+  if (roleLower.includes("gelling") || roleLower.includes("matrix builder")) {
+    return { key: "GELLING", customLabel: "" };
+  }
+  if (roleLower.includes("ph adjust") || roleLower.includes("ph neutral") || roleLower.includes("crosslinking")) {
+    return { key: "PH_ADJUSTER", customLabel: "" };
+  }
+  if (
+    roleLower.includes("humectant") ||
+    roleLower.includes("moisturizer") ||
+    roleLower.includes("emollient") ||
+    roleLower.includes("plasticizer")
+  ) {
+    return { key: "MOISTURIZER", customLabel: "" };
+  }
+  if (
+    roleLower.includes("hydrophilic vehicle") ||
+    roleLower.includes("aqueous") ||
+    roleLower.includes("diluent") ||
+    roleLower.includes("ointment base") ||
+    roleLower.includes("base ingredient")
+  ) {
+    return { key: "BASE", customLabel: "" };
+  }
+  if (type === "SOLVENT" || roleLower.includes("solvent")) {
+    return { key: "SOLVENT", customLabel: "" };
+  }
+  if (type === "PRESERVATIVE" || roleLower.includes("preservative") || roleLower.includes("antimicrobial")) {
+    return { key: "PRESERVATIVE", customLabel: "" };
+  }
+  if (
+    type === "ANALYTICAL_STANDARD" ||
+    roleLower.includes("analytical") ||
+    roleLower.includes("testing reference") ||
+    roleLower.includes("reference standard")
+  ) {
+    return { key: "TESTING", customLabel: "" };
+  }
+  if (!roleText || roleLower === "other / custom" || roleLower === "other") {
+    return { key: "OTHER", customLabel: "" };
+  }
+  return { key: "OTHER", customLabel: roleText };
+}
+
+/** Flat catalog search across all preset families (for autocomplete). */
+export function getAllMaterialPresets(options?: {
+  plantName?: string;
+  extractFractionName?: string;
+  verifiedPhytochemicals?: any[];
+}): MaterialPresetItem[] {
+  const botanical = getActiveBotanicalPresets(
+    options?.plantName || "Botanical",
+    options?.extractFractionName
+  );
+  const analytical = getAnalyticalStandardPresets(options?.verifiedPhytochemicals || []);
+  return [
+    ...botanical,
+    ...EXCIPIENT_PRESETS,
+    ...SOLVENT_PRESETS,
+    ...PRESERVATIVE_PRESETS,
+    ...analytical,
+  ];
+}
+
 export const CURATED_SUPPLIERS = [
   "Sigma-Aldrich / Merck Life Science",
   "Lubrizol Life Science",

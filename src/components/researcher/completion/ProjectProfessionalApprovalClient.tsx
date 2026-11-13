@@ -126,14 +126,14 @@ function sectionMeta(code: string, projectId: number) {
       label: "Section 2",
       href: `/researcher/projects/${projectId}/in-silico`,
       Icon: Cpu,
-      stepsFallback: 8,
+      stepsFallback: 7,
     };
   }
   return {
     label: "Section 3",
     href: `/researcher/projects/${projectId}/submission`,
     Icon: FileCheck2,
-    stepsFallback: 2,
+    stepsFallback: 3,
   };
 }
 

@@ -14,7 +14,7 @@ async function testStage10And11E2E() {
   });
 
   const projectId = 1;
-  const researcherId = 2; // Dr. Aris Dela Cruz
+  const researcherId = 2; // researcher@natureaide.test
 
   // --- Snapshot community tables before test ---
   const [commPlantsBefore] = await pool.query("SELECT COUNT(*) as cnt FROM plants");
@@ -75,7 +75,7 @@ async function testStage10And11E2E() {
       'BATCH-BB-2024-001', 'v1.1', 'Sambong (Blumea balsamifera) Leaf Standardized Extract',
       'Senior Analytical Chemist M. Santos', 'USP <621> HPLC Reverse-Phase isocratic elution (C18 5um, 250x4.6mm)',
       'Shimadzu Prominence HPLC with PDA Detector', 'USP Reference Standard Borneol (Lot #R082K0)',
-      'LABORATORY_REPORT', 'DOST-ITDI Analytical Report #STD-2024-8891', 'Dr. Aris Dela Cruz',
+      'LABORATORY_REPORT', 'DOST-ITDI Analytical Report #STD-2024-8891', 'Lead Researcher',
       'DOCUMENTED', 'Sample stored at 4C prior to analysis. Injection volume 10 uL, detection at 205 nm.'
     )
   `, [projectId]);
@@ -197,7 +197,7 @@ async function testStage10And11E2E() {
       'HPLC assay STD-2024-8891, Docking Run #12, and Stage 7 toxicology screen.',
       'DOST-ITDI confirmed 3.42% w/w L-borneol with 12.85 mg QE/g total flavonoids.',
       'In-silico predictions of low oral toxicity and high receptor binding were verified by physical chromatography and stability assays.',
-      'Reviewer Dr. Elena Rostova approved formulation v1.1 with verified pharmacist endorsement.',
+      'Lead Reviewer approved formulation v1.1 with verified pharmacist endorsement.',
       'Single geographical cohort (Taguig/Rizal batch); lack of Phase I human clinical pharmacokinetic data.',
       'Long-term multi-year shelf-life stability under tropical zone IVb humidity conditions.',
       'Initiate randomized double-blind clinical trial on mild renal inflammation cohorts.',

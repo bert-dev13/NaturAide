@@ -41,16 +41,39 @@ export default async function ResearchProjectWorkspacePage({
 
   const project = projectRows[0];
 
-  // Calculate V2 Section Progress
-  const v2Progress = await calculateV2ProjectProgress(projectId);
+  // Calculate V2 Section Progress (never let schema drift crash the workspace)
+  let v2Progress;
+  try {
+    v2Progress = await calculateV2ProjectProgress(projectId);
+  } catch (error) {
+    console.warn("calculateV2ProjectProgress failed; using draft progress fallback:", error);
+    v2Progress = {
+      section1: { status: "NOT_STARTED" as const, completedSteps: 0, totalSteps: 6 as const, steps: [] },
+      section2: { status: "NOT_STARTED" as const, completedSteps: 0, totalSteps: 7 as const, steps: [] },
+      section3: { status: "NOT_STARTED" as const, completedSteps: 0, totalSteps: 3, steps: [] },
+      section4: { status: "NOT_STARTED" as const, completedSteps: 0, totalSteps: 3 as const, steps: [] },
+      overallStatus: "Draft" as const,
+      overallProgressPercent: Number(project.progressPercent || 0),
+      canSubmit: false,
+      approvedSpecialtiesCount: 0,
+      hasSubmittedForReview: false,
+      isCompleted: false,
+      approvedStepsBySection: { section1: [], section2: [], section3: [] },
+      sectionApprovalPercent: { section1: 0, section2: 0, section3: 0, overall: 0 },
+    };
+  }
 
   // Sync DB progressPercent
   if (project.progressPercent !== v2Progress.overallProgressPercent) {
-    await pool.query(
-      "UPDATE research_projects SET progressPercent = ? WHERE id = ?",
-      [v2Progress.overallProgressPercent, projectId]
-    );
-    project.progressPercent = v2Progress.overallProgressPercent;
+    try {
+      await pool.query(
+        "UPDATE research_projects SET progressPercent = ? WHERE id = ?",
+        [v2Progress.overallProgressPercent, projectId]
+      );
+      project.progressPercent = v2Progress.overallProgressPercent;
+    } catch (error) {
+      console.warn("Could not sync progressPercent:", error);
+    }
   }
 
   const [activities]: any = await pool.query(

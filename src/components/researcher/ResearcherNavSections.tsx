@@ -143,7 +143,10 @@ export default function ResearcherNavSections({
   const isWorkspaceActive = routeProjectId !== null && (activeSubpath === "" || activeSubpath === undefined);
   const isSection1Active = activeSubpath === "formulation-rd" || activeSubpath === "formulation" || activeSubpath === "formulation-safety" || activeSubpath === "plant-literature";
   const isSection2Active = activeSubpath === "in-silico" || activeSubpath === "docking";
-  const isSection3Active = activeSubpath === "submission" || activeSubpath === "knowledge-integration";
+  const isSection3Active =
+    activeSubpath === "submission" ||
+    activeSubpath === "knowledge-integration" ||
+    activeSubpath === "laboratory-results";
   const isCompletionActive = activeSubpath === "completion" || activeSubpath === "complete";
   const isReviewFeedbackActive = pathname.includes("/revisions") || activeSubpath === "revisions" || pathname.startsWith("/researcher/review-feedback");
   const isCompletedResearchActive = pathname.startsWith("/researcher/completed");
@@ -378,7 +381,7 @@ export default function ResearcherNavSections({
               )}
             </Link>
 
-            {/* Section 3: Research Paper Submission */}
+            {/* Section 3: Research Paper Submission (includes Laboratory Results) */}
             <Link
               href={`/researcher/projects/${activeProjectId}/submission`}
               onClick={onNavigate}
@@ -426,7 +429,7 @@ export default function ResearcherNavSections({
               )}
             </Link>
 
-            {/* Ask NatureAide AI (After Section 4) */}
+            {/* Ask NatureAide AI */}
             <Link
               href="/researcher/assistant"
               onClick={onNavigate}

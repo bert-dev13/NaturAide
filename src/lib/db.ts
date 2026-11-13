@@ -12,7 +12,7 @@ declare global {
 const rawPool: Pool =
   global.mysqlPool ||
   mysql.createPool({
-    host: process.env.DB_HOST || "localhost",
+    host: process.env.DB_HOST || "127.0.0.1",
     port: process.env.DB_PORT ? parseInt(process.env.DB_PORT, 10) : 3306,
     user: process.env.DB_USER || "root",
     password: process.env.DB_PASSWORD ?? "",
@@ -160,6 +160,59 @@ function isPlantsTableEngineError(err: any): boolean {
   );
 }
 
+function isMissingExecutiveSummaryError(err: any): boolean {
+  const msg = String(err?.message || err?.sqlMessage || "");
+  return (
+    (err?.code === "ER_BAD_FIELD_ERROR" || msg.includes("Unknown column")) &&
+    msg.includes("executiveSummary")
+  );
+}
+
+let executiveSummaryRepairPromise: Promise<void> | null = null;
+
+async function ensureResearchDossierExecutiveSummary(
+  targetPool: Pool,
+  originalQuery: (...args: any[]) => Promise<any>
+): Promise<void> {
+  if (executiveSummaryRepairPromise) return executiveSummaryRepairPromise;
+  executiveSummaryRepairPromise = (async () => {
+    try {
+      const [cols]: any = await originalQuery(
+        `SELECT COUNT(*) AS c FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = 'research_dossiers'
+           AND COLUMN_NAME = 'executiveSummary'`
+      );
+      if (Number(cols?.[0]?.c || 0) === 0) {
+        await originalQuery(
+          "ALTER TABLE research_dossiers ADD COLUMN executiveSummary LONGTEXT NULL"
+        );
+      }
+    } finally {
+      executiveSummaryRepairPromise = null;
+    }
+  })();
+  return executiveSummaryRepairPromise;
+}
+
+/**
+ * mysql2 AggregateError on refused dual-stack localhost can throw a secondary
+ * "object null is not iterable" while formatting. Normalize to a plain Error.
+ */
+function normalizePoolError(err: any): Error {
+  const nested = Array.isArray(err?.errors) ? err.errors : [];
+  const codes = [err?.code, ...nested.map((e: any) => e?.code)].filter(Boolean);
+  if (codes.includes("ECONNREFUSED")) {
+    return Object.assign(
+      new Error(
+        "MySQL connection refused on the configured host/port. Start MySQL (XAMPP) and retry."
+      ),
+      { code: "ECONNREFUSED", fatal: true, cause: err }
+    );
+  }
+  return err instanceof Error ? err : Object.assign(new Error(String(err)), { cause: err });
+}
+
 if (!global.mysqlPoolPatched) {
   const origQuery = rawPool.query.bind(rawPool);
   const origExecute = rawPool.execute.bind(rawPool);
@@ -172,7 +225,11 @@ if (!global.mysqlPoolPatched) {
         await ensurePlantsTableHealthy(rawPool, origQuery as any);
         return await (origQuery as any)(...args);
       }
-      throw err;
+      if (isMissingExecutiveSummaryError(err)) {
+        await ensureResearchDossierExecutiveSummary(rawPool, origQuery as any);
+        return await (origQuery as any)(...args);
+      }
+      throw normalizePoolError(err);
     }
   };
 
@@ -184,7 +241,11 @@ if (!global.mysqlPoolPatched) {
         await ensurePlantsTableHealthy(rawPool, origQuery as any);
         return await (origExecute as any)(...args);
       }
-      throw err;
+      if (isMissingExecutiveSummaryError(err)) {
+        await ensureResearchDossierExecutiveSummary(rawPool, origQuery as any);
+        return await (origExecute as any)(...args);
+      }
+      throw normalizePoolError(err);
     }
   };
 

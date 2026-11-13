@@ -185,7 +185,7 @@ export default function PersonalInformationCard({
                   required
                   value={formLastName}
                   onChange={(e) => setFormLastName(e.target.value)}
-                  placeholder="e.g. Santos"
+                  placeholder="Last name"
                   className="w-full px-3.5 py-2.5 rounded-xl border border-[#cde0d4] bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-400 font-medium text-[#0f2c20]"
                 />
               </div>

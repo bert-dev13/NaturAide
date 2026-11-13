@@ -82,44 +82,45 @@ export function ExpertReviewers() {
           })}
         </div>
 
-        {/* Featured Reviewer Profiles */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-14">
-          {EXPERT_REVIEWERS.map((rev, idx) => (
-            <div
-              key={idx}
-              className="bg-white rounded-3xl p-6 border border-[#dde6df] shadow-xs flex flex-col justify-between"
-            >
-              <div>
-                {/* Avatar Badge */}
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#0f2c20] to-[#1e5c44] text-[#ccfbf1] font-heading font-extrabold flex items-center justify-center text-sm shadow-sm">
-                    {rev.avatarText}
+        {/* Optional featured profiles — only when role cards are configured (no hardcoded doctor names) */}
+        {EXPERT_REVIEWERS.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-14">
+            {EXPERT_REVIEWERS.map((rev, idx) => (
+              <div
+                key={idx}
+                className="bg-white rounded-3xl p-6 border border-[#dde6df] shadow-xs flex flex-col justify-between"
+              >
+                <div>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#0f2c20] to-[#1e5c44] text-[#ccfbf1] font-heading font-extrabold flex items-center justify-center text-sm shadow-sm">
+                      {rev.avatarText}
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-[#0d9488] block">
+                        Board Certified
+                      </span>
+                      <h4 className="text-sm font-bold text-[#0f2c20] leading-tight">
+                        {rev.name}
+                      </h4>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#0d9488] block">
-                      Board Certified
-                    </span>
-                    <h4 className="text-sm font-bold text-[#0f2c20] leading-tight">
-                      {rev.name}
-                    </h4>
-                  </div>
+
+                  <p className="text-xs font-semibold text-[#164533] mb-1">
+                    {rev.role}
+                  </p>
+                  <p className="text-[11px] text-[#6b7c76] leading-relaxed mb-3">
+                    {rev.institution}
+                  </p>
                 </div>
 
-                <p className="text-xs font-semibold text-[#164533] mb-1">
-                  {rev.role}
-                </p>
-                <p className="text-[11px] text-[#6b7c76] leading-relaxed mb-3">
-                  {rev.institution}
-                </p>
+                <div className="pt-3 border-t border-[#edf2ee] flex items-center justify-between text-xs">
+                  <span className="text-[#6b7c76]">Verified Monograph Sign-Offs</span>
+                  <span className="font-mono font-bold text-[#0f2c20]">{rev.verifiedReviews}</span>
+                </div>
               </div>
-
-              <div className="pt-3 border-t border-[#edf2ee] flex items-center justify-between text-xs">
-                <span className="text-[#6b7c76]">Verified Monograph Sign-Offs</span>
-                <span className="font-mono font-bold text-[#0f2c20]">{rev.verifiedReviews}</span>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
         {/* 4-Eye Review Process Callout */}
         <div className="bg-gradient-to-br from-[#edf2ee] to-white rounded-3xl p-6 sm:p-8 border border-[#c4d4c7] flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">

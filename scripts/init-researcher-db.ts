@@ -518,7 +518,7 @@ async function initResearcherDb() {
             researcherId, projectId, title, authors, year, journalSource, doiOrUrl, studyType,
             plantOrCompound, keyFindings, limitations, researchNotes, tags
           ) VALUES 
-          (?, ?, 'Anti-urolithiatic activity of Blumea balsamifera in vitro and in animal models', 'Dela Cruz, A. et al.', 2021, 'Philippine Journal of Science', 'https://doi.org/10.56899/pjs.150.04.12', 'In-Vivo', 'Sambong extract', 'Significant reduction in urinary stone weight and increased urinary volume in Sprague-Dawley rats.', 'Crude aqueous extract used; individual active compounds were not isolated.', 'Supports traditional dose titration.', 'Diuretic, Urolithiasis, Kidney'),
+          (?, ?, 'Anti-urolithiatic activity of Blumea balsamifera in vitro and in animal models', 'Philippine Journal Research Group et al.', 2021, 'Philippine Journal of Science', 'https://doi.org/10.56899/pjs.150.04.12', 'In-Vivo', 'Sambong extract', 'Significant reduction in urinary stone weight and increased urinary volume in Sprague-Dawley rats.', 'Crude aqueous extract used; individual active compounds were not isolated.', 'Supports traditional dose titration.', 'Diuretic, Urolithiasis, Kidney'),
           (?, ?, 'Volatile constituents and antioxidant profile of Philippine medicinal asteraceae', 'Santos, M.R., Rivera, J.', 2022, 'Journal of Natural Products Research', 'https://doi.org/10.1016/j.jep.2022.115402', 'In-Vitro', 'Borneol, Blumeatin', 'Identified 32 volatile compounds with high radical-scavenging capacity.', 'In-vitro chemical assay only without cellular pharmacokinetics.', 'Key baseline for compound selection.', 'Phytochemistry, Terpenoids')
         `, [researcherId, p1Id, researcherId, p1Id]);
 

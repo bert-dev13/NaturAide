@@ -332,11 +332,14 @@ export async function GET(
           : area.key === "bioinformatics"
           ? "section2"
           : "section3";
-      const stepList = approvedSteps[secKey] || [];
+      const stepList = (approvedSteps[secKey] || []).filter(
+        (n) => Number(n) >= 1 && Number(n) <= SECTION_TOTAL_STEPS[secKey]
+      );
       const totalStepCount = SECTION_TOTAL_STEPS[secKey];
+      const approvedStepCount = new Set(stepList.map(Number)).size;
 
       const rawStatus = String(cov?.status || ass?.status || "PENDING").toUpperCase();
-      const isFullyApprovedBySteps = stepList.length >= totalStepCount;
+      const isFullyApprovedBySteps = approvedStepCount >= totalStepCount;
       const isApprovedStatus =
         isFullyApprovedBySteps || rawStatus === "APPROVED" || rawStatus === "COMPLETED";
 
@@ -344,13 +347,13 @@ export async function GET(
         ? "Approved"
         : rawStatus === "REVISION_REQUIRED"
         ? "Revision Required"
-        : stepList.length > 0 || rawStatus === "IN_REVIEW"
+        : approvedStepCount > 0 || rawStatus === "IN_REVIEW"
         ? "In Review"
         : mapCoverageStatusToDisplay(rawStatus);
 
       const stepApprovedPercent = isApprovedStatus
         ? 100
-        : Math.round((stepList.length / totalStepCount) * 100);
+        : Math.round((approvedStepCount / totalStepCount) * 100);
 
       const isAssignedToCurrentUser =
         !isSelfResearcher && assignedSpecialties.includes(area.key);
@@ -457,7 +460,7 @@ export async function GET(
         history: areaHistory,
         secKey,
         approvedSteps: stepList,
-        approvedStepCount: stepList.length,
+        approvedStepCount,
         totalStepCount,
         approvedPercent: stepApprovedPercent,
       };

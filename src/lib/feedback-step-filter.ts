@@ -71,6 +71,8 @@ export function isFeedbackBelongsToSection(
       combined.includes("section 3") ||
       combined.includes("paper submission") ||
       combined.includes("manuscript") ||
+      combined.includes("laboratory") ||
+      combined.includes("lab result") ||
       combined.includes("clinical pharmacology") ||
       combined.includes("cross-disciplinary") ||
       combined.includes("research summary") ||
@@ -104,10 +106,42 @@ export function isFeedbackBelongsToStep(
   const fTitle = (feedback.title || "").toLowerCase().trim();
   const combined = `${sName} ${fTitle}`;
 
+  const looksLikeManuscript =
+    combined.includes("manuscript") ||
+    combined.includes("upload research paper") ||
+    combined.includes("uploaded scientific") ||
+    combined.includes("pdf / docx");
+  const looksLikeLaboratory =
+    combined.includes("laboratory") || combined.includes("lab result");
+  const looksLikeSummary =
+    combined.includes("research summary") ||
+    combined.includes("cross-disciplinary") ||
+    combined.includes("synthesis");
+
   // 2. Strict step number detection (e.g. "step 1", "step 2", "step 01")
+  // Section 3 used to map manuscript feedback as "Step 2" while Lab was UI step 2 —
+  // disambiguate with title keywords so Lab and Manuscript never cross-leak.
   const stepMatch = combined.match(/\bstep\s*0?(\d+)\b/i);
   if (stepMatch && stepMatch[1]) {
     const extractedNum = parseInt(stepMatch[1], 10);
+    if (sectionKey === "section3") {
+      if (stepNumber === 2) {
+        if (looksLikeManuscript) return false;
+        if (looksLikeLaboratory) return true;
+        return extractedNum === 2 && !looksLikeManuscript;
+      }
+      if (stepNumber === 3) {
+        if (looksLikeLaboratory) return false;
+        if (extractedNum === 3) return true;
+        // Legacy: manuscript findings were stored as Step 2 before Lab feedback existed
+        if (extractedNum === 2 && looksLikeManuscript) return true;
+        return false;
+      }
+      if (stepNumber === 1) {
+        if (looksLikeLaboratory || looksLikeManuscript) return false;
+        return extractedNum === 1;
+      }
+    }
     return extractedNum === stepNumber;
   }
 
@@ -118,6 +152,13 @@ export function isFeedbackBelongsToStep(
     if (cleanTitle.length >= 4 && combined.includes(cleanTitle)) {
       return true;
     }
+  }
+
+  // 4. Section 3 keyword fallback when titles omit an explicit "Step N"
+  if (sectionKey === "section3") {
+    if (stepNumber === 1) return looksLikeSummary && !looksLikeLaboratory && !looksLikeManuscript;
+    if (stepNumber === 2) return looksLikeLaboratory;
+    if (stepNumber === 3) return looksLikeManuscript;
   }
 
   return false;

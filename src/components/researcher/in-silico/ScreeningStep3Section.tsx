@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
+import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FlaskConical,
@@ -11,12 +12,10 @@ import {
   AlertTriangle,
   XCircle,
   Clock,
-  ChevronRight,
   Info,
   X,
   Sliders,
-  Leaf,
-  Beaker,
+  ExternalLink,
 } from "lucide-react";
 
 export interface ScreeningResultItem {
@@ -47,21 +46,30 @@ function compoundKey(c: { compoundName?: string | null; pubchemId?: string | nul
   return `${(c.compoundName || "").toLowerCase().trim()}::${c.pubchemId || ""}`;
 }
 
+type ScreeningStatusLabel =
+  | "Pending"
+  | "Screening"
+  | "Completed"
+  | "Requires Review"
+  | "Failed"
+  | "Ready for Docking";
+
 export default function ScreeningStep3Section({
-  projectId: _projectId,
+  projectId,
   compounds = [],
   screenResults = [],
   onRunScreening,
   isScreening,
   onToggleDocking,
-  onNextStep: _onNextStep,
 }: Step3Props) {
   const [inspectedId, setInspectedId] = useState<number | null>(null);
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showModelNotes, setShowModelNotes] = useState(false);
   const [togglingId, setTogglingId] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState<"ALL" | "DONE" | "PENDING" | "DOCK">("ALL");
+  const [feedback, setFeedback] = useState<{ text: string; type: "success" | "error" | "info" } | null>(
+    null
+  );
 
-  // Collapse duplicate name+CID rows (prefer docking-selected)
   const uniqueCompounds = useMemo(() => {
     const map = new Map<string, any>();
     for (const c of compounds) {
@@ -80,8 +88,6 @@ export default function ScreeningStep3Section({
     }
     return Array.from(map.values());
   }, [compounds]);
-
-  const duplicateCount = compounds.length - uniqueCompounds.length;
 
   const resultMap = useMemo(() => {
     const byId = new Map<number, ScreeningResultItem>();
@@ -115,27 +121,29 @@ export default function ScreeningStep3Section({
     const dockSuit = metrics.dockingSuitability || {};
 
     const mw =
-      res.molecularWeight ||
-      prop.molecularWeight?.value?.replace(" g/mol", "") ||
-      "—";
-    const formula = res.molecularFormula || prop.molecularFormula?.value || "—";
-    const logP = prop.logP?.value !== undefined ? prop.logP.value : "—";
-    const tpsa = prop.tpsa?.value !== undefined ? prop.tpsa.value : "—";
-    const hbd = prop.hBondDonors?.value !== undefined ? prop.hBondDonors.value : "—";
-    const hba = prop.hBondAcceptors?.value !== undefined ? prop.hBondAcceptors.value : "—";
-    const rotBonds =
-      prop.rotatableBonds?.value !== undefined ? prop.rotatableBonds.value : "—";
-    const heavyAtoms =
-      prop.heavyAtoms?.value !== undefined ? prop.heavyAtoms.value : "—";
+      res.molecularWeight ??
+      (prop.molecularWeight?.value
+        ? String(prop.molecularWeight.value).replace(/\s*g\/mol/i, "")
+        : null);
+    const formula = res.molecularFormula || prop.molecularFormula?.value || null;
+    const logP = prop.logP?.value !== undefined && prop.logP?.value !== "Unavailable" ? prop.logP.value : null;
+    const tpsa =
+      prop.tpsa?.value !== undefined && prop.tpsa?.value !== "Unavailable"
+        ? String(prop.tpsa.value).replace(/\s*Å²/i, "")
+        : null;
+    const hbd = prop.hBondDonors?.value !== undefined ? prop.hBondDonors.value : null;
+    const hba = prop.hBondAcceptors?.value !== undefined ? prop.hBondAcceptors.value : null;
+    const rotBonds = prop.rotatableBonds?.value !== undefined ? prop.rotatableBonds.value : null;
 
-    const status: "Completed" | "Needs Review" | "Failed" =
-      res.engineStatus === "Completed" ||
-      res.engineStatus === "Needs Review" ||
-      res.engineStatus === "Failed"
-        ? (res.engineStatus as any)
+    const engineStatus = res.engineStatus || metrics.status;
+    let status: "Completed" | "Needs Review" | "Failed" =
+      engineStatus === "Completed" ||
+      engineStatus === "Needs Review" ||
+      engineStatus === "Failed"
+        ? (engineStatus as any)
         : dl.violations !== undefined && dl.violations >= 2
           ? "Needs Review"
-          : mw !== "—"
+          : mw != null
             ? "Completed"
             : "Failed";
 
@@ -148,18 +156,26 @@ export default function ScreeningStep3Section({
       hbd,
       hba,
       rotBonds,
-      heavyAtoms,
-      lipinskiViolations: dl.violations ?? 0,
+      lipinskiViolations: dl.violations ?? null,
       lipinskiList: dl.violationsList || [],
-      skinPerm: admet.skinPermeability?.prediction || "Moderate Permeability",
+      lipinskiResult: dl.result || null,
+      // Only surface stored predictions — do not invent defaults
+      skinPerm: admet.skinPermeability?.prediction || null,
       skinLogKp: admet.skinPermeability?.logKp || null,
-      giAbs: admet.giAbsorption?.prediction || "Moderate Absorption",
-      bbb: admet.bbbPermeability?.prediction || "Non-permeant",
-      waterSol: admet.waterSolubility?.prediction || "Moderate Solubility",
-      cyp3a4: admet.cyp3a4Inhibition?.prediction || "Low Inhibition Potential",
-      engineTool: res.engineTool || "RDKit + NatureAide QSAR",
+      skinModel: admet.skinPermeability?.model || null,
+      giAbs: admet.giAbsorption?.prediction || null,
+      giModel: admet.giAbsorption?.model || null,
+      bbb: admet.bbbPermeability?.prediction || null,
+      bbbModel: admet.bbbPermeability?.model || null,
+      waterSol: admet.waterSolubility?.prediction || null,
+      waterLogS: admet.waterSolubility?.logS || null,
+      waterModel: admet.waterSolubility?.model || null,
+      cyp3a4: admet.cyp3a4Inhibition?.prediction || null,
+      cypModel: admet.cyp3a4Inhibition?.model || null,
+      engineTool: res.engineTool || metrics.engineTool || null,
       summary: res.resultSummary || "",
       suitabilityNote: dockSuit.recommendation || null,
+      isDockReady: dockSuit.isReady === true,
     };
   };
 
@@ -167,7 +183,35 @@ export default function ScreeningStep3Section({
     resultMap.byId.get(compound.id) ||
     resultMap.byName.get((compound.compoundName || "").trim().toLowerCase());
 
-  const evaluatedCount = uniqueCompounds.filter((c) => Boolean(getResult(c))).length;
+  const resolveScreeningLabel = (
+    compound: any,
+    parsed: ReturnType<typeof parseMetrics>
+  ): ScreeningStatusLabel => {
+    const isDock =
+      compound.selectedForDocking === 1 || compound.selectedForDocking === true;
+    if (isScreening && !parsed) return "Screening";
+    if (!parsed) return "Pending";
+    if (isDock && parsed.status === "Completed") return "Ready for Docking";
+    if (parsed.status === "Needs Review") return "Requires Review";
+    if (parsed.status === "Failed") return "Failed";
+    if (parsed.status === "Completed") return "Completed";
+    return "Pending";
+  };
+
+  const admetCompactLabel = (parsed: ReturnType<typeof parseMetrics>) => {
+    if (!parsed) return "—";
+    if (parsed.status === "Failed") return "Unavailable";
+    if (parsed.lipinskiViolations != null && parsed.lipinskiViolations >= 2) return "Review flags";
+    if (parsed.giAbs || parsed.skinPerm) {
+      const bits = [parsed.giAbs, parsed.skinPerm].filter(Boolean);
+      return bits[0] ? String(bits[0]).replace(/ Absorption$/i, "").replace(/ Permeability$/i, "") : "Predicted";
+    }
+    return "Predicted";
+  };
+
+  const totalCount = uniqueCompounds.length;
+  const screenedCount = uniqueCompounds.filter((c) => Boolean(getResult(c))).length;
+  const pendingCount = Math.max(0, totalCount - screenedCount);
   const dockCount = uniqueCompounds.filter(
     (c) => c.selectedForDocking === 1 || c.selectedForDocking === true
   ).length;
@@ -182,15 +226,53 @@ export default function ScreeningStep3Section({
       return true;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [uniqueCompounds, statusFilter, resultMap]);
+  }, [uniqueCompounds, statusFilter, resultMap, isScreening]);
 
-  const handleToggle = async (compoundId: number, currentSelected: boolean) => {
+  const hasSmiles = (compound: any) =>
+    Boolean(String(compound?.smiles || compound?.compoundSmiles || "").trim());
+
+  const dockingBlockReason = (compound: any) => {
+    if (hasSmiles(compound)) return null;
+    return "No valid molecular structure (SMILES) — cannot be selected for docking.";
+  };
+
+  const handleToggle = async (compoundId: number, currentSelected: boolean, compound: any) => {
     if (!onToggleDocking) return;
+    const block = dockingBlockReason(compound);
+    if (!currentSelected && block) {
+      setFeedback({ text: block, type: "error" });
+      return;
+    }
     setTogglingId(compoundId);
     try {
       await onToggleDocking(compoundId, !currentSelected);
+      setFeedback({
+        text: !currentSelected
+          ? "Compound selected for Molecular Docking Execution."
+          : "Compound deselected.",
+        type: "success",
+      });
+    } catch (e: any) {
+      setFeedback({ text: e?.message || "Failed to update docking selection.", type: "error" });
     } finally {
       setTogglingId(null);
+    }
+  };
+
+  const handleRun = async () => {
+    if (isScreening || uniqueCompounds.length === 0) return;
+    setFeedback(null);
+    try {
+      await onRunScreening();
+      setFeedback({
+        text: "Screening finished. Review ADMET details and select compounds for docking.",
+        type: "success",
+      });
+    } catch (e: any) {
+      setFeedback({
+        text: e?.message || "Screening failed. Try again after checking compound structures.",
+        type: "error",
+      });
     }
   };
 
@@ -201,126 +283,140 @@ export default function ScreeningStep3Section({
 
   const easeOut = [0.22, 1, 0.36, 1] as const;
 
-  const StatusPill = ({ status }: { status?: string | null }) => {
-    if (!status) {
+  const StatusPill = ({ label }: { label: ScreeningStatusLabel }) => {
+    if (label === "Pending") {
       return (
-        <span className="inline-flex items-center gap-1 rounded border border-[#d7e4dc] bg-[#f7faf8] px-1.5 py-0.5 text-[9px] font-semibold text-[#6d7f76]">
-          <Clock className="h-2.5 w-2.5" />
+        <span className="inline-flex items-center gap-1 rounded-md border border-[#d7e4dc] bg-[#f7faf8] px-1.5 py-0.5 text-[10px] font-semibold text-[#6d7f76]">
+          <Clock className="h-3 w-3" />
           Pending
         </span>
       );
     }
-    if (status === "Completed") {
+    if (label === "Screening") {
       return (
-        <span className="inline-flex items-center gap-1 rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-900">
-          <CheckCircle2 className="h-2.5 w-2.5" />
-          Done
+        <span className="inline-flex items-center gap-1 rounded-md border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[10px] font-semibold text-sky-900">
+          <Loader2 className="h-3 w-3 animate-spin" />
+          Screening
         </span>
       );
     }
-    if (status === "Needs Review") {
+    if (label === "Completed") {
       return (
-        <span className="inline-flex items-center gap-1 rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-semibold text-amber-900">
-          <AlertTriangle className="h-2.5 w-2.5" />
-          Review
+        <span className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-900">
+          <CheckCircle2 className="h-3 w-3" />
+          Completed
+        </span>
+      );
+    }
+    if (label === "Ready for Docking") {
+      return (
+        <span className="inline-flex items-center gap-1 rounded-md border border-emerald-300 bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-950">
+          <CheckCircle2 className="h-3 w-3" />
+          Ready for Docking
+        </span>
+      );
+    }
+    if (label === "Requires Review") {
+      return (
+        <span className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900">
+          <AlertTriangle className="h-3 w-3" />
+          Requires Review
         </span>
       );
     }
     return (
-      <span className="inline-flex items-center gap-1 rounded border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-[9px] font-semibold text-rose-900">
-        <XCircle className="h-2.5 w-2.5" />
+      <span className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-900">
+        <XCircle className="h-3 w-3" />
         Failed
       </span>
     );
   };
 
+  const fmt = (v: any) => (v === null || v === undefined || v === "" || v === "Unavailable" ? "—" : String(v));
+
   return (
     <div className="space-y-4">
-      {/* Status strip */}
-      <motion.div
+      {/* Header */}
+      <motion.section
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.28, ease: easeOut }}
-        className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[#d7e4dc]/90 bg-white px-4 py-2.5 shadow-[0_1px_2px_rgba(15,44,32,0.04)]"
+        className="rounded-2xl border border-[#d7e4dc]/90 bg-white p-3 shadow-[0_1px_2px_rgba(15,44,32,0.04)] sm:p-4"
       >
-        <div className="flex items-center gap-2 text-[11px] text-[#6d7f76]">
-          <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-800">
-            <FlaskConical className="h-3.5 w-3.5" />
-          </span>
-          <span className="font-semibold text-[#0f2c20]">In-Silico Screening</span>
-          <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-mono text-[10px] font-bold text-emerald-900">
-            {evaluatedCount}/{uniqueCompounds.length} screened
-          </span>
-          <span className="hidden rounded-md border border-[#d7e4dc] bg-[#f7faf8] px-2 py-0.5 font-mono text-[10px] font-semibold text-[#52645d] sm:inline">
-            {dockCount} docking
-          </span>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <h2 className="inline-flex items-center gap-2 text-sm font-bold tracking-tight text-[#0f2c20]">
+              <FlaskConical className="h-4 w-4 text-emerald-700" />
+              In-Silico Screening
+            </h2>
+            <p className="mt-0.5 text-[12px] text-[#6d7f76]">
+              Evaluate compound properties and predicted ADMET profiles before molecular docking.
+            </p>
+          </div>
+          <button
+            type="button"
+            disabled={isScreening || uniqueCompounds.length === 0}
+            onClick={handleRun}
+            className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-emerald-700 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isScreening ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Screening…
+              </>
+            ) : (
+              <>
+                <Play className="h-3.5 w-3.5 fill-current" />
+                {screenedCount > 0 ? "Re-run Screening" : "Run Screening"}
+              </>
+            )}
+          </button>
         </div>
-        <button
-          type="button"
-          disabled={isScreening || uniqueCompounds.length === 0}
-          onClick={onRunScreening}
-          className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-700 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-emerald-800 disabled:opacity-50"
-        >
-          {isScreening ? (
-            <>
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              Screening...
-            </>
-          ) : (
-            <>
-              <Play className="h-3.5 w-3.5 fill-current" />
-              {evaluatedCount > 0 ? "Re-run" : "Run screening"}
-            </>
-          )}
-        </button>
-      </motion.div>
 
-      {/* Context */}
-      <motion.section
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, ease: easeOut }}
-        className="relative overflow-hidden rounded-2xl border border-[#d7e4dc]/90 bg-[linear-gradient(165deg,#ffffff_0%,#f8fbf9_100%)] p-4 shadow-[0_1px_2px_rgba(15,44,32,0.04)]"
-      >
-        <div className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-emerald-600 via-teal-400 to-cyan-300" />
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex min-w-0 items-start gap-2.5">
-            <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-800">
-              <Leaf className="h-4 w-4" />
-            </span>
-            <div className="min-w-0">
-              <h2 className="text-sm font-semibold text-[#0f2c20]">ADMET &amp; descriptors</h2>
-              <p className="mt-0.5 text-[11px] text-[#8aa094]">
-                <span className="font-semibold text-[#52645d]">
-                  {uniqueCompounds.length} unique ligands
-                </span>
-                <span className="mx-1.5 text-[#d7e4dc]">·</span>
-                MW · LogP · TPSA · dermal QSAR
+        {/* Overview stats */}
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {[
+            { label: "Total Compounds", value: totalCount, tone: "text-[#0f2c20]" },
+            { label: "Screened", value: screenedCount, tone: "text-emerald-800" },
+            { label: "Pending", value: pendingCount, tone: "text-amber-800" },
+            { label: "Ready for Docking", value: dockCount, tone: "text-emerald-900" },
+          ].map((stat) => (
+            <div
+              key={stat.label}
+              className="rounded-xl border border-[#e8f0eb] bg-[#f7faf8] px-3 py-2"
+            >
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-[#8aa094]">
+                {stat.label}
               </p>
+              <p className={`mt-0.5 font-mono text-xl font-bold ${stat.tone}`}>{stat.value}</p>
             </div>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {[
-              { n: "1", label: "Run screen" },
-              { n: "2", label: "Review ADMET" },
-              { n: "3", label: "Pick for docking" },
-            ].map((step, idx) => (
-              <span
-                key={step.n}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-[#d7e4dc] bg-white px-2.5 py-1 text-[10px] font-semibold text-[#52645d]"
-              >
-                <span className="inline-flex h-4 w-4 items-center justify-center rounded-md bg-emerald-600 text-[9px] font-bold text-white">
-                  {step.n}
-                </span>
-                {step.label}
-                {idx < 2 && <ChevronRight className="h-3 w-3 text-[#c5d4cb]" />}
-              </span>
-            ))}
-          </div>
+          ))}
         </div>
+
+        <AnimatePresence>
+          {feedback && (
+            <motion.div
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className={`mt-3 flex items-center justify-between gap-2 rounded-xl border px-2.5 py-2 text-[11px] ${
+                feedback.type === "success"
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                  : feedback.type === "error"
+                    ? "border-rose-200 bg-rose-50 text-rose-900"
+                    : "border-sky-200 bg-sky-50 text-sky-900"
+              }`}
+            >
+              <span>{feedback.text}</span>
+              <button type="button" onClick={() => setFeedback(null)}>
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </motion.section>
 
-      {/* Results */}
+      {/* Compound table */}
       <motion.section
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -328,30 +424,26 @@ export default function ScreeningStep3Section({
         className="space-y-2.5 rounded-2xl border border-[#d7e4dc]/90 bg-white p-3 shadow-[0_1px_2px_rgba(15,44,32,0.04)] sm:p-4"
       >
         <div className="flex flex-col gap-2 border-b border-[#e8f0eb] pb-2.5 sm:flex-row sm:items-center sm:justify-between">
-          <h3 className="inline-flex flex-wrap items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-[#52645d]">
-            <span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-emerald-600 text-[10px] font-bold text-white">
-              1
-            </span>
-            <Beaker className="h-3.5 w-3.5 text-emerald-700" />
-            Screening results
-            <span className="font-medium normal-case tracking-normal text-[#8aa094]">
-              · {filteredCompounds.length} shown
-            </span>
-          </h3>
+          <div>
+            <h3 className="text-sm font-bold tracking-tight text-[#0f2c20]">Compound Screening</h3>
+            <p className="text-[11px] text-[#8aa094]">
+              {filteredCompounds.length} shown · {dockCount} selected for docking
+            </p>
+          </div>
           <div className="flex flex-wrap gap-1">
             {(
               [
                 { key: "ALL", label: "All" },
                 { key: "DONE", label: "Screened" },
                 { key: "PENDING", label: "Pending" },
-                { key: "DOCK", label: "Docking" },
+                { key: "DOCK", label: "For docking" },
               ] as const
             ).map((f) => (
               <button
                 key={f.key}
                 type="button"
                 onClick={() => setStatusFilter(f.key)}
-                className={`rounded-lg px-2 py-1 text-[10px] font-semibold transition ${
+                className={`rounded-lg px-2.5 py-1 text-[10px] font-semibold transition ${
                   statusFilter === f.key
                     ? "bg-emerald-700 text-white"
                     : "border border-[#d7e4dc] bg-[#f7faf8] text-[#52645d] hover:border-emerald-400"
@@ -363,142 +455,149 @@ export default function ScreeningStep3Section({
           </div>
         </div>
 
-        {duplicateCount > 0 && (
-          <span className="inline-flex rounded-lg border border-[#d7e4dc] bg-[#f7faf8] px-2 py-0.5 text-[10px] font-semibold text-[#52645d]">
-            Hidden {duplicateCount} duplicate {duplicateCount === 1 ? "row" : "rows"}
-          </span>
-        )}
-
         {uniqueCompounds.length === 0 ? (
           <div className="rounded-xl border border-dashed border-[#d7e4dc] bg-[#f7faf8] px-4 py-8 text-center">
             <FlaskConical className="mx-auto h-7 w-7 text-[#8aa094]" />
-            <p className="mt-2 text-xs font-semibold text-[#0f2c20]">No compounds selected</p>
+            <p className="mt-2 text-xs font-semibold text-[#0f2c20]">No compounds from Section 1</p>
             <p className="mt-1 text-[11px] text-[#8aa094]">
-              Go back to Step 1 and choose ligands first.
+              Identify structure-ready phytochemicals in Plant Information first.
             </p>
+            <Link
+              href={`/researcher/projects/${projectId}/formulation-rd`}
+              className="mt-3 inline-flex text-[11px] font-semibold text-emerald-800 hover:underline"
+            >
+              Go to Section 1
+            </Link>
           </div>
         ) : filteredCompounds.length === 0 ? (
           <div className="rounded-xl border border-dashed border-[#d7e4dc] bg-[#f7faf8] px-4 py-6 text-center text-[11px] text-[#8aa094]">
             No compounds match this filter.
           </div>
         ) : (
-          <div className="overflow-hidden rounded-xl border border-[#d7e4dc]/90">
-            <div className="hidden grid-cols-[minmax(0,1.3fr)_4.5rem_minmax(0,1fr)_minmax(0,1fr)_3.5rem_3.5rem] gap-2 border-b border-[#e8f0eb] bg-[#f7faf8] px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-wider text-[#8aa094] lg:grid">
-              <span>Compound</span>
-              <span>Status</span>
-              <span>MW / LogP / TPSA</span>
-              <span>ADMET</span>
-              <span className="text-center">Dock</span>
-              <span className="text-right">Info</span>
-            </div>
-            <div className="divide-y divide-[#e8f0eb]">
-              {filteredCompounds.map((compound) => {
-                const res = getResult(compound);
-                const parsed = parseMetrics(res || undefined);
-                const isDockingSelected =
-                  compound.selectedForDocking === 1 || compound.selectedForDocking === true;
+          <div className="overflow-x-auto rounded-xl border border-[#d7e4dc]/90">
+            <table className="w-full min-w-[44rem] text-left text-xs">
+              <thead className="border-b border-[#e8f0eb] bg-[#f7faf8] text-[10px] font-bold uppercase tracking-wider text-[#8aa094]">
+                <tr>
+                  <th className="w-12 px-2.5 py-2 text-center">Select</th>
+                  <th className="px-2.5 py-2">Compound</th>
+                  <th className="px-2.5 py-2 text-right">MW</th>
+                  <th className="px-2.5 py-2 text-right">LogP</th>
+                  <th className="px-2.5 py-2 text-right">TPSA</th>
+                  <th className="px-2.5 py-2">Screening Status</th>
+                  <th className="px-2.5 py-2">ADMET Status</th>
+                  <th className="w-16 px-2.5 py-2 text-right" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#e8f0eb]">
+                {filteredCompounds.map((compound) => {
+                  const res = getResult(compound);
+                  const parsed = parseMetrics(res || undefined);
+                  const isDockingSelected =
+                    compound.selectedForDocking === 1 || compound.selectedForDocking === true;
+                  const label = resolveScreeningLabel(compound, parsed);
+                  const blockReason = dockingBlockReason(compound);
+                  const dockingEligible = !blockReason;
 
-                return (
-                  <div
-                    key={compound.id}
-                    className={`grid grid-cols-1 gap-2 px-2.5 py-2 lg:grid-cols-[minmax(0,1.3fr)_4.5rem_minmax(0,1fr)_minmax(0,1fr)_3.5rem_3.5rem] lg:items-center lg:gap-2 ${
-                      isDockingSelected ? "bg-emerald-50/35" : "bg-white hover:bg-[#f7faf8]"
-                    }`}
-                  >
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-1.5">
+                  return (
+                    <tr
+                      key={compound.id}
+                      className={
+                        isDockingSelected
+                          ? "bg-emerald-50/40"
+                          : "bg-white hover:bg-[#f7faf8]"
+                      }
+                    >
+                      <td className="px-2.5 py-2 text-center">
+                        <input
+                          type="checkbox"
+                          checked={isDockingSelected}
+                          disabled={
+                            togglingId === compound.id ||
+                            !onToggleDocking ||
+                            (!isDockingSelected && !dockingEligible)
+                          }
+                          onChange={() =>
+                            handleToggle(compound.id, isDockingSelected, compound)
+                          }
+                          className="h-4 w-4 rounded border-[#d5e3da] text-emerald-700 focus:ring-emerald-600 disabled:cursor-not-allowed disabled:opacity-40"
+                          title={
+                            blockReason
+                              ? blockReason
+                              : isDockingSelected
+                                ? "Deselect for docking"
+                                : "Select for docking"
+                          }
+                          aria-label={`Select ${compound.compoundName} for docking`}
+                        />
+                      </td>
+                      <td className="px-2.5 py-2">
                         <button
                           type="button"
                           onClick={() => setInspectedId(compound.id)}
-                          className="truncate text-left text-xs font-semibold text-[#0f2c20] hover:text-emerald-800 hover:underline"
+                          className="text-left font-semibold text-[#0f2c20] hover:text-emerald-800 hover:underline"
                         >
                           {compound.compoundName}
                         </button>
-                        <span className="lg:hidden">
-                          <StatusPill status={parsed?.status} />
-                        </span>
-                      </div>
-                      <div className="mt-0.5 flex flex-wrap gap-x-2 font-mono text-[10px] text-[#8aa094]">
-                        <span>{compound.molecularFormula || parsed?.formula || "—"}</span>
-                        {compound.pubchemId && <span>CID {compound.pubchemId}</span>}
-                      </div>
-                    </div>
-
-                    <div className="hidden lg:block">
-                      <StatusPill status={parsed?.status} />
-                    </div>
-
-                    <div className="font-mono text-[11px] text-[#52645d]">
-                      {parsed && parsed.mw !== "—" ? (
-                        <>
-                          <span className="font-semibold text-[#0f2c20]">{parsed.mw}</span>
-                          <span className="text-[#8aa094]"> · {parsed.logP} · {parsed.tpsa}</span>
-                        </>
-                      ) : (
-                        <span className="text-[10px] italic text-[#8aa094]">Not screened</span>
-                      )}
-                    </div>
-
-                    <div className="text-[10px] text-[#6d7f76]">
-                      {parsed ? (
-                        <>
-                          <span className="font-semibold text-[#0f2c20]">{parsed.skinPerm}</span>
-                          <span className="mt-0.5 block text-[#8aa094]">
-                            GI {parsed.giAbs.replace(/ Absorption$/i, "")} · BBB{" "}
-                            {parsed.bbb.replace(/^Non-/, "Non-")}
-                          </span>
-                        </>
-                      ) : (
-                        <span className="text-[#8aa094]">—</span>
-                      )}
-                    </div>
-
-                    <div className="flex items-center justify-between lg:justify-center">
-                      <span className="text-[10px] font-semibold text-[#8aa094] lg:hidden">
-                        Dock
-                      </span>
-                      <input
-                        type="checkbox"
-                        checked={isDockingSelected}
-                        disabled={togglingId === compound.id || !onToggleDocking}
-                        onChange={() => handleToggle(compound.id, isDockingSelected)}
-                        className="h-3.5 w-3.5 rounded border-[#d5e3da] text-emerald-700 focus:ring-emerald-600"
-                        title="Select for docking"
-                      />
-                    </div>
-
-                    <div className="flex justify-end">
-                      <button
-                        type="button"
-                        onClick={() => setInspectedId(compound.id)}
-                        className="rounded-lg border border-[#d7e4dc] bg-[#f7faf8] px-2 py-1 text-[10px] font-semibold text-[#52645d] hover:border-emerald-400 hover:bg-emerald-50"
-                      >
-                        Info
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                        <p className="mt-0.5 font-mono text-[10px] text-[#8aa094]">
+                          {compound.molecularFormula || parsed?.formula || "—"}
+                          {compound.pubchemId ? ` · CID ${compound.pubchemId}` : ""}
+                        </p>
+                      </td>
+                      <td className="px-2.5 py-2 text-right font-mono text-[11px] text-[#0f2c20]">
+                        {fmt(parsed?.mw)}
+                      </td>
+                      <td className="px-2.5 py-2 text-right font-mono text-[11px] text-[#0f2c20]">
+                        {fmt(parsed?.logP)}
+                      </td>
+                      <td className="px-2.5 py-2 text-right font-mono text-[11px] text-[#0f2c20]">
+                        {fmt(parsed?.tpsa)}
+                      </td>
+                      <td className="px-2.5 py-2">
+                        <StatusPill label={label} />
+                      </td>
+                      <td className="px-2.5 py-2 text-[11px] text-[#52645d]">
+                        {admetCompactLabel(parsed)}
+                      </td>
+                      <td className="px-2.5 py-2 text-right">
+                        <button
+                          type="button"
+                          onClick={() => setInspectedId(compound.id)}
+                          className="rounded-lg border border-[#d7e4dc] bg-[#f7faf8] px-2 py-1 text-[10px] font-semibold text-[#52645d] hover:border-emerald-400 hover:bg-emerald-50"
+                        >
+                          Details
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
+        )}
+
+        {dockCount === 0 && screenedCount > 0 && (
+          <p className="flex items-start gap-1.5 text-[11px] text-amber-800">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            Select at least one screened compound for Molecular Docking Execution.
+          </p>
         )}
       </motion.section>
 
-      {/* Advanced — collapsed by default, short copy */}
+      {/* Model notes — collapsed */}
       <div className="overflow-hidden rounded-2xl border border-[#d7e4dc]/90 bg-white shadow-[0_1px_2px_rgba(15,44,32,0.04)]">
         <button
           type="button"
-          onClick={() => setShowAdvanced(!showAdvanced)}
+          onClick={() => setShowModelNotes(!showModelNotes)}
           className="flex w-full items-center justify-between px-4 py-2.5 text-left text-[11px] font-semibold text-[#52645d] hover:bg-[#f7faf8]"
         >
           <span className="inline-flex items-center gap-1.5">
             <Sliders className="h-3.5 w-3.5 text-[#8aa094]" />
             Screening model notes
           </span>
-          <span className="text-[10px] text-[#8aa094]">{showAdvanced ? "Hide" : "Show"}</span>
+          <span className="text-[10px] text-[#8aa094]">{showModelNotes ? "Hide" : "Show"}</span>
         </button>
         <AnimatePresence>
-          {showAdvanced && (
+          {showModelNotes && (
             <motion.div
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: "auto", opacity: 1 }}
@@ -509,14 +608,15 @@ export default function ScreeningStep3Section({
                 <div className="rounded-xl border border-[#e8f0eb] bg-[#f7faf8] p-2.5">
                   <p className="font-semibold text-[#0f2c20]">Topical adaptation</p>
                   <p className="mt-1 leading-relaxed">
-                    Lipinski is an oral guide. Higher-MW glycosides can still be active in hydrogels
-                    and dermal products.
+                    Lipinski is an oral bioavailability guide. Higher-MW glycosides may still be
+                    relevant for topical hydrogels and dermal products.
                   </p>
                 </div>
                 <div className="rounded-xl border border-[#e8f0eb] bg-[#f7faf8] p-2.5">
-                  <p className="font-semibold text-[#0f2c20]">QSAR engines</p>
+                  <p className="font-semibold text-[#0f2c20]">Prediction engines</p>
                   <p className="mt-1 leading-relaxed">
                     RDKit descriptors · Potts &amp; Guy dermal Log Kp · Delaney ESOL solubility.
+                    Predictions are computational estimates, not clinical findings.
                   </p>
                 </div>
               </div>
@@ -525,7 +625,7 @@ export default function ScreeningStep3Section({
         </AnimatePresence>
       </div>
 
-      {/* Details modal */}
+      {/* Details modal — ADMET groups */}
       <AnimatePresence>
         {inspectedCompound && (
           <motion.div
@@ -548,7 +648,9 @@ export default function ScreeningStep3Section({
                   <h3 className="flex flex-wrap items-center gap-2 text-sm font-bold text-[#0f2c20]">
                     <FlaskConical className="h-4 w-4 shrink-0 text-emerald-700" />
                     <span className="truncate">{inspectedCompound.compoundName}</span>
-                    <StatusPill status={inspectedParsed?.status} />
+                    <StatusPill
+                      label={resolveScreeningLabel(inspectedCompound, inspectedParsed)}
+                    />
                   </h3>
                   <p className="mt-0.5 font-mono text-[11px] text-[#8aa094]">
                     {inspectedCompound.molecularFormula || inspectedParsed?.formula || "—"}
@@ -563,6 +665,18 @@ export default function ScreeningStep3Section({
                   <X className="h-4 w-4" />
                 </button>
               </div>
+
+              {inspectedCompound.pubchemId && (
+                <a
+                  href={`https://pubchem.ncbi.nlm.nih.gov/compound/${inspectedCompound.pubchemId}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-800 hover:underline"
+                >
+                  Open in PubChem
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              )}
 
               {inspectedParsed ? (
                 <div className="mt-3 space-y-3">
@@ -580,97 +694,180 @@ export default function ScreeningStep3Section({
                     </div>
                   )}
 
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                    {[
-                      { label: "MW", value: `${inspectedParsed.mw}`, hint: "≤ 500" },
-                      { label: "LogP", value: `${inspectedParsed.logP}`, hint: "≤ 5" },
-                      { label: "TPSA", value: `${inspectedParsed.tpsa}`, hint: "≤ 140" },
-                      {
-                        label: "HBD/HBA",
-                        value: `${inspectedParsed.hbd}/${inspectedParsed.hba}`,
-                        hint: "≤5 / ≤10",
-                      },
-                    ].map((cell) => (
-                      <div
-                        key={cell.label}
-                        className="rounded-xl border border-[#e8f0eb] bg-[#f7faf8] p-2"
-                      >
-                        <span className="block text-[9px] font-bold uppercase tracking-wider text-[#8aa094]">
-                          {cell.label}
-                        </span>
-                        <span className="mt-0.5 block font-mono text-sm font-bold text-[#0f2c20]">
-                          {cell.value}
-                        </span>
-                        <span className="text-[9px] text-[#8aa094]">{cell.hint}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="grid gap-2 text-[11px] sm:grid-cols-3">
-                    <div className="rounded-xl border border-[#e8f0eb] bg-[#f7faf8] p-2.5">
-                      <p className="text-[9px] font-bold uppercase tracking-wider text-[#8aa094]">
-                        Skin
-                      </p>
-                      <p className="mt-0.5 font-semibold text-[#0f2c20]">
-                        {inspectedParsed.skinPerm}
-                      </p>
-                      {inspectedParsed.skinLogKp && (
-                        <p className="font-mono text-[10px] text-[#8aa094]">
-                          Log Kp {inspectedParsed.skinLogKp}
-                        </p>
-                      )}
-                    </div>
-                    <div className="rounded-xl border border-[#e8f0eb] bg-[#f7faf8] p-2.5">
-                      <p className="text-[9px] font-bold uppercase tracking-wider text-[#8aa094]">
-                        Solubility
-                      </p>
-                      <p className="mt-0.5 font-semibold text-[#0f2c20]">
-                        {inspectedParsed.waterSol}
-                      </p>
-                      <p className="text-[10px] text-[#8aa094]">CYP3A4: {inspectedParsed.cyp3a4}</p>
-                    </div>
-                    <div className="rounded-xl border border-[#e8f0eb] bg-[#f7faf8] p-2.5">
-                      <p className="text-[9px] font-bold uppercase tracking-wider text-[#8aa094]">
-                        Lipinski
-                      </p>
-                      <p className="mt-0.5 font-semibold text-[#0f2c20]">
-                        {inspectedParsed.lipinskiViolations === 0
-                          ? "0 violations"
-                          : `${inspectedParsed.lipinskiViolations}: ${(inspectedParsed.lipinskiList || []).join(", ")}`}
-                      </p>
-                      <p className="text-[10px] italic text-[#8aa094]">Oral guide only</p>
+                  <div>
+                    <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-[#8aa094]">
+                      Molecular descriptors
+                    </p>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                      {[
+                        { label: "MW", value: fmt(inspectedParsed.mw), hint: "g/mol" },
+                        { label: "LogP", value: fmt(inspectedParsed.logP), hint: "lipophilicity" },
+                        { label: "TPSA", value: fmt(inspectedParsed.tpsa), hint: "Å²" },
+                        {
+                          label: "HBD / HBA",
+                          value: `${fmt(inspectedParsed.hbd)} / ${fmt(inspectedParsed.hba)}`,
+                          hint: "H-bonds",
+                        },
+                      ].map((cell) => (
+                        <div
+                          key={cell.label}
+                          className="rounded-xl border border-[#e8f0eb] bg-[#f7faf8] p-2"
+                        >
+                          <span className="block text-[9px] font-bold uppercase tracking-wider text-[#8aa094]">
+                            {cell.label}
+                          </span>
+                          <span className="mt-0.5 block font-mono text-sm font-bold text-[#0f2c20]">
+                            {cell.value}
+                          </span>
+                          <span className="text-[9px] text-[#8aa094]">{cell.hint}</span>
+                        </div>
+                      ))}
                     </div>
                   </div>
 
-                  <p className="font-mono text-[10px] text-[#8aa094]">
-                    Engine: {inspectedParsed.engineTool}
-                  </p>
+                  <div>
+                    <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-[#8aa094]">
+                      Predicted ADMET
+                    </p>
+                    <div className="grid gap-2 text-[11px] sm:grid-cols-2">
+                      {[
+                        {
+                          group: "Absorption",
+                          items: [
+                            { k: "GI absorption", v: inspectedParsed.giAbs, m: inspectedParsed.giModel },
+                            {
+                              k: "Skin permeability",
+                              v: inspectedParsed.skinPerm,
+                              m: inspectedParsed.skinModel,
+                              extra: inspectedParsed.skinLogKp
+                                ? `Log Kp ${inspectedParsed.skinLogKp}`
+                                : null,
+                            },
+                          ],
+                        },
+                        {
+                          group: "Distribution",
+                          items: [
+                            {
+                              k: "BBB permeability",
+                              v: inspectedParsed.bbb,
+                              m: inspectedParsed.bbbModel,
+                            },
+                          ],
+                        },
+                        {
+                          group: "Metabolism",
+                          items: [
+                            {
+                              k: "CYP3A4 inhibition",
+                              v: inspectedParsed.cyp3a4,
+                              m: inspectedParsed.cypModel,
+                            },
+                          ],
+                        },
+                        {
+                          group: "Excretion",
+                          items: [
+                            {
+                              k: "Water solubility",
+                              v: inspectedParsed.waterSol,
+                              m: inspectedParsed.waterModel,
+                              extra: inspectedParsed.waterLogS || null,
+                            },
+                          ],
+                        },
+                        {
+                          group: "Toxicity / drug-likeness",
+                          items: [
+                            {
+                              k: "Lipinski Rule of Five",
+                              v:
+                                inspectedParsed.lipinskiViolations == null
+                                  ? null
+                                  : inspectedParsed.lipinskiViolations === 0
+                                    ? "0 violations (oral guide)"
+                                    : `${inspectedParsed.lipinskiViolations} violation(s)`,
+                              m: "Oral bioavailability guide — topical use may differ",
+                              extra:
+                                inspectedParsed.lipinskiList?.length > 0
+                                  ? inspectedParsed.lipinskiList.join(", ")
+                                  : null,
+                            },
+                          ],
+                        },
+                      ].map((block) => (
+                        <div
+                          key={block.group}
+                          className="rounded-xl border border-[#e8f0eb] bg-[#f7faf8] p-2.5"
+                        >
+                          <p className="text-[9px] font-bold uppercase tracking-wider text-emerald-800">
+                            {block.group}
+                          </p>
+                          <div className="mt-1.5 space-y-2">
+                            {block.items.map((item) => (
+                              <div key={item.k}>
+                                <p className="text-[10px] text-[#8aa094]">{item.k}</p>
+                                <p className="font-semibold text-[#0f2c20]">{fmt(item.v)}</p>
+                                {item.extra && (
+                                  <p className="font-mono text-[10px] text-[#6d7f76]">{item.extra}</p>
+                                )}
+                                {item.m && (
+                                  <p className="mt-0.5 text-[9px] italic text-[#8aa094]">{item.m}</p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="mt-2 text-[10px] italic text-[#8aa094]">
+                      Computational predictions only — not confirmed biological or clinical findings.
+                    </p>
+                  </div>
+
+                  {inspectedParsed.engineTool && (
+                    <p className="font-mono text-[10px] text-[#8aa094]">
+                      Engine: {inspectedParsed.engineTool}
+                    </p>
+                  )}
                 </div>
               ) : (
                 <div className="mt-4 rounded-xl border border-dashed border-[#d7e4dc] bg-[#f7faf8] px-3 py-6 text-center text-[11px] text-[#8aa094]">
-                  Not screened yet — run screening to compute descriptors.
+                  Not screened yet — run screening to compute descriptors and ADMET predictions.
                 </div>
               )}
 
               <div className="mt-4 flex items-center justify-between border-t border-[#e8f0eb] pt-3">
-                <label className="inline-flex items-center gap-2 text-[11px] font-semibold text-[#52645d]">
+                <label
+                  className="inline-flex items-center gap-2 text-[11px] font-semibold text-[#52645d]"
+                  title={dockingBlockReason(inspectedCompound) || undefined}
+                >
                   <input
                     type="checkbox"
                     checked={
                       inspectedCompound.selectedForDocking === 1 ||
                       inspectedCompound.selectedForDocking === true
                     }
-                    disabled={togglingId === inspectedCompound.id || !onToggleDocking}
+                    disabled={
+                      togglingId === inspectedCompound.id ||
+                      !onToggleDocking ||
+                      (!(
+                        inspectedCompound.selectedForDocking === 1 ||
+                        inspectedCompound.selectedForDocking === true
+                      ) &&
+                        Boolean(dockingBlockReason(inspectedCompound)))
+                    }
                     onChange={() =>
                       handleToggle(
                         inspectedCompound.id,
                         inspectedCompound.selectedForDocking === 1 ||
-                          inspectedCompound.selectedForDocking === true
+                          inspectedCompound.selectedForDocking === true,
+                        inspectedCompound
                       )
                     }
                     className="h-3.5 w-3.5 rounded border-[#d5e3da] text-emerald-700"
                   />
-                  Docking candidate
+                  Select for docking
                 </label>
                 <button
                   type="button"

@@ -29,6 +29,7 @@ interface ReviewFlowStageItem {
   number: string;
   stageNumber: number;
   stageName: string;
+  shortName: string;
   professionalExpert: string;
   expertise: string;
   areaKey: string;
@@ -39,6 +40,7 @@ const RESEARCH_REVIEW_FLOW_STAGES: ReviewFlowStageItem[] = [
     number: "01",
     stageNumber: 1,
     stageName: "Section 1 · Formulation R&D",
+    shortName: "Formulation R&D",
     professionalExpert: "Formulation Scientist / Pharmacognosist",
     expertise: "Formulation Science & Pharmacognosy",
     areaKey: "formulation",
@@ -47,6 +49,7 @@ const RESEARCH_REVIEW_FLOW_STAGES: ReviewFlowStageItem[] = [
     number: "02",
     stageNumber: 2,
     stageName: "Section 2 · In-Silico Docking",
+    shortName: "In-Silico Docking",
     professionalExpert: "Bioinformatician / Computational Scientist",
     expertise: "Bioinformatics & In-Silico",
     areaKey: "bioinformatics",
@@ -55,6 +58,7 @@ const RESEARCH_REVIEW_FLOW_STAGES: ReviewFlowStageItem[] = [
     number: "03",
     stageNumber: 3,
     stageName: "Section 3 · Paper Submission",
+    shortName: "Paper Submission",
     professionalExpert: "Clinical Pharmacologist / Medical Reviewer",
     expertise: "Clinical Pharmacology & Paper",
     areaKey: "pharmacology",
@@ -169,7 +173,7 @@ export default function ReviewerSidebar({
       } else {
         document.documentElement.style.setProperty(
           "--sidebar-width",
-          collapsed ? "80px" : "280px"
+          collapsed ? "80px" : "300px"
         );
       }
     };
@@ -269,7 +273,7 @@ export default function ReviewerSidebar({
     );
     const approvedStepCount = dynamic?.approvedStepCount ?? (dynamic?.approvedSteps?.length || 0);
     const totalStepCount =
-      dynamic?.totalStepCount ?? (base.stageNumber === 1 ? 6 : base.stageNumber === 2 ? 8 : 2);
+      dynamic?.totalStepCount ?? (base.stageNumber === 1 ? 6 : base.stageNumber === 2 ? 7 : 3);
     const stUpper = String(dynamic?.status || "").toUpperCase();
     const isApproved =
       stUpper === "APPROVED" || stUpper === "COMPLETED" || approvedStepCount >= totalStepCount;
@@ -302,7 +306,7 @@ export default function ReviewerSidebar({
   return (
     <aside
       className={`hidden lg:flex flex-col justify-between shrink-0 transition-all duration-200 border-r border-[#1e3a5f] bg-[#07172b] text-white ${
-        collapsed ? "w-20 px-3 py-4" : "w-[280px] px-4 py-5"
+        collapsed ? "w-20 px-3 py-4" : "w-[300px] px-3.5 py-5"
       } h-screen sticky top-0 select-none shadow-sm z-30`}
     >
       <div className="flex flex-col min-h-0 flex-1">
@@ -406,23 +410,27 @@ export default function ReviewerSidebar({
                 {activeProject ? (
                   <Link
                     href={`/reviewer/projects/${activeProject.id}?tab=section1`}
-                    className="block group pt-0.5"
+                    className="group block pt-0.5"
                     title={`View ${activeProject.title}`}
                   >
-                    <p
-                      className="font-semibold text-xs text-white leading-snug line-clamp-2 group-hover:text-blue-200 transition-colors"
-                      title={activeProject.title}
-                    >
+                    <p className="text-xs font-semibold leading-snug break-words text-white transition-colors group-hover:text-blue-200">
                       {activeProject.title}
                     </p>
+                    {(activeProject.plantName || activeProject.plantScientificName) && (
+                      <p className="mt-1 text-[10.5px] leading-snug text-blue-200/80 break-words">
+                        {[activeProject.plantName, activeProject.plantScientificName]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                    )}
                   </Link>
                 ) : effectiveProjectId ? (
                   <Link
                     href={`/reviewer/projects/${effectiveProjectId}?tab=section1`}
-                    className="block group pt-0.5"
+                    className="group block pt-0.5"
                     title={`View Research Project #${effectiveProjectId}`}
                   >
-                    <p className="font-semibold text-xs text-white leading-snug line-clamp-2 group-hover:text-blue-200 transition-colors">
+                    <p className="text-xs font-semibold leading-snug text-white transition-colors group-hover:text-blue-200">
                       Research Project #{effectiveProjectId}
                     </p>
                   </Link>
@@ -453,16 +461,16 @@ export default function ReviewerSidebar({
             )}
           </div>
 
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             {!collapsed && (
-              <div className="px-2.5 pb-0.5">
+              <div className="px-2 pb-0.5">
                 <p className="text-[10px] font-bold tracking-wider text-blue-400/70 uppercase">
                   Review flow
                 </p>
               </div>
             )}
 
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               {stagesToRender.map((stage) => {
                 const statusConfig = getStageStatusConfig(stage.status);
                 const StatusIcon = statusConfig.icon;
@@ -513,56 +521,73 @@ export default function ReviewerSidebar({
                   <Link
                     key={stage.number}
                     href={targetHref}
-                    className={`group block px-2.5 py-2 rounded-xl transition-all border ${
+                    className={`group block rounded-xl border px-3 py-2.5 transition-all ${
                       isStageActive
-                        ? "bg-blue-600/30 text-white border-blue-400 shadow-sm"
-                        : "bg-white/[0.03] border-white/10 hover:bg-white/[0.08] hover:border-white/20 text-slate-200"
+                        ? "border-blue-400 bg-blue-600/30 text-white shadow-sm"
+                        : "border-white/10 bg-white/[0.03] text-slate-200 hover:border-white/20 hover:bg-white/[0.08]"
                     }`}
-                    title={`${stage.number} ${stage.stageName} · ${stage.professionalExpert} · ${percent}% Approved`}
+                    title={`${stage.stageName} · ${stage.professionalExpert} · ${percent}% · ${statusConfig.label}`}
                   >
-                    {/* ROW 1: STATUS ICON + STAGE NUMBER + STAGE NAME + APPROVAL PERCENTAGE */}
-                    <div className="flex items-center justify-between gap-1.5 min-w-0">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <span className={`shrink-0 ${statusConfig.iconColor}`}>
-                          <StatusIcon className="w-3.5 h-3.5" />
-                        </span>
-                        <span className="font-mono text-xs font-black text-blue-300 shrink-0">
-                          {stage.number}
-                        </span>
-                        <span className="font-heading font-bold text-xs text-white leading-tight truncate">
-                          {stage.stageName}
-                        </span>
-                      </div>
+                    <div className="flex items-start gap-2.5">
                       <span
-                        className={`shrink-0 inline-flex items-center gap-1 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
-                          percent === 100
-                            ? "bg-emerald-500/20 text-emerald-300 border border-emerald-400/30"
-                            : "bg-white/10 text-slate-300"
+                        className={`mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border font-mono text-[11px] font-black ${
+                          isStageActive
+                            ? "border-blue-300/50 bg-blue-500/40 text-white"
+                            : "border-white/10 bg-white/5 text-blue-200"
                         }`}
                       >
-                        {percent}% Approved
+                        {stage.number}
                       </span>
-                    </div>
 
-                    {/* ROW 2: PROFESSIONAL EXPERT & PROGRESS BAR */}
-                    <div className="mt-1 pl-5 space-y-1">
-                      <div className="flex items-center justify-between text-[10.5px] text-slate-300">
-                        <span className="truncate">{stage.professionalExpert}</span>
-                        <span className={`text-[10px] font-medium ${statusConfig.textColor}`}>
-                          {statusConfig.label}
-                        </span>
-                      </div>
-                      <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full transition-all duration-300 ${
-                            percent === 100
-                              ? "bg-emerald-400"
-                              : percent > 0
-                              ? "bg-sky-400"
-                              : "bg-white/15"
-                          }`}
-                          style={{ width: `${percent}%` }}
-                        />
+                      <div className="min-w-0 flex-1 space-y-1.5">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-blue-300/80">
+                              Section {stage.stageNumber}
+                            </p>
+                            <p className="mt-0.5 text-[13px] font-bold leading-snug text-white">
+                              {stage.shortName}
+                            </p>
+                          </div>
+                          <span className={`mt-0.5 shrink-0 ${statusConfig.iconColor}`}>
+                            <StatusIcon className="h-3.5 w-3.5" />
+                          </span>
+                        </div>
+
+                        <p className="text-[11px] leading-snug text-slate-300">
+                          {stage.professionalExpert}
+                        </p>
+
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span
+                            className={`inline-flex items-center rounded-md border px-1.5 py-0.5 font-mono text-[10px] font-bold ${
+                              percent === 100
+                                ? "border-emerald-400/30 bg-emerald-500/20 text-emerald-300"
+                                : "border-white/10 bg-white/10 text-slate-200"
+                            }`}
+                          >
+                            {percent}%
+                          </span>
+                          <span className={`text-[10px] font-semibold ${statusConfig.textColor}`}>
+                            {statusConfig.label}
+                          </span>
+                          <span className="text-[10px] font-medium text-slate-400">
+                            {stage.approvedStepCount}/{stage.totalStepCount} steps
+                          </span>
+                        </div>
+
+                        <div className="h-1 w-full overflow-hidden rounded-full bg-white/10">
+                          <div
+                            className={`h-full transition-all duration-300 ${
+                              percent === 100
+                                ? "bg-emerald-400"
+                                : percent > 0
+                                  ? "bg-sky-400"
+                                  : "bg-white/15"
+                            }`}
+                            style={{ width: `${Math.min(100, Math.max(0, percent))}%` }}
+                          />
+                        </div>
                       </div>
                     </div>
                   </Link>
@@ -594,19 +619,19 @@ export default function ReviewerSidebar({
                   return (
                     <Link
                       href={evaluationHref}
-                      className={`w-10 h-10 mx-auto rounded-lg flex flex-col items-center justify-center transition-all border mt-2 ${
+                      className={`mx-auto mt-1 flex h-10 w-10 flex-col items-center justify-center rounded-lg border transition-all ${
                         isEvaluationActive
-                          ? "bg-indigo-600 text-white border-indigo-400 shadow-md"
-                          : "bg-indigo-950/40 border-indigo-500/30 hover:bg-indigo-900/40 text-indigo-200"
+                          ? "border-indigo-400 bg-indigo-600 text-white shadow-md"
+                          : "border-indigo-500/30 bg-indigo-950/40 text-indigo-200 hover:bg-indigo-900/40"
                       }`}
-                      title={`Professional Evaluation Panel (3 Roles)\nTotal Approval: ${totalApprovalPercent}% (${approvedCount}/3 Approved)`}
+                      title={`Professional Evaluation · ${totalApprovalPercent}% (${approvedCount}/3)`}
                     >
                       <ClipboardCheck
-                        className={`w-4 h-4 ${
+                        className={`h-4 w-4 ${
                           totalApprovalPercent === 100 ? "text-emerald-300" : "text-indigo-300"
                         }`}
                       />
-                      <span className="text-[8.5px] font-mono font-bold mt-0.5">
+                      <span className="mt-0.5 font-mono text-[8.5px] font-bold">
                         {totalApprovalPercent}%
                       </span>
                     </Link>
@@ -616,55 +641,60 @@ export default function ReviewerSidebar({
                 return (
                   <Link
                     href={evaluationHref}
-                    className={`group block px-2.5 py-2 rounded-xl transition-all border mt-2 ${
+                    className={`mt-1 block rounded-xl border px-3 py-2.5 transition-all ${
                       isEvaluationActive
-                        ? "bg-indigo-600/35 text-white border-indigo-400 shadow-sm"
-                        : "bg-gradient-to-r from-indigo-950/40 via-blue-950/30 to-indigo-950/40 border-indigo-500/30 hover:border-indigo-400/50 hover:bg-indigo-900/30 text-slate-200"
+                        ? "border-indigo-400 bg-indigo-600/35 text-white shadow-sm"
+                        : "border-indigo-500/30 bg-gradient-to-r from-indigo-950/40 via-blue-950/30 to-indigo-950/40 text-slate-200 hover:border-indigo-400/50 hover:bg-indigo-900/30"
                     }`}
                     title="Professional Multidisciplinary Review Panel (3 Roles)"
                   >
-                    <div className="flex items-center justify-between gap-1.5 min-w-0">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <ClipboardCheck
-                          className={`w-4 h-4 shrink-0 ${
-                            totalApprovalPercent === 100
-                              ? "text-emerald-400"
-                              : "text-indigo-400"
-                          }`}
-                        />
-                        <span className="font-heading font-bold text-xs text-white leading-tight truncate">
-                          Professional Evaluation
-                        </span>
-                      </div>
+                    <div className="flex items-start gap-2.5">
                       <span
-                        className={`shrink-0 inline-flex items-center gap-1 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                        className={`mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${
                           totalApprovalPercent === 100
-                            ? "bg-emerald-500/20 text-emerald-300 border border-emerald-400/30"
-                            : "bg-white/10 text-indigo-200 border border-indigo-400/20"
+                            ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-300"
+                            : "border-indigo-400/30 bg-indigo-500/15 text-indigo-300"
                         }`}
                       >
-                        {totalApprovalPercent}% Total
+                        <ClipboardCheck className="h-4 w-4" />
                       </span>
-                    </div>
-
-                    <div className="mt-1 pl-5 space-y-1">
-                      <div className="flex items-center justify-between text-[10.5px] text-slate-300">
-                        <span className="truncate">3 Professional Roles</span>
-                        <span className="text-[10px] font-mono text-indigo-300 font-semibold">
-                          {approvedCount} of 3 Approved
-                        </span>
-                      </div>
-                      <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full transition-all duration-300 ${
-                            totalApprovalPercent === 100
-                              ? "bg-emerald-400"
-                              : totalApprovalPercent > 0
-                              ? "bg-indigo-400"
-                              : "bg-white/20"
-                          }`}
-                          style={{ width: `${totalApprovalPercent}%` }}
-                        />
+                      <div className="min-w-0 flex-1 space-y-1.5">
+                        <div>
+                          <p className="text-[13px] font-bold leading-snug text-white">
+                            Professional Evaluation
+                          </p>
+                          <p className="mt-0.5 text-[11px] leading-snug text-slate-300">
+                            3 specialist roles · multidisciplinary panel
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span
+                            className={`inline-flex items-center rounded-md border px-1.5 py-0.5 font-mono text-[10px] font-bold ${
+                              totalApprovalPercent === 100
+                                ? "border-emerald-400/30 bg-emerald-500/20 text-emerald-300"
+                                : "border-indigo-400/20 bg-white/10 text-indigo-200"
+                            }`}
+                          >
+                            {totalApprovalPercent}%
+                          </span>
+                          <span className="text-[10px] font-semibold text-indigo-200">
+                            {approvedCount} of 3 approved
+                          </span>
+                        </div>
+                        <div className="h-1 w-full overflow-hidden rounded-full bg-white/10">
+                          <div
+                            className={`h-full transition-all duration-300 ${
+                              totalApprovalPercent === 100
+                                ? "bg-emerald-400"
+                                : totalApprovalPercent > 0
+                                  ? "bg-indigo-400"
+                                  : "bg-white/20"
+                            }`}
+                            style={{
+                              width: `${Math.min(100, Math.max(0, totalApprovalPercent))}%`,
+                            }}
+                          />
+                        </div>
                       </div>
                     </div>
                   </Link>

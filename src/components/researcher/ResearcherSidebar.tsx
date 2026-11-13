@@ -48,28 +48,32 @@ export default function ResearcherSidebar({
       {/* ================================================== */}
       <div className="flex flex-col min-h-0 flex-1">
         {/* LOGO & BRAND HEADER */}
-        <div className="flex items-center justify-between pb-4 mb-4 border-b border-emerald-900/50 shrink-0">
+        <div className="flex items-center justify-between pb-5 mb-4 border-b border-emerald-900/50 shrink-0">
           <Link
             href="/researcher"
-            className="flex items-center gap-3 overflow-hidden group"
+            className="flex items-center gap-3.5 overflow-hidden group"
             title="NaturAide Research Platform"
           >
-            <div className="w-9 h-9 rounded-lg bg-white p-1.5 shrink-0 flex items-center justify-center shadow-xs">
+            <div
+              className={`rounded-xl bg-white p-1.5 shrink-0 flex items-center justify-center shadow-md ring-1 ring-emerald-400/20 transition group-hover:ring-emerald-300/40 ${
+                collapsed ? "w-10 h-10" : "w-11 h-11"
+              }`}
+            >
               <Image
                 src="/images/nature-logo.png"
                 alt="NaturAide Logo"
-                width={24}
-                height={24}
+                width={collapsed ? 28 : 32}
+                height={collapsed ? 28 : 32}
                 className="object-contain"
                 priority
               />
             </div>
             {!collapsed && (
               <div className="flex flex-col min-w-0">
-                <span className="font-semibold text-base tracking-tight text-white leading-tight">
+                <span className="font-heading text-[1.2rem] font-bold tracking-tight text-white leading-none">
                   NaturAide
                 </span>
-                <span className="text-[10px] font-medium text-emerald-400/80 tracking-widest uppercase">
+                <span className="mt-1 text-[10px] font-semibold text-emerald-300/90 tracking-[0.18em] uppercase">
                   Research Platform
                 </span>
               </div>

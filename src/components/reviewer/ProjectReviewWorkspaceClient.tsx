@@ -62,8 +62,10 @@ export default function ProjectReviewWorkspaceClient({
   const searchParams = useSearchParams();
   const { setActiveProject } = useReviewerProject();
 
-  // Tab State
-  const tabFromQuery = (searchParams?.get("tab") as ReviewerTabId) || initialTab;
+  // Tab State (legacy "laboratory" tab → Paper Submission)
+  const rawTabFromQuery = (searchParams?.get("tab") as string) || (initialTab as string);
+  const tabFromQuery: ReviewerTabId =
+    rawTabFromQuery === "laboratory" ? "section3" : (rawTabFromQuery as ReviewerTabId);
   const [activeTab, setActiveTab] = useState<ReviewerTabId>(tabFromQuery);
 
   // Specialty State
@@ -74,9 +76,11 @@ export default function ProjectReviewWorkspaceClient({
 
   // Synchronize activeTab with URL query changes (e.g. sidebar navigation clicks)
   useEffect(() => {
-    const qTab = (searchParams?.get("tab") as ReviewerTabId) || initialTab;
+    const raw = (searchParams?.get("tab") as string) || (initialTab as string);
+    const qTab: ReviewerTabId = raw === "laboratory" ? "section3" : (raw as ReviewerTabId);
     if (qTab && qTab !== activeTab) {
       setActiveTab(qTab);
+      if (raw === "laboratory") setSection3Step(2);
     }
   }, [searchParams, initialTab, activeTab]);
 
@@ -115,10 +119,15 @@ export default function ProjectReviewWorkspaceClient({
     initialTab === "section1" && initialStepParam ? Math.min(6, Math.max(1, initialStepParam)) : 1
   );
   const [section2Step, setSection2Step] = useState(
-    initialTab === "section2" && initialStepParam ? Math.min(8, Math.max(1, initialStepParam)) : 1
+    initialTab === "section2" && initialStepParam ? Math.min(7, Math.max(1, initialStepParam)) : 1
   );
   const [section3Step, setSection3Step] = useState(
-    initialTab === "section3" && initialStepParam ? Math.min(2, Math.max(1, initialStepParam)) : 1
+    (initialTab === "section3" || (initialTab as string) === "laboratory") &&
+      initialStepParam
+      ? Math.min(3, Math.max(1, initialStepParam))
+      : (initialTab as string) === "laboratory"
+        ? 2
+        : 1
   );
 
   useEffect(() => {
@@ -127,8 +136,8 @@ export default function ProjectReviewWorkspaceClient({
       const stepNum = parseInt(s, 10);
       if (!isNaN(stepNum) && stepNum >= 1) {
         if (activeTab === "section1") setSection1Step(Math.min(6, stepNum));
-        if (activeTab === "section2") setSection2Step(Math.min(8, stepNum));
-        if (activeTab === "section3") setSection3Step(Math.min(2, stepNum));
+        if (activeTab === "section2") setSection2Step(Math.min(7, stepNum));
+        if (activeTab === "section3") setSection3Step(Math.min(3, stepNum));
       }
     }
   }, [searchParams, activeTab]);
@@ -398,8 +407,8 @@ export default function ProjectReviewWorkspaceClient({
           secKey === "section1"
             ? [1, 2, 3, 4, 5, 6]
             : secKey === "section2"
-            ? [1, 2, 3, 4, 5, 6, 7, 8]
-            : [1, 2, 3, 4];
+            ? [1, 2, 3, 4, 5, 6, 7]
+            : [1, 2];
         setApprovedSteps((prev) => {
           const nextState = { ...prev, [secKey]: allNums };
           try {
@@ -582,7 +591,7 @@ export default function ProjectReviewWorkspaceClient({
               <Sprout className="w-3 h-3 text-emerald-300 shrink-0" />
               <strong className="text-white font-medium">{project.plantName}</strong>
               <em className="text-emerald-200/80 font-serif text-[10px]">
-                ({project.plantScientificName || "Vitex negundo L."})
+                ({project.plantScientificName || "Scientific name not recorded"})
               </em>
             </span>
             <span className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-0.5 font-mono">
@@ -612,7 +621,10 @@ export default function ProjectReviewWorkspaceClient({
 
         {activeTab === "section1" && (
           <ReviewerFormulationRdSection
-            project={project}
+            project={{
+              ...project,
+              activeSubmissionId: activeSubmission?.id || project.activeSubmissionId,
+            }}
             dossier={dossier}
             feedbackList={feedbackList}
             activeStep={section1Step}
@@ -699,7 +711,7 @@ export default function ProjectReviewWorkspaceClient({
             : 1;
 
         const totalSteps =
-          activeTab === "section1" ? 6 : activeTab === "section2" ? 8 : activeTab === "section3" ? 2 : 1;
+          activeTab === "section1" ? 6 : activeTab === "section2" ? 7 : activeTab === "section3" ? 3 : 1;
 
         const currentSectionKey: "section1" | "section2" | "section3" | null =
           activeTab === "section1"
@@ -714,10 +726,19 @@ export default function ProjectReviewWorkspaceClient({
           ? approvedSteps[currentSectionKey] || []
           : [];
 
-        const isCurrentStepApproved = approvedStepsForCurrentSection.includes(currentStep);
-        const approvedStepsCount = approvedStepsForCurrentSection.length;
+        // Section 3 UI steps map 1:1 to approval steps (Summary, Lab, Manuscript)
+        const approvalStepForCurrent = currentStep;
+
+        const validApprovals = approvedStepsForCurrentSection.filter(
+          (n) => Number(n) >= 1 && Number(n) <= totalSteps
+        );
+        const isCurrentStepApproved = validApprovals.includes(approvalStepForCurrent);
+        const approvedStepsCount = new Set(validApprovals.map(Number)).size;
+        const sectionApprovalDenom = totalSteps;
         const approvedStepsPercent =
-          totalSteps > 0 ? Math.round((approvedStepsCount / totalSteps) * 100) : 0;
+          sectionApprovalDenom > 0
+            ? Math.round((approvedStepsCount / sectionApprovalDenom) * 100)
+            : 0;
 
         const handlePrevStep = () => {
           if (activeTab === "section1") setSection1Step((p) => Math.max(1, p - 1));
@@ -734,14 +755,14 @@ export default function ProjectReviewWorkspaceClient({
               handleTabChange("section2");
             }
           } else if (activeTab === "section2") {
-            if (section2Step < 8) {
+            if (section2Step < 7) {
               setSection2Step((p) => p + 1);
             } else {
               setSection3Step(1);
               handleTabChange("section3");
             }
           } else if (activeTab === "section3") {
-            if (section3Step < 2) {
+            if (section3Step < 3) {
               setSection3Step((p) => p + 1);
             } else {
               handleTabChange("evaluation");
@@ -751,7 +772,7 @@ export default function ProjectReviewWorkspaceClient({
 
         const handleToggleApproveCurrentStep = () => {
           if (currentSectionKey) {
-            handleToggleApproveStep(currentSectionKey, currentStep);
+            handleToggleApproveStep(currentSectionKey, approvalStepForCurrent);
           }
         };
 

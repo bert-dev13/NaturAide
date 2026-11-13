@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import Image from "next/image";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Layers,
   Cpu,
@@ -14,8 +15,7 @@ import {
   FolderKanban,
   Award,
   Leaf,
-  ShieldCheck,
-  Info,
+  ChevronDown,
 } from "lucide-react";
 import { V2SectionProgress } from "@/lib/v2-progress-service";
 
@@ -58,40 +58,149 @@ interface Props {
 const easeOut = [0.22, 1, 0.36, 1] as const;
 
 type SectionTone = {
+  key: string;
   accent: string;
+  soft: string;
+  border: string;
   bar: string;
   iconWrap: string;
-  badge: string;
-  stepDone: string;
+  ring: string;
   cta: string;
+  glow: string;
 };
 
 const SECTION_TONES: Record<string, SectionTone> = {
   emerald: {
-    accent: "text-emerald-800",
-    bar: "from-emerald-600 via-emerald-400 to-teal-300",
-    iconWrap: "bg-gradient-to-br from-emerald-500 to-teal-600 text-white",
-    badge: "text-emerald-800",
-    stepDone: "bg-emerald-50/80 border-emerald-200/80",
+    key: "emerald",
+    accent: "text-emerald-900",
+    soft: "bg-emerald-50",
+    border: "border-emerald-200/80",
+    bar: "bg-emerald-500",
+    iconWrap: "bg-emerald-600 text-white",
+    ring: "ring-emerald-500/20",
     cta: "bg-[#0f2c20] hover:bg-[#164533] text-white",
+    glow: "from-emerald-500/15 via-transparent to-transparent",
   },
   teal: {
-    accent: "text-teal-800",
-    bar: "from-teal-600 via-teal-400 to-cyan-300",
-    iconWrap: "bg-gradient-to-br from-teal-500 to-cyan-600 text-white",
-    badge: "text-teal-800",
-    stepDone: "bg-teal-50/80 border-teal-200/80",
-    cta: "bg-teal-700 hover:bg-teal-600 text-white",
+    key: "teal",
+    accent: "text-teal-900",
+    soft: "bg-teal-50",
+    border: "border-teal-200/80",
+    bar: "bg-teal-500",
+    iconWrap: "bg-teal-600 text-white",
+    ring: "ring-teal-500/20",
+    cta: "bg-teal-800 hover:bg-teal-700 text-white",
+    glow: "from-teal-500/15 via-transparent to-transparent",
   },
-  slate: {
+  amber: {
+    key: "amber",
+    accent: "text-amber-950",
+    soft: "bg-amber-50",
+    border: "border-amber-200/80",
+    bar: "bg-amber-500",
+    iconWrap: "bg-amber-600 text-white",
+    ring: "ring-amber-500/20",
+    cta: "bg-amber-800 hover:bg-amber-700 text-white",
+    glow: "from-amber-500/15 via-transparent to-transparent",
+  },
+  forest: {
+    key: "forest",
     accent: "text-[#0f2c20]",
-    bar: "from-[#0f2c20] via-emerald-500 to-teal-300",
+    soft: "bg-[#edf5f0]",
+    border: "border-[#c5d8cc]",
+    bar: "bg-[#0f2c20]",
     iconWrap: "bg-[#0f2c20] text-emerald-200",
-    badge: "text-[#0f2c20]",
-    stepDone: "bg-[#edf5f0] border-[#d7e4dc]",
+    ring: "ring-[#0f2c20]/15",
     cta: "bg-[#0f2c20] hover:bg-[#164533] text-white",
+    glow: "from-[#0f2c20]/10 via-transparent to-transparent",
   },
 };
+
+function CircularProgress({
+  percent,
+  size = 68,
+  stroke = 6,
+}: {
+  percent: number;
+  size?: number;
+  stroke?: number;
+}) {
+  const clamped = Math.max(0, Math.min(100, percent));
+  const radius = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (clamped / 100) * circumference;
+
+  return (
+    <div className="relative" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="-rotate-90" aria-hidden>
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke="rgba(167,243,208,0.2)"
+          strokeWidth={stroke}
+        />
+        <motion.circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke="url(#workspaceProgressGrad)"
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          initial={{ strokeDashoffset: circumference }}
+          animate={{ strokeDashoffset: offset }}
+          transition={{ duration: 0.85, ease: easeOut, delay: 0.15 }}
+        />
+        <defs>
+          <linearGradient id="workspaceProgressGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#34d399" />
+            <stop offset="55%" stopColor="#2dd4bf" />
+            <stop offset="100%" stopColor="#6ee7b7" />
+          </linearGradient>
+        </defs>
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <motion.span
+          className="font-mono text-base font-bold tabular-nums leading-none text-white"
+          initial={{ opacity: 0, scale: 0.92 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.35, delay: 0.25 }}
+        >
+          {clamped}
+          <span className="text-[10px] font-semibold text-emerald-200/80">%</span>
+        </motion.span>
+      </div>
+    </div>
+  );
+}
+
+function StatusBadge({ status }: { status: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED" }) {
+  if (status === "COMPLETED") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-900">
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
+        Completed
+      </span>
+    );
+  }
+  if (status === "IN_PROGRESS") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-900">
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
+        In Progress
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border border-[#d7e4dc] bg-white px-2 py-0.5 text-[10px] font-bold text-[#6d7f76]">
+      <span className="h-1.5 w-1.5 rounded-full bg-[#c5d4cb]" />
+      Not Started
+    </span>
+  );
+}
 
 export default function ResearchWorkspaceClient({
   project,
@@ -99,6 +208,8 @@ export default function ResearchWorkspaceClient({
   activities,
   openRevisionsCount = 0,
 }: Props) {
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
+
   const continueRoute = useMemo(() => {
     if (v2Progress.section1.status !== "COMPLETED") {
       return `/researcher/projects/${project.id}/formulation-rd`;
@@ -121,37 +232,12 @@ export default function ResearchWorkspaceClient({
         ? "IN_PROGRESS"
         : "NOT_STARTED");
 
-  const renderSectionStatusBadge = (status: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED") => {
-    switch (status) {
-      case "COMPLETED":
-        return (
-          <span className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-900">
-            <CheckCircle2 className="h-3 w-3 text-emerald-700" />
-            Completed
-          </span>
-        );
-      case "IN_PROGRESS":
-        return (
-          <span className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-900">
-            <Clock className="h-3 w-3 text-amber-600" />
-            In Progress
-          </span>
-        );
-      default:
-        return (
-          <span className="inline-flex items-center gap-1 rounded-md border border-[#d7e4dc] bg-white px-2 py-0.5 text-[10px] font-bold text-[#6d7f76]">
-            Not Started
-          </span>
-        );
-    }
-  };
-
   const sections = [
     {
       key: "s1",
-      num: "Section 1",
+      num: "01",
+      label: "Section 1",
       title: "Formulation Research & Development",
-      desc: "Specimen authentication, dosage format, extraction, excipient matrix, and batch QC.",
       href: `/researcher/projects/${project.id}/formulation-rd`,
       cta: "Open Section",
       icon: Layers,
@@ -159,16 +245,16 @@ export default function ResearchWorkspaceClient({
       status: v2Progress.section1.status,
       done: v2Progress.section1.completedSteps,
       total: v2Progress.section1.totalSteps,
+      progressPercent: v2Progress.section1.progressPercent,
       steps: v2Progress.section1.steps,
       stepHref: null as string | null,
-      progressLabel: "Steps completed",
-      cols: "sm:grid-cols-2 xl:grid-cols-3",
+      progressLabel: "Steps",
     },
     {
       key: "s2",
-      num: "Section 2",
+      num: "02",
+      label: "Section 2",
       title: "In-Silico Analysis",
-      desc: "Phytochemical library, target selection, ADMET, docking, and interaction visualization.",
       href: `/researcher/projects/${project.id}/in-silico`,
       cta: "Open Section",
       icon: Cpu,
@@ -176,40 +262,41 @@ export default function ResearchWorkspaceClient({
       status: v2Progress.section2.status,
       done: v2Progress.section2.completedSteps,
       total: v2Progress.section2.totalSteps,
+      progressPercent: v2Progress.section2.progressPercent,
       steps: v2Progress.section2.steps,
       stepHref: null as string | null,
-      progressLabel: "Steps completed",
-      cols: "sm:grid-cols-2 xl:grid-cols-4",
+      progressLabel: "Steps",
     },
     {
       key: "s3",
-      num: "Section 3",
+      num: "03",
+      label: "Section 3",
       title: "Research Paper Submission",
-      desc: "Multi-stage summary, manuscript upload, and dossier submission for expert review.",
       href: `/researcher/projects/${project.id}/submission`,
       cta: "Open Section",
       icon: FileCheck2,
-      tone: SECTION_TONES.slate,
+      tone: SECTION_TONES.amber,
       status: v2Progress.section3.status,
       done: v2Progress.section3.completedSteps,
       total: v2Progress.section3.totalSteps,
+      progressPercent: v2Progress.section3.progressPercent,
       steps: v2Progress.section3.steps,
       stepHref: `/researcher/projects/${project.id}/submission`,
-      progressLabel: "Steps completed",
-      cols: "sm:grid-cols-2 xl:grid-cols-3",
+      progressLabel: "Steps",
     },
     {
       key: "s4",
-      num: "Section 4",
+      num: "04",
+      label: "Section 4",
       title: "Professional Approval & Research Completion",
-      desc: "Panel review across Formulation, Bioinformatics, and Clinical Pharmacology.",
       href: `/researcher/projects/${project.id}/completion`,
       cta: "Track Approval",
       icon: Award,
-      tone: SECTION_TONES.emerald,
+      tone: SECTION_TONES.forest,
       status: section4Status as "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED",
       done: v2Progress.approvedSpecialtiesCount ?? v2Progress.section4?.completedSteps ?? 0,
       total: 3,
+      progressPercent: v2Progress.section4?.progressPercent,
       steps:
         v2Progress.section4?.steps ||
         [
@@ -233,45 +320,115 @@ export default function ResearchWorkspaceClient({
           },
         ],
       stepHref: `/researcher/projects/${project.id}/completion`,
-      progressLabel: "Panel Approvals",
-      cols: "sm:grid-cols-2 xl:grid-cols-3",
+      progressLabel: "Approvals",
     },
   ];
 
+  const completedSectionCount = sections.filter((s) => s.status === "COMPLETED").length;
+  const progressPercent = v2Progress.overallProgressPercent;
+
+  const toggleSteps = (key: string) => {
+    setExpandedSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
   return (
-    <div className="w-full max-w-none space-y-6 pb-12 text-slate-800">
-      {/* 1. Compact project header */}
+    <div className="relative w-full max-w-none space-y-5 pb-12 text-slate-800">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 -top-6 h-36 bg-[radial-gradient(ellipse_at_top,_rgba(16,185,129,0.07),_transparent_60%)]"
+      />
+
+      {/* Brand strip */}
       <motion.div
-        initial={{ opacity: 0, y: 8 }}
+        initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="relative w-full overflow-hidden rounded-2xl border border-[#0f2c20]/15 bg-[linear-gradient(120deg,#0f2c20_0%,#134032_48%,#0b271b_100%)] px-4 py-3.5 text-white shadow-[0_12px_28px_-18px_rgba(15,44,32,0.55)] sm:px-5"
+        transition={{ duration: 0.28, ease: easeOut }}
+        className="relative flex items-center justify-between gap-3"
       >
-        <div className="pointer-events-none absolute -right-10 -top-12 h-36 w-36 rounded-full bg-emerald-400/15 blur-3xl" />
+        <div className="flex min-w-0 items-center gap-2.5">
+          <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-[#d7e4dc] bg-white shadow-[0_1px_2px_rgba(15,44,32,0.06)]">
+            <Image
+              src="/images/nature-logo.png"
+              alt="NaturAide"
+              width={22}
+              height={22}
+              className="object-contain"
+              priority
+            />
+          </div>
+          <div className="min-w-0 leading-tight">
+            <p className="font-heading text-[15px] font-bold tracking-tight text-[#0f2c20]">
+              NaturAide
+            </p>
+            <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-emerald-700/80">
+              Research Platform
+            </p>
+          </div>
+        </div>
+
+        <Link
+          href="/researcher/projects"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#d7e4dc] bg-white/80 px-2 py-1 text-[11px] font-semibold text-[#52645d] transition hover:border-emerald-300 hover:text-[#0f2c20]"
+        >
+          <FolderKanban className="h-3.5 w-3.5 text-emerald-700" />
+          My Research
+        </Link>
+      </motion.div>
+
+      {/* Project header */}
+      <motion.section
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, ease: easeOut }}
+        className="relative overflow-hidden rounded-2xl border border-[#0f2c20]/12 bg-[linear-gradient(135deg,#0b2419_0%,#0f2c20_42%,#134032_100%)] px-4 py-3.5 text-white shadow-[0_12px_28px_-20px_rgba(15,44,32,0.55)] sm:px-5 sm:py-4"
+      >
+        <div className="pointer-events-none absolute -right-12 -top-14 h-36 w-36 rounded-full bg-emerald-400/12 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-16 left-1/3 h-28 w-28 rounded-full bg-teal-300/10 blur-3xl" />
 
-        <div className="relative space-y-3">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex min-w-0 flex-wrap items-center gap-2 text-[11px] font-medium text-emerald-200/80">
-              <Link
-                href="/researcher/projects"
-                className="inline-flex items-center gap-1.5 transition hover:text-white"
-              >
-                <FolderKanban className="h-3.5 w-3.5 text-emerald-300" />
-                My Research
-              </Link>
-              <span className="text-emerald-700">/</span>
-              <span className="truncate font-semibold text-white">{project.title}</span>
-              <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 font-mono text-[10px] font-bold text-emerald-200">
+        <div className="relative flex flex-col gap-3.5 lg:flex-row lg:items-center lg:justify-between lg:gap-5">
+          <div className="min-w-0 flex-1 space-y-2.5">
+            <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-emerald-200/75">
+              <span className="rounded-full border border-white/10 bg-white/5 px-1.5 py-0.5 font-mono font-bold text-emerald-100">
                 #{project.id}
               </span>
+              <span className="rounded-full border border-white/10 bg-white/5 px-1.5 py-0.5 font-semibold text-emerald-100/90">
+                {v2Progress.overallStatus}
+              </span>
+              {project.updatedAt && (
+                <span className="inline-flex items-center gap-1 text-emerald-200/70">
+                  <Clock className="h-3 w-3" />
+                  <span suppressHydrationWarning>
+                    {new Date(project.updatedAt).toLocaleDateString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                      timeZone: "UTC",
+                    })}
+                  </span>
+                </span>
+              )}
             </div>
 
-            <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <div className="space-y-1">
+              <h1 className="max-w-3xl text-lg font-bold leading-snug tracking-tight text-white sm:text-xl">
+                {project.title}
+              </h1>
+              <p className="inline-flex max-w-2xl flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-emerald-100/90 sm:text-[13px]">
+                <Leaf className="h-3.5 w-3.5 shrink-0 text-emerald-300" />
+                <span className="font-semibold text-white">{project.plantName}</span>
+                {project.plantScientificName ? (
+                  <span className="italic text-emerald-200/80">
+                    ({project.plantScientificName})
+                  </span>
+                ) : null}
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
               {openRevisionsCount > 0 && (
                 <Link
                   href={`/researcher/projects/${project.id}/revisions`}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-amber-400/40 bg-amber-500/15 px-3 py-2 text-xs font-semibold text-amber-100 transition hover:bg-amber-500/25"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-amber-400/40 bg-amber-500/15 px-2.5 py-1.5 text-[11px] font-semibold text-amber-100 transition hover:bg-amber-500/25"
                 >
                   <AlertTriangle className="h-3.5 w-3.5 text-amber-300" />
                   {openRevisionsCount} Revision{openRevisionsCount > 1 ? "s" : ""}
@@ -280,7 +437,7 @@ export default function ResearchWorkspaceClient({
               {isProjectCompleted ? (
                 <Link
                   href={`/researcher/completed/${project.id}`}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-400 px-3.5 py-2 text-xs font-semibold text-[#091a13] shadow-sm transition hover:bg-emerald-300"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-400 px-3 py-1.5 text-xs font-bold text-[#091a13] shadow-sm transition hover:bg-emerald-300"
                 >
                   <Award className="h-3.5 w-3.5" />
                   View Completed Dossier
@@ -289,7 +446,7 @@ export default function ResearchWorkspaceClient({
               ) : (
                 <Link
                   href={continueRoute}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-400 px-3.5 py-2 text-xs font-semibold text-[#091a13] shadow-sm transition hover:bg-emerald-300"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-400 px-3 py-1.5 text-xs font-bold text-[#091a13] shadow-sm transition hover:bg-emerald-300"
                 >
                   Continue Research
                   <ArrowRight className="h-3.5 w-3.5" />
@@ -298,211 +455,233 @@ export default function ResearchWorkspaceClient({
             </div>
           </div>
 
-          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-lg font-semibold tracking-tight text-white sm:text-xl">
-                  {project.title}
-                </h1>
-                <span
-                  className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-bold ${
-                    isProjectCompleted
-                      ? "border-emerald-400/40 bg-emerald-500/20 text-emerald-100"
-                      : "border-white/15 bg-white/5 text-emerald-100/90"
-                  }`}
-                >
-                  <CheckCircle2 className="h-3 w-3 text-emerald-300" />
-                  {v2Progress.overallStatus}
-                </span>
-              </div>
-              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-emerald-100/80">
-                <span className="inline-flex items-center gap-1 rounded-lg border border-emerald-400/25 bg-emerald-500/10 px-2 py-0.5 font-semibold text-white">
-                  <Leaf className="h-3 w-3 text-emerald-300" />
-                  {project.plantName}
-                  {project.plantScientificName ? (
-                    <span className="font-medium italic text-emerald-200/80">
-                      ({project.plantScientificName})
-                    </span>
-                  ) : null}
-                </span>
-                {project.updatedAt && (
-                  <span className="inline-flex items-center gap-1">
-                    <Clock className="h-3 w-3 text-emerald-300" />
-                    <span suppressHydrationWarning>
-                      Updated{" "}
-                      {new Date(project.updatedAt).toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                        timeZone: "UTC",
-                      })}
-                    </span>
-                  </span>
-                )}
-              </div>
-            </div>
-
-            <div className="w-full shrink-0 rounded-xl border border-emerald-400/25 bg-emerald-950/40 p-2.5 md:w-64">
-              <div className="flex items-center justify-between gap-2 text-[11px]">
-                <span className="inline-flex items-center gap-1 font-semibold uppercase tracking-[0.12em] text-emerald-200/90">
-                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-300" />
-                  Completion
-                </span>
-                <span className="rounded border border-emerald-500/30 bg-emerald-800/50 px-1.5 py-0.5 font-mono text-xs font-bold text-white">
-                  {v2Progress.overallProgressPercent}%
-                </span>
-              </div>
-              <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-emerald-950">
+          {/* Completion overview */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.4, delay: 0.08, ease: easeOut }}
+            className="flex shrink-0 items-center gap-3 rounded-xl border border-emerald-400/20 bg-emerald-950/35 px-3 py-2.5 backdrop-blur-sm"
+          >
+            <CircularProgress percent={progressPercent} size={68} stroke={6} />
+            <div className="min-w-[6.5rem] space-y-1">
+              <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-emerald-200/80">
+                Completion
+              </p>
+              <p className="text-xs font-semibold text-white">
+                {completedSectionCount}
+                <span className="font-medium text-emerald-200/75">/{sections.length}</span>
+                <span className="ml-1 font-medium text-emerald-200/65">sections</span>
+              </p>
+              <div className="h-1 w-full overflow-hidden rounded-full bg-emerald-950/80">
                 <motion.div
                   className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-300"
                   initial={{ width: 0 }}
-                  animate={{ width: `${v2Progress.overallProgressPercent}%` }}
-                  transition={{ duration: 0.7, ease: easeOut, delay: 0.1 }}
+                  animate={{
+                    width: `${(completedSectionCount / Math.max(sections.length, 1)) * 100}%`,
+                  }}
+                  transition={{ duration: 0.7, ease: easeOut, delay: 0.2 }}
                 />
               </div>
             </div>
-          </div>
+          </motion.div>
         </div>
-      </motion.div>
+      </motion.section>
 
-      {/* Objective */}
-      {project.researchObjective && (
+      {/* Objective — only when present */}
+      {project.researchObjective ? (
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.05 }}
-          className="flex items-start gap-3 rounded-2xl border border-[#d7e4dc]/90 bg-white p-3.5 shadow-[0_1px_2px_rgba(15,44,32,0.04)] sm:p-4"
+          className="rounded-2xl border border-[#d7e4dc]/90 bg-white/90 px-4 py-3.5 text-sm leading-relaxed text-[#52645d] shadow-[0_1px_2px_rgba(15,44,32,0.04)]"
         >
-          <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-800">
-            <Info className="h-3.5 w-3.5" />
+          <span className="mr-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[#8aa094]">
+            Objective
           </span>
-          <div className="min-w-0">
-            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#6d7f76]">
-              Research Objective
-            </p>
-            <p className="mt-1 text-sm leading-relaxed text-[#52645d]">{project.researchObjective}</p>
-          </div>
+          {project.researchObjective}
         </motion.div>
-      )}
+      ) : null}
 
-      {/* Sections */}
-      <div className="space-y-3.5">
-        <div className="flex flex-col gap-1 px-0.5 sm:flex-row sm:items-end sm:justify-between">
+      {/* Four research sections */}
+      <div className="space-y-4">
+        <div className="flex items-end justify-between gap-3 px-0.5">
           <div>
-            <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#52645d]">
+            <h2 className="text-sm font-bold tracking-tight text-[#0f2c20] sm:text-base">
               Research Sections
             </h2>
             <p className="mt-0.5 text-xs text-[#8aa094]">
-              Complete all sections before final manuscript submission.
+              {completedSectionCount}/{sections.length} complete
             </p>
           </div>
-          <p className="text-[11px] font-medium text-[#6d7f76]">
-            {sections.filter((s) => s.status === "COMPLETED").length} of {sections.length} complete
-          </p>
         </div>
 
-        <div className="grid w-full grid-cols-1 gap-3.5">
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           {sections.map((section, index) => {
             const Icon = section.icon;
             const tone = section.tone;
+            const pct =
+              typeof (section as any).progressPercent === "number"
+                ? (section as any).progressPercent
+                : section.total > 0
+                  ? Math.round((section.done / section.total) * 100)
+                  : 0;
+            const expanded = Boolean(expandedSections[section.key]);
+            const isComplete = section.status === "COMPLETED";
+            const isActive = section.status === "IN_PROGRESS";
+
             return (
               <motion.article
                 key={section.key}
-                initial={{ opacity: 0, y: 12 }}
+                initial={{ opacity: 0, y: 14 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.32, delay: 0.08 + index * 0.05, ease: easeOut }}
-                className="group relative overflow-hidden rounded-2xl border border-[#d7e4dc]/90 bg-[linear-gradient(165deg,#ffffff_0%,#f8fbf9_100%)] shadow-[0_1px_2px_rgba(15,44,32,0.04)] transition-all duration-300 hover:border-emerald-300/70 hover:shadow-[0_18px_34px_-22px_rgba(15,44,32,0.28)]"
+                transition={{ duration: 0.34, delay: 0.08 + index * 0.05, ease: easeOut }}
+                className={`group relative overflow-hidden rounded-3xl border bg-white shadow-[0_1px_2px_rgba(15,44,32,0.04)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_20px_40px_-24px_rgba(15,44,32,0.3)] ${
+                  isComplete
+                    ? "border-emerald-200/90"
+                    : isActive
+                      ? `${tone.border} ring-1 ${tone.ring}`
+                      : "border-[#d7e4dc]/90"
+                }`}
               >
-                <div className={`absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r ${tone.bar}`} />
+                <div
+                  className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${tone.glow} opacity-80`}
+                />
+                <div className={`absolute inset-y-0 left-0 w-1 ${tone.bar}`} />
 
-                <div className="flex flex-col gap-3.5 p-4 sm:p-5">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="flex min-w-0 items-start gap-3">
+                <div className="relative flex h-full flex-col gap-4 p-5 sm:p-6">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-start gap-3.5">
                       <span
-                        className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl shadow-sm ${tone.iconWrap}`}
+                        className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl shadow-sm ${tone.iconWrap}`}
                       >
-                        <Icon className="h-4 w-4" strokeWidth={2.2} />
+                        <Icon className="h-5 w-5" strokeWidth={2.1} />
                       </span>
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <span className={`font-mono text-[10px] font-bold uppercase tracking-[0.12em] ${tone.badge}`}>
-                            {section.num}
+                      <div className="min-w-0 space-y-1.5">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span
+                            className={`font-mono text-[11px] font-bold uppercase tracking-[0.14em] ${tone.accent}`}
+                          >
+                            {section.label}
                           </span>
-                          {renderSectionStatusBadge(section.status)}
+                          <StatusBadge status={section.status} />
                         </div>
-                        <h3 className="mt-1 text-[15px] font-semibold leading-snug text-[#0f2c20]">
+                        <h3 className="text-base font-bold leading-snug tracking-tight text-[#0f2c20] sm:text-lg">
                           {section.title}
                         </h3>
-                        <p className="mt-0.5 text-xs leading-relaxed text-[#6d7f76]">{section.desc}</p>
                       </div>
                     </div>
+                  </div>
 
-                    <div className="flex shrink-0 items-center gap-3 sm:pt-0.5">
-                      <div className="hidden text-right sm:block">
-                        <p className="text-[10px] font-medium uppercase tracking-wider text-[#8aa094]">
-                          {section.progressLabel}
-                        </p>
-                        <p className="font-mono text-sm font-bold tabular-nums text-[#0f2c20]">
-                          {section.done} / {section.total}
-                        </p>
-                      </div>
-                      <Link
-                        href={section.href}
-                        className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold shadow-sm transition ${tone.cta}`}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="font-medium text-[#6d7f76]">
+                        {section.done}/{section.total} {section.progressLabel.toLowerCase()}
+                      </span>
+                      <span className="font-mono text-[11px] font-bold tabular-nums text-[#0f2c20]">
+                        {pct}%
+                      </span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-[#eef4f0]">
+                      <motion.div
+                        className={`h-full rounded-full ${tone.bar}`}
+                        initial={{ width: 0 }}
+                        animate={{ width: `${pct}%` }}
+                        transition={{ duration: 0.65, ease: easeOut, delay: 0.12 + index * 0.04 }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-auto flex flex-wrap items-center gap-2 pt-1">
+                    <Link
+                      href={section.href}
+                      className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2.5 text-xs font-bold shadow-sm transition ${tone.cta}`}
+                    >
+                      {section.cta}
+                      <ArrowRight className="h-3.5 w-3.5 opacity-90" />
+                    </Link>
+
+                    {section.steps.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => toggleSteps(section.key)}
+                        className="inline-flex items-center gap-1 rounded-xl border border-[#d7e4dc] bg-white px-3 py-2.5 text-xs font-semibold text-[#52645d] transition hover:border-emerald-300 hover:text-[#0f2c20]"
+                        aria-expanded={expanded}
                       >
-                        {section.cta}
-                        <ArrowRight className="h-3.5 w-3.5 opacity-80" />
-                      </Link>
-                    </div>
+                        Steps
+                        <ChevronDown
+                          className={`h-3.5 w-3.5 transition-transform ${
+                            expanded ? "rotate-180" : ""
+                          }`}
+                        />
+                      </button>
+                    )}
                   </div>
 
-                  <div className={`grid grid-cols-1 gap-2 ${section.cols}`}>
-                    {section.steps.map((st, idx) => {
-                      const content = (
-                        <>
-                          <div className="mb-1 flex items-center justify-between gap-2">
-                            <span className="truncate text-[11px] font-semibold text-[#0f2c20]">
-                              {idx + 1}. {st.title}
-                            </span>
-                            {st.completed ? (
-                              <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
-                            ) : (
-                              <span className="h-2 w-2 shrink-0 rounded-full bg-[#c5d4cb]" />
-                            )}
-                          </div>
-                          <p className="truncate text-[10px] text-[#8aa094]">{st.detail}</p>
-                        </>
-                      );
+                  <AnimatePresence initial={false}>
+                    {expanded && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.22, ease: easeOut }}
+                        className="overflow-hidden"
+                      >
+                        <ul className="space-y-1.5 border-t border-[#eef4f0] pt-3">
+                          {section.steps.map((st, idx) => {
+                            const className = `flex w-full items-center gap-2.5 rounded-xl border px-3 py-2 text-left text-xs transition ${
+                              st.completed
+                                ? `${tone.soft} ${tone.border}`
+                                : "border-[#eef4f0] bg-[#fbfcfb] text-[#52645d]"
+                            }`;
+                            const inner = (
+                              <>
+                                {st.completed ? (
+                                  <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                                ) : (
+                                  <span className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border border-[#c5d4cb] text-[9px] font-bold text-[#8aa094]">
+                                    {idx + 1}
+                                  </span>
+                                )}
+                                <span className="min-w-0 flex-1 truncate font-semibold text-[#0f2c20]">
+                                  {st.title}
+                                </span>
+                                {"progressPercent" in st &&
+                                typeof (st as { progressPercent?: number }).progressPercent ===
+                                  "number" ? (
+                                  <span
+                                    className={`shrink-0 font-mono text-[10px] font-bold tabular-nums ${
+                                      st.completed ? "text-emerald-700" : "text-[#8aa094]"
+                                    }`}
+                                  >
+                                    {(st as { progressPercent: number }).progressPercent}%
+                                  </span>
+                                ) : null}
+                              </>
+                            );
 
-                      const className = `rounded-xl border p-2.5 text-left transition ${
-                        st.completed
-                          ? tone.stepDone
-                          : "border-[#e8f0eb] bg-white/70 text-[#52645d]"
-                      } ${section.stepHref ? "hover:border-emerald-300" : ""}`;
-
-                      if (section.stepHref) {
-                        return (
-                          <Link
-                            key={st.stepKey}
-                            href={
-                              section.key === "s3"
-                                ? `${section.stepHref}?step=${idx + 1}`
-                                : section.stepHref
-                            }
-                            className={`block ${className}`}
-                          >
-                            {content}
-                          </Link>
-                        );
-                      }
-
-                      return (
-                        <div key={st.stepKey} className={className}>
-                          {content}
-                        </div>
-                      );
-                    })}
-                  </div>
+                            return (
+                              <li key={st.stepKey}>
+                                {section.stepHref ? (
+                                  <Link
+                                    href={
+                                      section.key === "s3"
+                                        ? `${section.stepHref}?step=${idx + 1}`
+                                        : section.stepHref
+                                    }
+                                    className={`${className} hover:border-emerald-300`}
+                                  >
+                                    {inner}
+                                  </Link>
+                                ) : (
+                                  <div className={className}>{inner}</div>
+                                )}
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
               </motion.article>
             );
@@ -515,10 +694,10 @@ export default function ResearchWorkspaceClient({
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35, delay: 0.28, ease: easeOut }}
-        className="overflow-hidden rounded-2xl border border-[#d7e4dc]/90 bg-white shadow-[0_1px_2px_rgba(15,44,32,0.04)]"
+        className="overflow-hidden rounded-3xl border border-[#d7e4dc]/90 bg-white shadow-[0_1px_2px_rgba(15,44,32,0.04)]"
       >
-        <div className="flex items-center justify-between gap-2 border-b border-[#e8f0eb] px-4 py-3 sm:px-5">
-          <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#52645d]">
+        <div className="flex items-center justify-between gap-2 border-b border-[#eef4f0] px-5 py-3.5">
+          <h2 className="text-sm font-bold tracking-tight text-[#0f2c20]">
             Recent Research Activity
           </h2>
           <span className="text-[11px] font-medium text-[#8aa094]">
@@ -531,7 +710,7 @@ export default function ResearchWorkspaceClient({
             {activities.map((act, index) => (
               <div
                 key={`${act.actionType}-${act.createdAt}-${index}`}
-                className="flex flex-col gap-1.5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-5"
+                className="flex flex-col gap-1.5 px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
               >
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
@@ -559,9 +738,7 @@ export default function ResearchWorkspaceClient({
             ))}
           </div>
         ) : (
-          <p className="px-4 py-6 text-center text-xs text-[#8aa094] sm:px-5">
-            No activity recorded yet.
-          </p>
+          <p className="px-5 py-7 text-center text-xs text-[#8aa094]">No activity recorded yet.</p>
         )}
       </motion.section>
     </div>

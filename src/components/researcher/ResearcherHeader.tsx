@@ -36,34 +36,69 @@ export default function ResearcherHeader({
   const pathname = usePathname();
 
   useEffect(() => {
+    let cancelled = false;
+    let controller: AbortController | null = null;
+
+    function isBenignFetchError(err: unknown) {
+      if (!err || typeof err !== "object") return false;
+      const name = "name" in err ? String((err as { name?: string }).name) : "";
+      const message = "message" in err ? String((err as { message?: string }).message) : "";
+      return (
+        name === "AbortError" ||
+        message === "Failed to fetch" ||
+        message.includes("aborted") ||
+        message.includes("network error")
+      );
+    }
+
     async function fetchNotifs() {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+        return;
+      }
+
+      controller?.abort();
+      controller = new AbortController();
+
       try {
-        const res = await fetch("/api/researcher/notifications");
-        if (res.ok) {
-          const data = await res.json();
-          setNotifications(data.notifications || []);
-          setUnreadCount(data.unreadCount || 0);
-        }
+        const res = await fetch("/api/researcher/notifications", {
+          signal: controller.signal,
+          cache: "no-store",
+        });
+        if (cancelled || !res.ok) return;
+        const data = await res.json();
+        if (cancelled) return;
+        setNotifications(data.notifications || []);
+        setUnreadCount(data.unreadCount || 0);
       } catch (err) {
+        if (cancelled || isBenignFetchError(err)) return;
         console.error("Notifications fetch error:", err);
       }
     }
+
     fetchNotifs();
 
     const handleSync = () => fetchNotifs();
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") fetchNotifs();
+    };
+
     window.addEventListener("natureaide:review-updated", handleSync);
     window.addEventListener("natureaide:revisions-updated", handleSync);
     window.addEventListener("natureaide:project-updated", handleSync);
+    document.addEventListener("visibilitychange", handleVisibility);
 
-    const interval = setInterval(fetchNotifs, 12000);
+    const interval = setInterval(fetchNotifs, 20000);
 
     return () => {
+      cancelled = true;
+      controller?.abort();
       window.removeEventListener("natureaide:review-updated", handleSync);
       window.removeEventListener("natureaide:revisions-updated", handleSync);
       window.removeEventListener("natureaide:project-updated", handleSync);
+      document.removeEventListener("visibilitychange", handleVisibility);
       clearInterval(interval);
     };
-  }, [pathname]);
+  }, []);
 
   useEffect(() => {
     setNotifOpen(false);
@@ -100,10 +135,10 @@ export default function ResearcherHeader({
 
           <Link
             href="/researcher"
-            className="flex items-center gap-2 min-w-0 group"
-            title="NaturAide Lab"
+            className="flex items-center gap-2.5 min-w-0 group"
+            title="NaturAide Research Platform"
           >
-            <div className="relative w-7 h-7 rounded-md overflow-hidden bg-white border border-[#e6ebe7] shrink-0">
+            <div className="relative w-8 h-8 rounded-lg overflow-hidden bg-white border border-[#d7e4dc] shadow-sm shrink-0">
               <Image
                 src="/images/nature-logo.png"
                 alt="NaturAide logo"
@@ -112,9 +147,14 @@ export default function ResearcherHeader({
                 priority
               />
             </div>
-            <span className="font-heading font-bold text-sm tracking-tight text-[#0f2c20] truncate">
-              NaturAide
-            </span>
+            <div className="min-w-0 leading-tight">
+              <span className="block font-heading font-bold text-[15px] tracking-tight text-[#0f2c20] truncate">
+                NaturAide
+              </span>
+              <span className="hidden sm:block text-[9px] font-semibold uppercase tracking-[0.16em] text-emerald-700/80">
+                Research
+              </span>
+            </div>
           </Link>
         </div>
 

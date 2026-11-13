@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import pool from "@/lib/db";
 import { loadDockingWorkspace } from "@/lib/docking-jobs";
-import { resolveCanonicalPlantId } from "@/lib/phytochemical-catalog";
+import { loadVerifiedPhytochemicals, resolveCanonicalPlantId } from "@/lib/phytochemical-catalog";
 import InSilicoRdWorkspaceClient from "@/components/researcher/in-silico/InSilicoRdWorkspaceClient";
 
 export default async function InSilicoStagePage({
@@ -23,7 +23,13 @@ export default async function InSilicoStagePage({
   if (isNaN(projectId)) notFound();
 
   const sp = (await searchParams) || {};
-  const initialStep = sp.step ? Math.min(8, Math.max(1, parseInt(sp.step, 10))) : 1;
+  const parsedStep = sp.step ? parseInt(sp.step, 10) : 1;
+  // Legacy 8-step URLs used step=8 for Results & Interpretation; clamp to 7-step workflow
+  const initialStep = Number.isNaN(parsedStep)
+    ? 1
+    : parsedStep >= 8
+      ? 7
+      : Math.min(7, Math.max(1, parsedStep));
 
   // Query project verifying ownership
   const [projectRows]: any = await pool.query(
@@ -84,34 +90,11 @@ export default async function InSilicoStagePage({
 
   let availableCompounds: any[] = [];
   try {
-    let pcRows: any[] = [];
-    if (canonicalPlantId) {
-      const [rows]: any = await pool.query(
-        `
-        SELECT id, plantId, plantScientificName, plantCommonName, compoundName,
-               iupacName, molecularFormula, molecularWeight, compoundClass,
-               pubchemId, smiles, plantPartReported, referencesData, verificationStatus
-        FROM plant_compounds
-        WHERE plantId = ?
-        ORDER BY compoundName ASC
-        `,
-        [canonicalPlantId]
-      );
-      pcRows = rows;
-    } else if (project.plantScientificName && project.plantScientificName.trim().length > 2) {
-      const [rows]: any = await pool.query(
-        `
-        SELECT id, plantId, plantScientificName, plantCommonName, compoundName,
-               iupacName, molecularFormula, molecularWeight, compoundClass,
-               pubchemId, smiles, plantPartReported, referencesData, verificationStatus
-        FROM plant_compounds
-        WHERE LOWER(TRIM(plantScientificName)) = LOWER(TRIM(?))
-        ORDER BY compoundName ASC
-        `,
-        [project.plantScientificName.trim()]
-      );
-      pcRows = rows;
-    }
+    const pcRows = await loadVerifiedPhytochemicals({
+      plantId: canonicalPlantId || project.plantId,
+      scientificName: project.plantScientificName,
+      commonName: project.plantName,
+    });
 
     const projectAddedNames = new Set(
       compounds.map((c: any) => c.compoundName.trim().toLowerCase())
@@ -138,7 +121,7 @@ export default async function InSilicoStagePage({
         references: parsedRefs,
         structureReady: Boolean(row.pubchemId && row.smiles && row.molecularFormula),
         isAlreadyAdded:
-          projectAddedNames.has(row.compoundName.trim().toLowerCase()) ||
+          projectAddedNames.has(String(row.compoundName || "").trim().toLowerCase()) ||
           (row.pubchemId && projectAddedCids.has(row.pubchemId)),
       };
     });

@@ -14,7 +14,7 @@ async function testKnowledgeIntegrationFullE2E() {
   });
 
   const projectId = 1;
-  const researcherId = 2; // Dr. Aris Dela Cruz
+  const researcherId = 2; // researcher@natureaide.test
   const adminId = 4;      // Admin NatureAide
   const plantId = 'sambong'; // Sambong (Blumea balsamifera)
 

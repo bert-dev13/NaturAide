@@ -8,36 +8,19 @@ import {
   Check,
   ChevronDown,
   AlertTriangle,
-  RotateCcw,
   FlaskConical,
-  Sparkles,
-  Info,
-  Clock,
-  Scale,
-  ShieldAlert,
-  ExternalLink,
-  BookOpen,
   X,
   Calculator,
   Thermometer,
-  ChevronRight,
+  Clock,
+  Scale,
 } from "lucide-react";
 import {
   EXTRACTION_METHODS,
   ExtractionMethodPreset,
-  SOLVENT_SYSTEMS,
-  SolventSystemSpec,
-  SOLVENT_CONCENTRATION_OPTIONS,
-  SOLVENT_RATIO_OPTIONS,
   SOLVENT_RATIO_PRESETS,
-  SolventRatioPreset,
-  EXTRACTION_DURATION_PRESETS,
   matchExtractionDurationPreset,
   formatMethodDefaultDuration,
-  parseSolventRatio,
-  isSolventConcentrationMeaningful,
-  checkSolventCompatibility,
-  calculateSolventVolume,
   calculateSolventVolumeDetails,
   calculateExtractYield,
   generateExtractFractionId,
@@ -76,1373 +59,1029 @@ interface Props {
   scientificLiterature?: LiteratureItem[];
   linkedLiterature?: any[];
   onToggleLiteratureReference?: (lit: LiteratureItem) => Promise<void> | void;
+  /** Reviewer / read-only mode: disable parameter edits and method browser */
+  readOnly?: boolean;
+}
+
+const easeOut = [0.22, 1, 0.36, 1] as const;
+
+const fieldClass =
+  "h-9 w-full rounded-lg border border-[#d5e3da] bg-[#fbfdfb] px-3 text-xs font-medium text-[#0f2c20] outline-none transition focus:border-emerald-600 focus:bg-white focus:ring-2 focus:ring-emerald-600/15";
+
+const calcBoxClass =
+  "rounded-xl border border-emerald-200/80 bg-emerald-50/70 px-3 py-2.5";
+
+/** Simplified method labels → catalog presets (all catalog methods remain via Browse). */
+const SIMPLE_METHODS = [
+  {
+    label: "Ultrasonic-Assisted Extraction (UAE)",
+    presetId: "uae",
+    match: (name: string) =>
+      /ultrasound|ultrasonic|uae/i.test(name),
+  },
+  {
+    label: "Maceration",
+    presetId: "cold_maceration",
+    match: (name: string) => /maceration/i.test(name),
+  },
+  {
+    label: "Soxhlet Extraction",
+    presetId: "soxhlet",
+    match: (name: string) => /soxhlet/i.test(name),
+  },
+  {
+    label: "Decoction",
+    presetId: "decoction",
+    match: (name: string) => /decoction/i.test(name),
+  },
+  {
+    label: "Infusion",
+    presetId: "infusion",
+    match: (name: string) => /infusion/i.test(name),
+  },
+  {
+    label: "Reflux Extraction",
+    presetId: "reflux",
+    match: (name: string) => /reflux/i.test(name),
+  },
+  {
+    label: "Percolation",
+    presetId: "percolation",
+    match: (name: string) => /percolation/i.test(name),
+  },
+  {
+    label: "Other",
+    presetId: "custom",
+    match: (name: string) => /other|custom/i.test(name),
+  },
+] as const;
+
+/** Simplified solvent systems → stored solvent + concentration. */
+const SIMPLE_SOLVENTS = [
+  {
+    key: "etoh100",
+    label: "100% Ethanol",
+    store: "Ethanol",
+    concentration: "100% v/v",
+    match: (s: string, c: string) =>
+      (/^ethanol$/i.test(s.trim()) && /100|95/.test(c)) ||
+      /100%\s*ethanol/i.test(s),
+  },
+  {
+    key: "etoh70",
+    label: "70% Ethanol / 30% Water",
+    store: "70% Ethanol / 30% USP Deionized Water",
+    concentration: "70% v/v",
+    match: (s: string, c: string) =>
+      /70%\s*ethanol/i.test(s) ||
+      (/ethanol.?water|ethanol–water|ethanol-water/i.test(s) && /70/.test(c)),
+  },
+  {
+    key: "etoh50",
+    label: "50% Ethanol / 50% Water",
+    store: "50% Ethanol / 50% Water",
+    concentration: "50% v/v",
+    match: (s: string, c: string) =>
+      /50%\s*ethanol/i.test(s) ||
+      (/ethanol.?water|ethanol–water|ethanol-water/i.test(s) && /50/.test(c)),
+  },
+  {
+    key: "etoh30",
+    label: "30% Ethanol / 70% Water",
+    store: "30% Ethanol / 70% Water",
+    concentration: "30% v/v",
+    match: (s: string, c: string) =>
+      /30%\s*ethanol/i.test(s) ||
+      (/ethanol.?water|ethanol–water|ethanol-water/i.test(s) && /30/.test(c)),
+  },
+  {
+    key: "water",
+    label: "100% Deionized Water",
+    store: "Distilled Water",
+    concentration: "0%",
+    match: (s: string) =>
+      /distilled water|deionized water|^water$/i.test(s) &&
+      !/ethanol/i.test(s),
+  },
+  {
+    key: "other",
+    label: "Other",
+    store: "Other / Custom",
+    concentration: "Custom",
+    match: () => false,
+  },
+] as const;
+
+const SIMPLE_RATIOS = ["1:5", "1:10", "1:15", "1:20", "1:25"] as const;
+
+const SIMPLE_TEMPERATURES = [25, 35, 45, 50, 60, 70] as const;
+
+const SIMPLE_DURATIONS = [
+  { label: "15 minutes", value: "15 minutes", minutes: 15 },
+  { label: "30 minutes", value: "30 minutes", minutes: 30 },
+  { label: "45 minutes", value: "45 minutes", minutes: 45 },
+  { label: "60 minutes", value: "60 minutes", minutes: 60 },
+  { label: "90 minutes", value: "90 minutes", minutes: 90 },
+  { label: "120 minutes", value: "120 minutes", minutes: 120 },
+] as const;
+
+function parseNumericMass(raw: string): number {
+  const trimmed = (raw || "").trim();
+  if (!trimmed || trimmed.includes("-")) return 0;
+  const match = trimmed.match(/(\d+(\.\d+)?)/);
+  return match ? parseFloat(match[1]) : 0;
+}
+
+function formatMassDisplay(raw: string): string {
+  const n = parseNumericMass(raw);
+  if (!n) return "";
+  return String(n);
+}
+
+function resolveMethodSelect(methodName: string): string {
+  const hit = SIMPLE_METHODS.find((m) => m.match(methodName || ""));
+  if (hit) return hit.label;
+  if (!methodName) return SIMPLE_METHODS[0].label;
+  return "Other";
+}
+
+function resolveSolventKey(solvent: string, concentration: string): string {
+  for (const opt of SIMPLE_SOLVENTS) {
+    if (opt.key === "other") continue;
+    if (opt.match(solvent || "", concentration || "")) return opt.key;
+  }
+  // Legacy catalog solvent name without explicit % label
+  if (/ethanol.?water|ethanol–water|ethanol-water/i.test(solvent || "")) {
+    return "etoh70";
+  }
+  if (!solvent) return "etoh70";
+  return "other";
+}
+
+function resolveRatioSelect(ratio: string): string {
+  const raw = (ratio || "").trim();
+  for (const r of SIMPLE_RATIOS) {
+    if (raw === r || raw.startsWith(r) || raw.includes(r)) return r;
+  }
+  const preset = SOLVENT_RATIO_PRESETS.find(
+    (p) =>
+      raw === p.ratioText ||
+      raw.startsWith(p.ratioText) ||
+      raw === p.label
+  );
+  if (preset && (SIMPLE_RATIOS as readonly string[]).includes(preset.ratioText)) {
+    return preset.ratioText;
+  }
+  // Map nearby legacy ratios onto closest simplified option
+  const m = raw.match(/1:(\d+)/);
+  if (m) {
+    const n = parseInt(m[1], 10);
+    if (n === 8 || n === 12) return n < 12 ? "1:10" : "1:15";
+  }
+  return SIMPLE_RATIOS[1];
+}
+
+function resolveTempSelect(temp: string): string {
+  const match = (temp || "").match(/(-?\d+(\.\d+)?)/);
+  if (!match) return "45";
+  const n = Math.round(parseFloat(match[1]));
+  if ((SIMPLE_TEMPERATURES as readonly number[]).includes(n)) return String(n);
+  return "custom";
+}
+
+function resolveDurationSelect(duration: string): string {
+  const matched = matchExtractionDurationPreset(duration || "");
+  if (matched) {
+    const simple = SIMPLE_DURATIONS.find((d) => d.minutes === matched.minutes);
+    if (simple) return simple.value;
+  }
+  const simpleDirect = SIMPLE_DURATIONS.find(
+    (d) =>
+      d.value.toLowerCase() === (duration || "").trim().toLowerCase() ||
+      d.label.toLowerCase() === (duration || "").trim().toLowerCase()
+  );
+  if (simpleDirect) return simpleDirect.value;
+  if (!duration) return "45 minutes";
+  return "custom";
 }
 
 export default function ExtractionStep3Section({
   project,
-  productSelection,
   extraction,
   onChange,
-  onSave,
-  isSaving,
-  scientificLiterature = [],
-  linkedLiterature = [],
-  onToggleLiteratureReference,
+  readOnly = false,
 }: Props) {
-  // Method Dropdown & Search State
+  const selectFieldClass = readOnly
+    ? `${fieldClass} cursor-default bg-[#f8fbf9]`
+    : fieldClass;
   const [isMethodDropdownOpen, setIsMethodDropdownOpen] = useState(false);
   const [methodSearch, setMethodSearch] = useState("");
   const methodDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Solvent Dropdown & Search State
-  const [isSolventDropdownOpen, setIsSolventDropdownOpen] = useState(false);
-  const [solventSearch, setSolventSearch] = useState("");
-  const solventDropdownRef = useRef<HTMLDivElement>(null);
+  const [customMethod, setCustomMethod] = useState("");
+  const [customSolvent, setCustomSolvent] = useState("");
+  const [customConcentration, setCustomConcentration] = useState("");
+  const [customTemperature, setCustomTemperature] = useState("");
+  const [customDuration, setCustomDuration] = useState("");
+  const [fractionManual, setFractionManual] = useState(false);
 
-  // Ratio Dropdown & Custom State
-  const [isRatioDropdownOpen, setIsRatioDropdownOpen] = useState(false);
-  const ratioDropdownRef = useRef<HTMLDivElement>(null);
-
-  // Concentration Dropdown & Custom State
-  const [isConcDropdownOpen, setIsConcDropdownOpen] = useState(false);
-  const concDropdownRef = useRef<HTMLDivElement>(null);
-
-  // Duration Dropdown & Custom State
-  const [isDurationDropdownOpen, setIsDurationDropdownOpen] = useState(false);
-  const durationDropdownRef = useRef<HTMLDivElement>(null);
-
-  // Literature Abstract Modal
-  const [selectedLitModal, setSelectedLitModal] = useState<LiteratureItem | null>(null);
-  const [litSearch, setLitSearch] = useState("");
-  const [litVisibleCount, setLitVisibleCount] = useState(6);
-
-  // Overwrite Confirmation Modal
   const [pendingMethod, setPendingMethod] = useState<ExtractionMethodPreset | null>(null);
-
-  // Field change tracking to avoid overwriting user edits without confirmation
   const [modifiedFields, setModifiedFields] = useState<Record<string, boolean>>({
-    extractionMethod: false,
-    plantMaterialMass: false,
     extractionSolvent: false,
     solventConcentration: false,
     solventRatio: false,
     extractionTemperature: false,
     extractionDuration: false,
-    extractYieldPercent: false,
-    extractFractionName: false,
-    recoveredDryMass: false,
+    plantMaterialMass: false,
   });
 
-  const [isDirty, setIsDirty] = useState(false);
-
-  // Close dropdowns on outside click
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (methodDropdownRef.current && !methodDropdownRef.current.contains(event.target as Node)) {
         setIsMethodDropdownOpen(false);
-      }
-      if (solventDropdownRef.current && !solventDropdownRef.current.contains(event.target as Node)) {
-        setIsSolventDropdownOpen(false);
-      }
-      if (ratioDropdownRef.current && !ratioDropdownRef.current.contains(event.target as Node)) {
-        setIsRatioDropdownOpen(false);
-      }
-      if (concDropdownRef.current && !concDropdownRef.current.contains(event.target as Node)) {
-        setIsConcDropdownOpen(false);
-      }
-      if (durationDropdownRef.current && !durationDropdownRef.current.contains(event.target as Node)) {
-        setIsDurationDropdownOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Matched current method preset
-  const currentMethodPreset = useMemo(() => {
-    if (!extraction.extractionMethod) return null;
-    const m = extraction.extractionMethod.toLowerCase();
-    return (
-      EXTRACTION_METHODS.find(
-        (preset) =>
-          preset.name.toLowerCase() === m ||
-          m.includes(preset.name.toLowerCase()) ||
-          preset.id.toLowerCase() === m
-      ) || null
-    );
-  }, [extraction.extractionMethod]);
-
-  // Filtered methods for searchable dropdown
   const filteredMethods = useMemo(() => {
     if (!methodSearch.trim()) return EXTRACTION_METHODS;
     const q = methodSearch.toLowerCase();
     return EXTRACTION_METHODS.filter(
       (m) =>
         m.name.toLowerCase().includes(q) ||
-        m.description.toLowerCase().includes(q) ||
-        m.suggestedSolvents.some((s) => s.toLowerCase().includes(q))
+        m.description.toLowerCase().includes(q)
     );
   }, [methodSearch]);
 
-  // Matched current solvent spec
-  const currentSolventSpec = useMemo(() => {
-    if (!extraction.extractionSolvent) return null;
-    const s = extraction.extractionSolvent.toLowerCase();
-    return (
-      SOLVENT_SYSTEMS.find(
-        (spec) =>
-          spec.name.toLowerCase() === s ||
-          s.includes(spec.name.toLowerCase()) ||
-          spec.id.toLowerCase() === s
-      ) || null
-    );
-  }, [extraction.extractionSolvent]);
+  const methodSelectValue = useMemo(
+    () => resolveMethodSelect(extraction.extractionMethod || ""),
+    [extraction.extractionMethod]
+  );
 
-  // Filtered solvents for searchable dropdown
-  const filteredSolvents = useMemo(() => {
-    if (!solventSearch.trim()) return SOLVENT_SYSTEMS;
-    const q = solventSearch.toLowerCase();
-    return SOLVENT_SYSTEMS.filter(
-      (s) =>
-        s.name.toLowerCase().includes(q) ||
-        s.safetyClass.toLowerCase().includes(q) ||
-        s.boilingPoint.toLowerCase().includes(q)
-    );
-  }, [solventSearch]);
+  const solventKey = useMemo(
+    () =>
+      resolveSolventKey(
+        extraction.extractionSolvent || "",
+        extraction.solventConcentration || ""
+      ),
+    [extraction.extractionSolvent, extraction.solventConcentration]
+  );
 
-  // Compatibility & Safety Checks
-  const compatibilityResult = useMemo(() => {
-    return checkSolventCompatibility(
-      extraction.extractionMethod,
-      extraction.extractionSolvent,
-      productSelection?.productType || productSelection?.deliveryFormat
-    );
-  }, [extraction.extractionMethod, extraction.extractionSolvent, productSelection]);
+  const ratioSelect = useMemo(
+    () => resolveRatioSelect(extraction.solventRatio || ""),
+    [extraction.solventRatio]
+  );
 
-  // Numeric mass parsing
-  const numericPlantMass = useMemo(() => {
-    const raw = extraction.plantMaterialMass || "";
-    const trimmed = raw.trim();
-    if (!trimmed) return 0;
-    if (trimmed.includes("-")) return -1;
-    const match = trimmed.match(/(\d+(\.\d+)?)/);
-    return match ? parseFloat(match[1]) : 0;
-  }, [extraction.plantMaterialMass]);
+  const tempSelect = useMemo(
+    () => resolveTempSelect(extraction.extractionTemperature || ""),
+    [extraction.extractionTemperature]
+  );
 
-  // Numeric recovered mass parsing - only parse if user has actually entered a value (avoid populating unmeasured values)
+  const durationSelect = useMemo(
+    () => resolveDurationSelect(extraction.extractionDuration || ""),
+    [extraction.extractionDuration]
+  );
+
+  const numericPlantMass = useMemo(
+    () => parseNumericMass(extraction.plantMaterialMass || ""),
+    [extraction.plantMaterialMass]
+  );
+
   const numericRecoveredDryMass = useMemo(() => {
-    if (extraction.recoveredDryMass === undefined || extraction.recoveredDryMass === null || extraction.recoveredDryMass === "") {
+    if (
+      extraction.recoveredDryMass === undefined ||
+      extraction.recoveredDryMass === null ||
+      extraction.recoveredDryMass === ""
+    ) {
       return null;
     }
     const raw = String(extraction.recoveredDryMass).trim();
-    if (!raw) return null;
-    if (raw.includes("-")) return -1;
+    if (!raw || raw.includes("-")) return raw.includes("-") ? -1 : null;
     const match = raw.match(/(\d+(\.\d+)?)/);
     return match ? parseFloat(match[1]) : null;
   }, [extraction.recoveredDryMass]);
 
-  // Automatic Solvent Volume Calculation with full structured details
-  const volumeResult = useMemo(() => {
-    return calculateSolventVolumeDetails(numericPlantMass, extraction.solventRatio);
-  }, [numericPlantMass, extraction.solventRatio]);
-
-  const calculatedSolventVolume = volumeResult.volumeMl;
-
-  // Matched current solvent ratio preset (if any)
-  const currentRatioPreset = useMemo(() => {
-    const raw = (extraction.solventRatio || "").trim().toLowerCase();
-    if (!raw) return null;
-    return (
-      SOLVENT_RATIO_PRESETS.find(
-        (p) =>
-          p.ratioText.toLowerCase() === raw ||
-          raw.startsWith(p.ratioText.toLowerCase()) ||
-          p.label.toLowerCase() === raw ||
-          p.id.toLowerCase() === raw ||
-          (raw.includes(":") && parseSolventRatio(raw).ratioMlPerG === p.ratioValue && (raw === `${p.ratioValue}:1` || raw === `1:${p.ratioValue}`))
-      ) || null
-    );
-  }, [extraction.solventRatio]);
-
-  const isCustomRatio = useMemo(() => {
-    const raw = (extraction.solventRatio || "").trim();
-    if (!raw) return false;
-    if (raw.toLowerCase().startsWith("custom")) return true;
-    return currentRatioPreset === null;
-  }, [extraction.solventRatio, currentRatioPreset]);
-
-  const currentDurationPreset = useMemo(
-    () => matchExtractionDurationPreset(extraction.extractionDuration || ""),
-    [extraction.extractionDuration]
+  const volumeResult = useMemo(
+    () => calculateSolventVolumeDetails(numericPlantMass, extraction.solventRatio),
+    [numericPlantMass, extraction.solventRatio]
   );
 
-  const isCustomDuration = useMemo(() => {
-    const raw = (extraction.extractionDuration || "").trim();
-    if (!raw) return false;
-    if (raw.toLowerCase().startsWith("custom")) return true;
-    return currentDurationPreset === null;
-  }, [extraction.extractionDuration, currentDurationPreset]);
+  const yieldResult = useMemo(
+    () => calculateExtractYield(numericRecoveredDryMass, numericPlantMass),
+    [numericRecoveredDryMass, numericPlantMass]
+  );
 
-  // Automatic Crude Extract Yield Calculation
-  const yieldResult = useMemo(() => {
-    return calculateExtractYield(numericRecoveredDryMass, numericPlantMass);
-  }, [numericRecoveredDryMass, numericPlantMass]);
-
-  // Numeric temperature parsing & scientific validation
-  const numericTemperature = useMemo(() => {
-    const raw = extraction.extractionTemperature || "";
-    const match = raw.match(/(-?\d+(\.\d+)?)/);
-    return match ? parseFloat(match[1]) : null;
-  }, [extraction.extractionTemperature]);
-
-  const temperatureValidationWarning = useMemo(() => {
-    if (numericTemperature === null) return null;
-    const m = (extraction.extractionMethod || "").toLowerCase();
-    const s = (extraction.extractionSolvent || "").toLowerCase();
-
-    if (m.includes("cold") && numericTemperature > 35) {
-      return "Cold maceration is compendially defined at controlled ambient temperature (15–25°C). Operating above 35°C accelerates thermal degradation of heat-sensitive flavonoids; consider reclassifying as Hot Maceration.";
-    }
-    if ((s.includes("ethanol") || s.includes("aqueous ethanol")) && numericTemperature > 78.3 && !m.includes("reflux") && !m.includes("soxhlet")) {
-      return "Atmospheric boiling point of ethanol is 78.3°C. Heating above this threshold requires a sealed reflux condenser or specialized pressurized vessel to avoid solvent loss and fire hazards.";
-    }
-    if (s.includes("distilled water") && numericTemperature > 100) {
-      return "Distilled water boils at 100°C under atmospheric pressure. Temperatures above 100°C require an autoclave or pressurized reactor.";
-    }
-    return null;
-  }, [numericTemperature, extraction.extractionMethod, extraction.extractionSolvent]);
-
-  // Auto-generate fraction ID if empty or default
   useEffect(() => {
-    if (!extraction.extractFractionName || extraction.extractFractionName.includes("Standardized Polyphenolic")) {
-      const generatedId = generateExtractFractionId(project.plantName, extraction.extractFractionName);
+    if (methodSelectValue === "Other" && extraction.extractionMethod) {
+      const isSimple = SIMPLE_METHODS.some(
+        (m) => m.label !== "Other" && m.match(extraction.extractionMethod)
+      );
+      if (!isSimple) setCustomMethod(extraction.extractionMethod);
+    }
+  }, [methodSelectValue, extraction.extractionMethod]);
+
+  useEffect(() => {
+    if (solventKey === "other" && extraction.extractionSolvent) {
+      setCustomSolvent(extraction.extractionSolvent);
+      setCustomConcentration(extraction.solventConcentration || "");
+    }
+  }, [solventKey, extraction.extractionSolvent, extraction.solventConcentration]);
+
+  useEffect(() => {
+    if (tempSelect === "custom" && extraction.extractionTemperature) {
+      setCustomTemperature(extraction.extractionTemperature);
+    }
+  }, [tempSelect, extraction.extractionTemperature]);
+
+  useEffect(() => {
+    if (durationSelect === "custom" && extraction.extractionDuration) {
+      setCustomDuration(extraction.extractionDuration);
+    }
+  }, [durationSelect, extraction.extractionDuration]);
+
+  // Auto-generate fraction ID for empty / default descriptive names
+  useEffect(() => {
+    if (readOnly) return;
+    if (fractionManual) return;
+    if (
+      !extraction.extractFractionName ||
+      extraction.extractFractionName.includes("Standardized Polyphenolic")
+    ) {
+      const generatedId = generateExtractFractionId(
+        project.plantName,
+        extraction.extractFractionName
+      );
       if (generatedId !== extraction.extractFractionName) {
-        onChange({
-          ...extraction,
-          extractFractionName: generatedId,
-        });
+        onChange({ ...extraction, extractFractionName: generatedId });
       }
     }
-  }, [project.plantName]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project.plantName, fractionManual]);
 
-  // Generic Field Change Handler
-  const handleFieldChange = (field: keyof ExtractionState, value: any) => {
-    setModifiedFields((prev) => ({ ...prev, [field]: true }));
-    setIsDirty(true);
-    onChange({
-      ...extraction,
-      [field]: value,
-    });
+  const handleFieldChange = (field: keyof ExtractionState, value: string) => {
+    if (readOnly) return;
+    if (field in modifiedFields) {
+      setModifiedFields((prev) => ({ ...prev, [field]: true }));
+    }
+    onChange({ ...extraction, [field]: value });
   };
 
-  // Plant Material Mass change
-  const handleMassChange = (newMassStr: string) => {
-    setModifiedFields((prev) => ({ ...prev, plantMaterialMass: true }));
-    setIsDirty(true);
+  const applyMethodPreset = (preset: ExtractionMethodPreset, overwrite = true) => {
+    if (readOnly) return;
+    setIsMethodDropdownOpen(false);
+    setPendingMethod(null);
 
-    const match = newMassStr.match(/(\d+(\.\d+)?)/);
-    const num = match ? parseFloat(match[1]) : 0;
-    const updatedYield = calculateExtractYield(numericRecoveredDryMass, num);
-    const updatedYieldStr =
-      updatedYield.yieldPercent !== null
-        ? `${updatedYield.yieldPercent}% w/w`
-        : numericRecoveredDryMass !== null
-        ? ""
-        : extraction.extractYieldPercent;
+    const next: ExtractionState = { ...extraction, extractionMethod: preset.name };
 
-    onChange({
-      ...extraction,
-      plantMaterialMass: newMassStr,
-      extractYieldPercent: updatedYieldStr,
-    });
+    if (overwrite || !modifiedFields.extractionSolvent) {
+      // Prefer simplified solvent mapping from preset defaults
+      if (preset.defaultSolvent === "Ethanol–Water" || preset.defaultSolvent === "Ethanol-Water") {
+        const conc = preset.defaultConcentration || "70%";
+        if (conc.startsWith("70")) {
+          next.extractionSolvent = "70% Ethanol / 30% USP Deionized Water";
+          next.solventConcentration = "70% v/v";
+        } else if (conc.startsWith("50")) {
+          next.extractionSolvent = "50% Ethanol / 50% Water";
+          next.solventConcentration = "50% v/v";
+        } else if (conc.startsWith("30")) {
+          next.extractionSolvent = "30% Ethanol / 70% Water";
+          next.solventConcentration = "30% v/v";
+        } else {
+          next.extractionSolvent = "70% Ethanol / 30% USP Deionized Water";
+          next.solventConcentration = "70% v/v";
+        }
+      } else if (preset.defaultSolvent === "Ethanol") {
+        next.extractionSolvent = "Ethanol";
+        next.solventConcentration = "100% v/v";
+      } else if (
+        preset.defaultSolvent === "Distilled Water" ||
+        /water/i.test(preset.defaultSolvent)
+      ) {
+        next.extractionSolvent = "Distilled Water";
+        next.solventConcentration = "0%";
+      } else {
+        next.extractionSolvent = preset.defaultSolvent;
+        next.solventConcentration = preset.defaultConcentration;
+      }
+    }
+
+    if (overwrite || !modifiedFields.solventRatio) {
+      const ratio = preset.defaultRatio || "1:10";
+      next.solventRatio = resolveRatioSelect(ratio);
+    }
+    if (overwrite || !modifiedFields.extractionTemperature) {
+      const t = preset.defaultTemperature;
+      next.extractionTemperature = (SIMPLE_TEMPERATURES as readonly number[]).includes(t)
+        ? `${t}°C`
+        : `${t}°C`;
+    }
+    if (overwrite || !modifiedFields.extractionDuration) {
+      const formatted = formatMethodDefaultDuration(preset);
+      const simple = SIMPLE_DURATIONS.find(
+        (d) => d.minutes === matchExtractionDurationPreset(formatted)?.minutes
+      );
+      next.extractionDuration = simple?.value || formatted;
+    }
+
+    if (overwrite) {
+      setModifiedFields({
+        extractionSolvent: false,
+        solventConcentration: false,
+        solventRatio: false,
+        extractionTemperature: false,
+        extractionDuration: false,
+        plantMaterialMass: modifiedFields.plantMaterialMass,
+      });
+    }
+
+    onChange(next);
   };
 
-  // Recovered Dry Mass change
-  const handleRecoveredDryMassChange = (newDryMassStr: string) => {
-    setModifiedFields((prev) => ({ ...prev, recoveredDryMass: true, extractYieldPercent: true }));
-    setIsDirty(true);
-
-    const cleanNum = newDryMassStr.trim();
-    const dryNum = cleanNum === "" ? null : parseFloat(cleanNum);
-    const updatedYield = calculateExtractYield(dryNum, numericPlantMass);
-    const updatedYieldStr = updatedYield.yieldPercent !== null ? `${updatedYield.yieldPercent}% w/w` : "";
-
-    onChange({
-      ...extraction,
-      recoveredDryMass: newDryMassStr,
-      extractYieldPercent: updatedYieldStr,
-    });
-  };
-
-  // Preset Selection with Overwrite Protection
-  const handleSelectMethodPreset = (preset: ExtractionMethodPreset) => {
-    const hasModifications =
-      modifiedFields.extractionSolvent ||
-      modifiedFields.solventRatio ||
-      modifiedFields.extractionTemperature ||
-      modifiedFields.extractionDuration;
-
-    if (hasModifications && extraction.extractionMethod !== preset.name) {
+  const handleSelectCatalogMethod = (preset: ExtractionMethodPreset) => {
+    if (readOnly) return;
+    const hasMods = Object.entries(modifiedFields).some(
+      ([k, v]) => v && k !== "plantMaterialMass"
+    );
+    if (hasMods && extraction.extractionMethod !== preset.name) {
       setPendingMethod(preset);
       return;
     }
-
-    applyMethodPreset(preset);
+    applyMethodPreset(preset, true);
   };
 
-  const applyMethodPreset = (preset: ExtractionMethodPreset) => {
-    setIsMethodDropdownOpen(false);
-    setPendingMethod(null);
-    setIsDirty(true);
-
-    const newExtraction: ExtractionState = {
-      ...extraction,
-      extractionMethod: preset.name,
-      extractionSolvent: preset.defaultSolvent,
-      solventConcentration: preset.defaultConcentration,
-      solventRatio: preset.defaultRatio,
-      extractionTemperature: `${preset.defaultTemperature}°C`,
-      extractionDuration: formatMethodDefaultDuration(preset),
-    };
-
-    setModifiedFields({
-      extractionMethod: false,
-      plantMaterialMass: modifiedFields.plantMaterialMass,
-      extractionSolvent: false,
-      solventConcentration: false,
-      solventRatio: false,
-      extractionTemperature: false,
-      extractionDuration: false,
-      extractYieldPercent: modifiedFields.extractYieldPercent,
-      extractFractionName: modifiedFields.extractFractionName,
-      recoveredDryMass: modifiedFields.recoveredDryMass,
-    });
-
-    onChange(newExtraction);
-  };
-
-  const handleRestorePresetDefaults = () => {
-    if (currentMethodPreset) {
-      applyMethodPreset(currentMethodPreset);
+  const handleSimpleMethodChange = (label: string) => {
+    if (readOnly) return;
+    if (label === "Other") {
+      handleFieldChange(
+        "extractionMethod",
+        customMethod.trim() || "Other / Custom"
+      );
+      return;
     }
+    const simple = SIMPLE_METHODS.find((m) => m.label === label);
+    const preset = EXTRACTION_METHODS.find((p) => p.id === simple?.presetId);
+    if (preset) handleSelectCatalogMethod(preset);
   };
 
-  // Linked literature IDs
-  const linkedLitIds = useMemo(() => {
-    const set = new Set<string>();
-    linkedLiterature.forEach((l) => {
-      if (l.scientificReferenceId) set.add(String(l.scientificReferenceId));
-      if (l.pubmedId) set.add(String(l.pubmedId));
-      if (l.title) set.add(String(l.title));
+  const handleSolventKeyChange = (key: string) => {
+    if (readOnly) return;
+    const opt = SIMPLE_SOLVENTS.find((s) => s.key === key);
+    if (!opt) return;
+    if (opt.key === "other") {
+      setModifiedFields((prev) => ({
+        ...prev,
+        extractionSolvent: true,
+        solventConcentration: true,
+      }));
+      onChange({
+        ...extraction,
+        extractionSolvent: customSolvent.trim() || "Other / Custom",
+        solventConcentration: customConcentration.trim() || "Custom",
+      });
+      return;
+    }
+    setModifiedFields((prev) => ({
+      ...prev,
+      extractionSolvent: true,
+      solventConcentration: true,
+    }));
+    onChange({
+      ...extraction,
+      extractionSolvent: opt.store,
+      solventConcentration: opt.concentration,
     });
-    return set;
-  }, [linkedLiterature]);
+  };
 
-  const filteredLitList = useMemo(() => {
-    if (!litSearch.trim()) return scientificLiterature;
-    const q = litSearch.toLowerCase();
-    return scientificLiterature.filter(
-      (l) =>
-        l.title.toLowerCase().includes(q) ||
-        (l.authors && l.authors.toLowerCase().includes(q)) ||
-        (l.journalOrPublisher && l.journalOrPublisher.toLowerCase().includes(q))
+  const handleMassChange = (raw: string) => {
+    if (readOnly) return;
+    const cleaned = raw.replace(/[^\d.]/g, "");
+    const n = cleaned === "" ? 0 : parseFloat(cleaned);
+    if (cleaned !== "" && (isNaN(n) || n < 0)) return;
+
+    setModifiedFields((prev) => ({ ...prev, plantMaterialMass: true }));
+    const massStr = cleaned === "" ? "" : `${cleaned} g`;
+    const updatedYield = calculateExtractYield(
+      numericRecoveredDryMass,
+      cleaned === "" ? 0 : n
     );
-  }, [scientificLiterature, litSearch]);
+    onChange({
+      ...extraction,
+      plantMaterialMass: massStr,
+      extractYieldPercent:
+        updatedYield.yieldPercent !== null
+          ? `${updatedYield.yieldPercent}% w/w`
+          : extraction.extractYieldPercent,
+    });
+  };
 
-  useEffect(() => {
-    setLitVisibleCount(6);
-  }, [litSearch]);
+  const handleRatioChange = (ratio: string) => {
+    if (readOnly) return;
+    setModifiedFields((prev) => ({ ...prev, solventRatio: true }));
+    onChange({ ...extraction, solventRatio: ratio });
+  };
 
-  const visibleLitList = filteredLitList.slice(0, litVisibleCount);
+  const handleTempChange = (value: string) => {
+    if (readOnly) return;
+    setModifiedFields((prev) => ({ ...prev, extractionTemperature: true }));
+    if (value === "custom") {
+      onChange({
+        ...extraction,
+        extractionTemperature: customTemperature.trim() || "Custom",
+      });
+      return;
+    }
+    onChange({ ...extraction, extractionTemperature: `${value}°C` });
+  };
 
-  const isConcentrationVisible = isSolventConcentrationMeaningful(extraction.extractionSolvent);
+  const handleDurationChange = (value: string) => {
+    if (readOnly) return;
+    setModifiedFields((prev) => ({ ...prev, extractionDuration: true }));
+    if (value === "custom") {
+      onChange({
+        ...extraction,
+        extractionDuration: customDuration.trim() || "Custom",
+      });
+      return;
+    }
+    onChange({ ...extraction, extractionDuration: value });
+  };
+
+  const handleRecoveredDryMassChange = (raw: string) => {
+    if (readOnly) return;
+    const cleaned = raw.replace(/[^\d.]/g, "");
+    const dryNum = cleaned === "" ? null : parseFloat(cleaned);
+    if (cleaned !== "" && (dryNum === null || isNaN(dryNum) || dryNum < 0)) return;
+
+    const updatedYield = calculateExtractYield(dryNum, numericPlantMass);
+    onChange({
+      ...extraction,
+      recoveredDryMass: cleaned,
+      extractYieldPercent:
+        updatedYield.yieldPercent !== null ? `${updatedYield.yieldPercent}% w/w` : "",
+    });
+  };
+
+  const concentrationEditable = solventKey === "other";
 
   return (
     <div className="space-y-4">
-      {/* Compact status strip — step chrome lives in parent workspace header */}
-      <motion.div
+      {/* 1. Extraction Method */}
+      <motion.section
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.28 }}
-        className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[#d7e4dc]/90 bg-white px-4 py-2.5 shadow-[0_1px_2px_rgba(15,44,32,0.04)]"
+        transition={{ duration: 0.28, ease: easeOut }}
+        className="rounded-2xl border border-[#d7e4dc]/90 bg-white p-4 shadow-[0_1px_2px_rgba(15,44,32,0.04)]"
       >
-        <div className="flex items-center gap-2 text-[11px] text-[#6d7f76]">
-          <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-800">
-            <Beaker className="h-3.5 w-3.5" />
-          </span>
-          <span className="font-semibold text-[#0f2c20]">Extraction Methodology &amp; Yield</span>
-          {currentMethodPreset && (
-            <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-900">
-              {currentMethodPreset.typicalYieldRange} typical
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-800">
+              <Beaker className="h-3.5 w-3.5" />
             </span>
-          )}
-        </div>
-        <div className="flex items-center gap-2 text-[11px] font-semibold">
-          {isSaving ? (
-            <span className="inline-flex items-center gap-1 text-amber-700">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
-              Saving...
-            </span>
-          ) : isDirty ? (
-            <span className="inline-flex items-center gap-1 text-amber-700">
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-              Unsaved
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1 text-emerald-800">
-              <Check className="h-3.5 w-3.5" />
-              Saved
-            </span>
-          )}
-          {currentMethodPreset && (
+            <h3 className="text-sm font-bold tracking-tight text-[#0f2c20]">
+              Extraction Method
+            </h3>
+          </div>
+          {!readOnly && (
+          <div className="relative" ref={methodDropdownRef}>
             <button
               type="button"
-              onClick={handleRestorePresetDefaults}
-              className="inline-flex items-center gap-1 rounded-xl border border-[#d7e4dc] bg-[#f7faf8] px-2.5 py-1 text-[11px] font-semibold text-[#52645d] hover:border-emerald-400 hover:bg-emerald-50"
+              onClick={() => setIsMethodDropdownOpen((v) => !v)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[#d7e4dc] bg-[#f7faf8] px-2.5 py-1.5 text-[11px] font-semibold text-emerald-900 hover:bg-emerald-50"
             >
-              <RotateCcw className="h-3 w-3" />
-              Reset Defaults
+              <Search className="h-3 w-3" />
+              Browse All ({EXTRACTION_METHODS.length})
+              <ChevronDown
+                className={`h-3 w-3 transition ${isMethodDropdownOpen ? "rotate-180" : ""}`}
+              />
             </button>
-          )}
-        </div>
-      </motion.div>
-
-      {/* ===================================================================== */}
-      {/* 2. EXTRACTION METHOD SELECTOR (SEARCHABLE DROPDOWN & PRESET ADVISORY)  */}
-      {/* ===================================================================== */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.04 }}
-        className="space-y-3 rounded-2xl border border-[#d7e4dc]/90 bg-white p-4 shadow-[0_1px_2px_rgba(15,44,32,0.04)] sm:p-5"
-      >
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <label className="block font-bold text-slate-800 text-xs sm:text-sm">
-              Extraction Method / Technique <span className="text-rose-500">*</span>
-            </label>
-            <p className="text-[11px] text-slate-500">
-              Select standardized extraction protocol or configure custom experimental parameters.
-            </p>
-          </div>
-
-          {currentMethodPreset && (
-            <span className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-800">
-              <Sparkles className="h-3 w-3 text-emerald-600" />
-              {currentMethodPreset.typicalYieldRange} typical yield
-            </span>
-          )}
-        </div>
-
-        {/* Searchable Method Dropdown */}
-        <div className="relative" ref={methodDropdownRef}>
-          <button
-            type="button"
-            onClick={() => setIsMethodDropdownOpen(!isMethodDropdownOpen)}
-            className="w-full flex items-center justify-between px-3 py-2 rounded-lg border border-slate-300 bg-white hover:border-slate-400 text-left text-xs sm:text-sm font-semibold text-slate-800 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 cursor-pointer shadow-2xs"
-          >
-            <div className="flex items-center gap-2 truncate">
-              <FlaskConical className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span className="truncate">{extraction.extractionMethod || "Select Extraction Method..."}</span>
-            </div>
-            <ChevronDown className="w-4 h-4 text-slate-400 shrink-0 ml-2" />
-          </button>
-
-          {isMethodDropdownOpen && (
-            <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl border border-slate-200 shadow-xl z-30 overflow-hidden max-h-80 flex flex-col animate-in fade-in zoom-in-95 duration-100">
-              <div className="p-2 border-b border-slate-100 bg-slate-50/70">
-                <div className="relative">
-                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
-                  <input
-                    type="text"
-                    value={methodSearch}
-                    onChange={(e) => setMethodSearch(e.target.value)}
-                    placeholder="Search extraction techniques (e.g. UAE, Maceration, Soxhlet)..."
-                    className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:border-emerald-500"
-                    autoFocus
-                  />
-                </div>
-              </div>
-
-              <div className="overflow-y-auto divide-y divide-slate-100">
-                {filteredMethods.map((preset) => {
-                  const isSelected =
-                    currentMethodPreset?.id === preset.id ||
-                    Boolean(extraction.extractionMethod && extraction.extractionMethod.toLowerCase().includes(preset.name.toLowerCase()));
-
-                  return (
-                    <button
-                      key={preset.id}
-                      type="button"
-                      onClick={() => handleSelectMethodPreset(preset)}
-                      className={`w-full p-2.5 text-left transition-colors flex items-start justify-between gap-3 cursor-pointer ${
-                        isSelected ? "bg-emerald-50/70" : "hover:bg-slate-50"
-                      }`}
-                    >
-                      <div className="space-y-0.5">
-                        <div className="flex items-center gap-2">
-                          <span className={`text-xs font-bold ${isSelected ? "text-emerald-900" : "text-slate-800"}`}>
-                            {preset.name}
-                          </span>
-                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 font-medium">
-                            {preset.defaultTemperature}°C • {formatMethodDefaultDuration(preset)}
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-slate-500 line-clamp-1">{preset.description}</p>
-                      </div>
-
-                      {isSelected && <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Method Principle & Scientific Advisory Note */}
-        {currentMethodPreset && (
-          <div className="space-y-1 rounded-xl border border-[#e8f0eb] bg-[linear-gradient(145deg,#f4f8f5_0%,#ffffff_55%)] p-3 text-xs text-[#52645d]">
-            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[#0f2c20]">
-              <Info className="h-3.5 w-3.5 text-emerald-700" />
-              <span>Scientific Mechanism</span>
-            </div>
-            <p className="text-[11px] leading-relaxed text-[#52645d]">{currentMethodPreset.principles}</p>
-            <p className="pt-1 text-[10px] italic text-[#8aa094]">
-              Operating parameters below are literature-derived suggestions and must be verified experimentally.
-            </p>
-          </div>
-        )}
-      </motion.div>
-
-      {/* ===================================================================== */}
-      {/* 3. TWO-COLUMN PARAMETER FIELDS (SOLVENT, RATIO, CONDITIONS, YIELD)    */}
-      {/* ===================================================================== */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {/* COLUMN 1: SOLVENT SYSTEM & MATERIAL RATIO */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.08 }}
-          className="space-y-3.5 rounded-2xl border border-[#d7e4dc]/90 bg-white p-4 shadow-[0_1px_2px_rgba(15,44,32,0.04)] sm:p-5"
-        >
-          <div className="flex items-center gap-2 border-b border-[#e8f0eb] pb-2">
-            <FlaskConical className="h-4 w-4 text-emerald-700" />
-            <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#52645d]">
-              Menstruum &amp; Solvent Ratio
-            </h2>
-          </div>
-
-          {/* Solvent System Searchable Dropdown */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="block font-semibold text-slate-700 text-xs">
-                Extraction Solvent System <span className="text-rose-500">*</span>
-              </label>
-              {currentSolventSpec && (
-                <span
-                  className={`text-[10px] px-1.5 py-0.2 rounded font-semibold ${
-                    currentSolventSpec.safetyClass.includes("Class 3") || currentSolventSpec.safetyClass.includes("GRAS")
-                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                      : "bg-amber-50 text-amber-800 border border-amber-200"
-                  }`}
+            <AnimatePresence>
+              {isMethodDropdownOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  className="absolute right-0 z-40 mt-1.5 w-72 space-y-2 rounded-xl border border-[#d7e4dc] bg-white p-2.5 shadow-xl sm:w-80"
                 >
-                  {currentSolventSpec.safetyClass}
-                </span>
-              )}
-            </div>
-
-            <div className="relative" ref={solventDropdownRef}>
-              <button
-                type="button"
-                onClick={() => setIsSolventDropdownOpen(!isSolventDropdownOpen)}
-                className="w-full flex items-center justify-between px-3 py-2 rounded-lg border border-slate-300 bg-white hover:border-slate-400 text-left text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 cursor-pointer shadow-2xs"
-              >
-                <span className="truncate">{extraction.extractionSolvent || "Select Solvent System..."}</span>
-                <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0 ml-1.5" />
-              </button>
-
-              {isSolventDropdownOpen && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl border border-slate-200 shadow-xl z-30 overflow-hidden max-h-72 flex flex-col animate-in fade-in zoom-in-95 duration-100">
-                  <div className="p-2 border-b border-slate-100 bg-slate-50">
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#8aa094]" />
                     <input
                       type="text"
-                      value={solventSearch}
-                      onChange={(e) => setSolventSearch(e.target.value)}
-                      placeholder="Search solvents..."
-                      className="w-full px-2.5 py-1 text-xs rounded-md border border-slate-200 bg-white focus:outline-none focus:border-emerald-500"
+                      placeholder="Search method..."
+                      value={methodSearch}
+                      onChange={(e) => setMethodSearch(e.target.value)}
+                      className="h-8 w-full rounded-lg border border-[#d5e3da] bg-[#fbfdfb] pl-8 pr-2 text-xs outline-none focus:border-emerald-600"
                       autoFocus
                     />
                   </div>
-
-                  <div className="overflow-y-auto divide-y divide-slate-100">
-                    {filteredSolvents.map((sol) => (
-                      <button
-                        key={sol.id}
-                        type="button"
-                        onClick={() => {
-                          handleFieldChange("extractionSolvent", sol.name);
-                          setIsSolventDropdownOpen(false);
-                          if (!sol.isConcentrationMeaningful) {
-                            handleFieldChange("solventConcentration", sol.defaultConcentrations[0] || "100%");
-                          }
-                        }}
-                        className={`w-full p-2 text-left text-xs transition-colors flex items-center justify-between cursor-pointer ${
-                          extraction.extractionSolvent === sol.name ? "bg-emerald-50 text-emerald-900 font-bold" : "hover:bg-slate-50 text-slate-700"
-                        }`}
-                      >
-                        <div className="space-y-0.5">
-                          <span className="font-semibold block">{sol.name}</span>
-                          <span className="text-[10px] text-slate-400 block">
-                            BP: {sol.boilingPoint} • {sol.safetyClass}
+                  <div className="max-h-60 space-y-0.5 overflow-y-auto">
+                    {filteredMethods.map((preset) => {
+                      const isCurrent =
+                        extraction.extractionMethod?.toLowerCase() ===
+                          preset.name.toLowerCase() ||
+                        resolveMethodSelect(extraction.extractionMethod || "") ===
+                          SIMPLE_METHODS.find((m) => m.presetId === preset.id)?.label;
+                      return (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          onClick={() => handleSelectCatalogMethod(preset)}
+                          className={`flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-xs transition ${
+                            isCurrent
+                              ? "bg-emerald-50 font-semibold text-emerald-950"
+                              : "text-[#52645d] hover:bg-[#f4f8f5]"
+                          }`}
+                        >
+                          <span className="flex min-w-0 items-center gap-1.5">
+                            <FlaskConical className="h-3.5 w-3.5 shrink-0 text-emerald-700" />
+                            <span className="truncate">{preset.name}</span>
                           </span>
-                        </div>
-                        {extraction.extractionSolvent === sol.name && <Check className="w-3.5 h-3.5 text-emerald-600" />}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Incompatibility / Toxicity warnings */}
-            {compatibilityResult.warnings.length > 0 && (
-              <div className="p-2 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-[11px] flex items-start gap-1.5">
-                <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0 mt-0.5" />
-                <div className="space-y-0.5">
-                  <span className="font-bold block">Incompatibility Alert:</span>
-                  {compatibilityResult.warnings.map((w: string, idx: number) => (
-                    <p key={idx}>{w}</p>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {compatibilityResult.cautions.length > 0 && (
-              <div className="p-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-[11px] flex items-start gap-1.5">
-                <ShieldAlert className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
-                <div className="space-y-0.5">
-                  <span className="font-bold block">Safety Consideration:</span>
-                  {compatibilityResult.cautions.map((c: string, idx: number) => (
-                    <p key={idx}>{c}</p>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Solvent Concentration (Shown conditionally when meaningful) */}
-          {isConcentrationVisible && (
-            <div className="space-y-1.5">
-              <label className="block font-semibold text-slate-700 text-xs">
-                Solvent Concentration (% v/v)
-              </label>
-
-              <div className="flex items-center gap-2">
-                <div className="relative flex-1" ref={concDropdownRef}>
-                  <button
-                    type="button"
-                    onClick={() => setIsConcDropdownOpen(!isConcDropdownOpen)}
-                    className="w-full flex items-center justify-between px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-slate-800 cursor-pointer shadow-2xs"
-                  >
-                    <span>{extraction.solventConcentration || "Select Concentration..."}</span>
-                    <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
-                  </button>
-
-                  {isConcDropdownOpen && (
-                    <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-lg border border-slate-200 shadow-lg z-30 py-1">
-                      {SOLVENT_CONCENTRATION_OPTIONS.map((opt) => (
-                        <button
-                          key={opt}
-                          type="button"
-                          onClick={() => {
-                            if (opt === "Custom") {
-                              handleFieldChange("solventConcentration", "Custom % v/v");
-                            } else {
-                              handleFieldChange("solventConcentration", opt);
-                            }
-                            setIsConcDropdownOpen(false);
-                          }}
-                          className={`w-full px-3 py-1.5 text-left text-xs transition-colors flex items-center justify-between cursor-pointer ${
-                            extraction.solventConcentration === opt ? "bg-emerald-50 text-emerald-800 font-bold" : "hover:bg-slate-50 text-slate-700"
-                          }`}
-                        >
-                          <span>{opt}</span>
-                          {extraction.solventConcentration === opt && <Check className="w-3 h-3 text-emerald-600" />}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {Boolean(extraction.solventConcentration && extraction.solventConcentration.toLowerCase().includes("custom")) && (
-                  <input
-                    type="text"
-                    value={extraction.solventConcentration}
-                    onChange={(e) => handleFieldChange("solventConcentration", e.target.value)}
-                    placeholder="e.g. 65% v/v"
-                    className="w-28 px-2 py-1.5 rounded-lg border border-slate-300 text-xs font-mono"
-                  />
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Plant Starting Mass & Ratio Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-            <div className="space-y-1">
-              <label className="block font-semibold text-slate-700 text-xs">
-                Plant Starting Mass (g) <span className="text-rose-500">*</span>
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={extraction.plantMaterialMass}
-                  onChange={(e) => handleMassChange(e.target.value)}
-                  placeholder="100.0"
-                  className="w-full px-3 py-1.5 rounded-lg border border-slate-300 font-mono text-xs focus:outline-none focus:border-emerald-500"
-                />
-              </div>
-              <span className="text-[10px] text-slate-400">Dry milled botanical powder</span>
-            </div>
-
-            <div className="space-y-1">
-              <label className="block font-semibold text-slate-700 text-xs">
-                Solvent Ratio (mL/g) <span className="text-rose-500">*</span>
-              </label>
-              <div className="relative" ref={ratioDropdownRef}>
-                <button
-                  type="button"
-                  onClick={() => setIsRatioDropdownOpen(!isRatioDropdownOpen)}
-                  className="w-full flex items-center justify-between px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-slate-800 cursor-pointer shadow-2xs"
-                >
-                  <span className="truncate">
-                    {currentRatioPreset
-                      ? currentRatioPreset.label
-                      : extraction.solventRatio
-                      ? (isCustomRatio ? `Custom (${extraction.solventRatio})` : extraction.solventRatio)
-                      : "1:10 (w/v)"}
-                  </span>
-                  <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                </button>
-
-                {isRatioDropdownOpen && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-lg border border-slate-200 shadow-xl z-30 py-1 max-h-64 overflow-y-auto">
-                    {SOLVENT_RATIO_PRESETS.map((preset) => {
-                      const isSelected =
-                        currentRatioPreset?.id === preset.id ||
-                        extraction.solventRatio === preset.ratioText ||
-                        extraction.solventRatio === preset.label;
-
-                      return (
-                        <button
-                          key={preset.id}
-                          type="button"
-                          onClick={() => {
-                            handleFieldChange("solventRatio", preset.ratioText);
-                            setIsRatioDropdownOpen(false);
-                          }}
-                          className={`w-full px-3 py-1.5 text-left text-xs transition-colors flex items-center justify-between cursor-pointer ${
-                            isSelected ? "bg-emerald-50 text-emerald-800 font-bold" : "hover:bg-slate-50 text-slate-700"
-                          }`}
-                        >
-                          <div>
-                            <span className="font-semibold block">{preset.label}</span>
-                            <span className="text-[10px] text-slate-400 block">{preset.description}</span>
-                          </div>
-                          {isSelected && <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />}
+                          {isCurrent && <Check className="h-3.5 w-3.5 text-emerald-600" />}
                         </button>
                       );
                     })}
-
-                    <div className="border-t border-slate-100 my-1" />
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        handleFieldChange("solventRatio", "Custom");
-                        setIsRatioDropdownOpen(false);
-                      }}
-                      className={`w-full px-3 py-1.5 text-left text-xs transition-colors flex items-center justify-between cursor-pointer ${
-                        isCustomRatio ? "bg-emerald-50 text-emerald-800 font-bold" : "hover:bg-slate-50 text-slate-700"
-                      }`}
-                    >
-                      <div>
-                        <span className="font-semibold block">Custom Ratio</span>
-                        <span className="text-[10px] text-slate-400 block">Specify custom menstruum proportion</span>
-                      </div>
-                      {isCustomRatio && <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />}
-                    </button>
                   </div>
-                )}
-              </div>
-
-              {isCustomRatio && (
-                <div className="mt-1 flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={extraction.solventRatio === "Custom" ? "" : extraction.solventRatio}
-                    onChange={(e) => handleFieldChange("solventRatio", e.target.value)}
-                    placeholder="e.g. 1:12 or 12 mL/g"
-                    className="w-full px-2.5 py-1 rounded-lg border border-slate-300 text-xs font-mono focus:outline-none focus:border-emerald-500"
-                  />
-                  <span className="text-[10px] text-slate-400 font-mono shrink-0">mL/g</span>
-                </div>
+                </motion.div>
               )}
-
-              <span className="text-[10px] text-slate-400">mL menstruum per g dry plant</span>
-            </div>
+            </AnimatePresence>
           </div>
-
-          {/* Automatic Solvent Volume Calculation Card */}
-          <div
-            className={`p-3 rounded-lg border flex items-center justify-between gap-3 shadow-2xs transition-colors ${
-              volumeResult.isValid ? "bg-emerald-50/60 border-emerald-200/80" : "bg-amber-50/70 border-amber-200/80"
-            }`}
-          >
-            <div className="flex items-center gap-2 min-w-0">
-              <Calculator
-                className={`w-4 h-4 shrink-0 ${volumeResult.isValid ? "text-emerald-700" : "text-amber-700"}`}
-              />
-              <div className="min-w-0">
-                <span
-                  className={`text-[10px] font-bold uppercase tracking-wider block ${
-                    volumeResult.isValid ? "text-emerald-800" : "text-amber-800"
-                  }`}
-                >
-                  Calculated Menstruum Volume
-                </span>
-                {volumeResult.isValid ? (
-                  <span className="text-xs text-emerald-700 font-mono truncate block">
-                    {volumeResult.startingMassGrams.toLocaleString()} g × {volumeResult.ratioMlPerG} mL/g ({volumeResult.formattedRatio} w/v)
-                  </span>
-                ) : (
-                  <span className="text-xs text-amber-700 font-medium truncate block">
-                    {volumeResult.error || "Please enter valid starting mass and ratio"}
-                  </span>
-                )}
-              </div>
-            </div>
-
-            <div className="text-right shrink-0">
-              <span
-                className={`text-sm sm:text-base font-black font-mono block ${
-                  volumeResult.isValid ? "text-emerald-900" : "text-amber-900"
-                }`}
-              >
-                {volumeResult.volumeMl.toLocaleString()} mL
-              </span>
-              <span
-                className={`text-[10px] font-medium ${
-                  volumeResult.isValid ? "text-emerald-700" : "text-amber-700"
-                }`}
-              >
-                ({volumeResult.volumeLiters.toFixed(2)} L)
-              </span>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* COLUMN 2: OPERATING CONDITIONS & YIELD VALIDATION */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.12 }}
-          className="space-y-3.5 rounded-2xl border border-[#d7e4dc]/90 bg-white p-4 shadow-[0_1px_2px_rgba(15,44,32,0.04)] sm:p-5"
-        >
-          <div className="flex items-center gap-2 border-b border-[#e8f0eb] pb-2">
-            <Scale className="h-4 w-4 text-teal-700" />
-            <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#52645d]">
-              Operating Parameters &amp; Yield
-            </h2>
-          </div>
-
-          {/* Operating Temp & Duration Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="block font-semibold text-slate-700 text-xs">
-                Operating Temperature (°C) <span className="text-rose-500">*</span>
-              </label>
-              <div className="relative">
-                <Thermometer className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
-                <input
-                  type="text"
-                  value={extraction.extractionTemperature}
-                  onChange={(e) => handleFieldChange("extractionTemperature", e.target.value)}
-                  placeholder="e.g. 25°C"
-                  className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-slate-300 text-xs font-mono focus:outline-none focus:border-emerald-500"
-                />
-              </div>
-              <span className="text-[10px] text-slate-400">Controlled bath or vessel temperature</span>
-            </div>
-
-            <div className="space-y-1">
-              <label className="block font-semibold text-slate-700 text-xs">
-                Extraction Duration <span className="text-rose-500">*</span>
-              </label>
-              <div className="relative" ref={durationDropdownRef}>
-                <button
-                  type="button"
-                  onClick={() => setIsDurationDropdownOpen(!isDurationDropdownOpen)}
-                  className="w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-slate-800 cursor-pointer shadow-2xs"
-                >
-                  <span className="flex min-w-0 items-center gap-2">
-                    <Clock className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                    <span className="truncate font-mono">
-                      {currentDurationPreset
-                        ? currentDurationPreset.label
-                        : extraction.extractionDuration
-                          ? isCustomDuration
-                            ? `Custom (${extraction.extractionDuration})`
-                            : extraction.extractionDuration
-                          : "Select duration"}
-                    </span>
-                  </span>
-                  <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                </button>
-
-                {isDurationDropdownOpen && (
-                  <div className="absolute top-full left-0 right-0 z-30 mt-1 max-h-64 overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-xl">
-                    {EXTRACTION_DURATION_PRESETS.map((preset) => {
-                      const isSelected = currentDurationPreset?.id === preset.id;
-                      return (
-                        <button
-                          key={preset.id}
-                          type="button"
-                          onClick={() => {
-                            handleFieldChange("extractionDuration", preset.value);
-                            setIsDurationDropdownOpen(false);
-                          }}
-                          className={`flex w-full cursor-pointer items-center justify-between px-3 py-1.5 text-left text-xs transition-colors ${
-                            isSelected
-                              ? "bg-emerald-50 font-bold text-emerald-800"
-                              : "text-slate-700 hover:bg-slate-50"
-                          }`}
-                        >
-                          <div>
-                            <span className="block font-semibold font-mono">{preset.label}</span>
-                            <span className="block text-[10px] font-normal text-slate-400">
-                              {preset.description}
-                            </span>
-                          </div>
-                          {isSelected && (
-                            <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
-                          )}
-                        </button>
-                      );
-                    })}
-
-                    <div className="my-1 border-t border-slate-100" />
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        handleFieldChange(
-                          "extractionDuration",
-                          isCustomDuration && extraction.extractionDuration
-                            ? extraction.extractionDuration
-                            : "Custom"
-                        );
-                        setIsDurationDropdownOpen(false);
-                      }}
-                      className={`flex w-full cursor-pointer items-center justify-between px-3 py-1.5 text-left text-xs transition-colors ${
-                        isCustomDuration
-                          ? "bg-emerald-50 font-bold text-emerald-800"
-                          : "text-slate-700 hover:bg-slate-50"
-                      }`}
-                    >
-                      <div>
-                        <span className="block font-semibold">Custom Duration</span>
-                        <span className="block text-[10px] font-normal text-slate-400">
-                          Specify experimental contact time
-                        </span>
-                      </div>
-                      {isCustomDuration && (
-                        <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
-                      )}
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {isCustomDuration && (
-                <div className="mt-1 flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={
-                      extraction.extractionDuration === "Custom"
-                        ? ""
-                        : extraction.extractionDuration ?? ""
-                    }
-                    onChange={(e) => handleFieldChange("extractionDuration", e.target.value)}
-                    placeholder="e.g. 90 minutes or 3 hours"
-                    className="w-full rounded-lg border border-slate-300 px-2.5 py-1 font-mono text-xs focus:border-emerald-500 focus:outline-none"
-                  />
-                  <span className="shrink-0 font-mono text-[10px] text-slate-400">time</span>
-                </div>
-              )}
-
-              <span className="text-[10px] text-slate-400">Total contact / cavitation duration</span>
-            </div>
-          </div>
-
-          {/* Temperature Validation Warning */}
-          {temperatureValidationWarning && (
-            <div className="p-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-[11px] flex items-start gap-1.5">
-              <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
-              <span>{temperatureValidationWarning}</span>
-            </div>
           )}
-
-          {/* Recovered Dry Extract Mass Input */}
-          <div className="space-y-1 pt-1">
-            <div className="flex items-center justify-between">
-              <label className="block font-semibold text-slate-700 text-xs">
-                Recovered Dry Extract Mass (g)
-              </label>
-              <span className="text-[10px] text-slate-400 font-medium">Rotary evaporated dry residue</span>
-            </div>
-
-            <div className="relative">
-              <Scale className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
-              <input
-                type="text"
-                value={extraction.recoveredDryMass || ""}
-                onChange={(e) => handleRecoveredDryMassChange(e.target.value)}
-                placeholder="Enter measured dry extract mass (e.g. 14.2)"
-                className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-slate-300 text-xs font-mono focus:outline-none focus:border-emerald-500"
-              />
-            </div>
-            <p className="text-[10px] text-slate-400">
-              * Must be weighed after complete solvent removal (lyophilization / rotary evaporation). Do not enter wet mass.
-            </p>
-          </div>
-
-          {/* Automatic Yield Calculation Card */}
-          <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 space-y-1.5">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
-                Crude Extract Yield (% w/w)
-              </span>
-              <span className="text-[10px] text-slate-400 font-mono">
-                (Recovered Dry Mass ÷ Starting Mass) × 100
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between">
-              {yieldResult.yieldPercent !== null ? (
-                <div className="flex items-center gap-2">
-                  <span className={`text-base sm:text-lg font-black font-mono ${yieldResult.isValid ? "text-emerald-700" : "text-rose-600"}`}>
-                    {yieldResult.yieldPercent}% w/w
-                  </span>
-                  {yieldResult.isValid && currentMethodPreset && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100/70 text-emerald-800 font-medium">
-                      Baseline: {currentMethodPreset.typicalYieldRange}
-                    </span>
-                  )}
-                </div>
-              ) : (
-                <div className="flex items-center gap-1.5 text-xs text-slate-400 italic">
-                  <Clock className="w-3.5 h-3.5" />
-                  <span>Pending measurement (enter recovered dry mass above)</span>
-                </div>
-              )}
-
-              <input
-                type="hidden"
-                value={extraction.extractYieldPercent}
-              />
-            </div>
-
-            {/* Error or validation alert */}
-            {yieldResult.error && (
-              <div className="p-2 rounded bg-rose-50 border border-rose-200 text-rose-700 text-[11px] flex items-start gap-1">
-                <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0 mt-0.5" />
-                <span>{yieldResult.error}</span>
-              </div>
-            )}
-          </div>
-
-          {/* Standardized Extract Fraction Identifier */}
-          <div className="space-y-1 pt-1">
-            <div className="flex items-center justify-between">
-              <label className="block font-semibold text-slate-700 text-xs">
-                Extract Fraction Identifier <span className="text-rose-500">*</span>
-              </label>
-              <span className="text-[10px] font-mono text-emerald-700">Project Lot Standard</span>
-            </div>
-            <input
-              type="text"
-              value={extraction.extractFractionName}
-              onChange={(e) => handleFieldChange("extractFractionName", e.target.value)}
-              placeholder="e.g. AKP-EXT-001"
-              className="w-full px-3 py-1.5 rounded-lg border border-slate-300 font-mono text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-500"
-            />
-            <span className="text-[10px] text-[#8aa094]">
-              Unique standardized extract accession ID carried forward to materials compounding.
-            </span>
-          </div>
-        </motion.div>
-      </div>
-
-      {/* ===================================================================== */}
-      {/* 4. SUPPORTING SCIENTIFIC REFERENCES (VISIBLE DIRECTLY ON PAGE)         */}
-      {/* ===================================================================== */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.16 }}
-        className="space-y-3 rounded-2xl border border-[#d7e4dc]/90 bg-white p-4 shadow-[0_1px_2px_rgba(15,44,32,0.04)] sm:p-5"
-      >
-        <div className="flex flex-col gap-2 border-b border-[#e8f0eb] pb-2.5 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="flex items-center gap-2">
-              <BookOpen className="h-4 w-4 text-emerald-700" />
-              <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#52645d]">
-                Supporting Extraction Literature
-              </h2>
-            </div>
-            <p className="mt-0.5 text-[11px] text-[#8aa094]">
-              {scientificLiterature.length} references · showing {visibleLitList.length} of{" "}
-              {filteredLitList.length}
-            </p>
-          </div>
-
-          <div className="relative sm:w-64">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#8aa094]" />
-            <input
-              type="text"
-              value={litSearch}
-              onChange={(e) => setLitSearch(e.target.value)}
-              placeholder="Filter references..."
-              className="h-9 w-full rounded-xl border border-[#d5e3da] bg-[#fbfdfb] pl-8 pr-2.5 text-xs outline-none focus:border-emerald-600"
-            />
-          </div>
         </div>
 
-        {visibleLitList.length > 0 ? (
-          <div className="space-y-2">
-            {visibleLitList.map((lit) => (
-              <div
-                key={lit.id}
-                className="flex items-start justify-between gap-3 rounded-xl border border-[#e8f0eb] bg-[linear-gradient(180deg,#ffffff_0%,#fbfdfb_100%)] p-3 transition hover:border-emerald-300"
-              >
-                <div className="min-w-0 space-y-0.5">
-                  <p className="line-clamp-2 text-xs font-semibold leading-snug text-[#0f2c20]">
-                    {lit.title}
-                  </p>
-                  <div className="flex flex-wrap items-center gap-2 text-[10px] text-[#8aa094]">
-                    <span>{lit.authors || "Botanical Research Group"}</span>
-                    <span>·</span>
-                    <span>{lit.journalOrPublisher || "Scientific Source"}</span>
-                    {lit.publicationYear && (
-                      <>
-                        <span>·</span>
-                        <span>{lit.publicationYear}</span>
-                      </>
-                    )}
-                    {lit.doi && (
-                      <a
-                        href={`https://doi.org/${lit.doi}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-0.5 font-semibold text-emerald-800 hover:underline"
-                      >
-                        DOI
-                        <ExternalLink className="h-2.5 w-2.5" />
-                      </a>
-                    )}
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setSelectedLitModal(lit)}
-                  className="inline-flex shrink-0 items-center gap-0.5 text-[11px] font-semibold text-emerald-800 hover:underline"
-                >
-                  Details
-                  <ChevronRight className="h-3 w-3" />
-                </button>
-              </div>
-            ))}
-            {litVisibleCount < filteredLitList.length && (
-              <button
-                type="button"
-                onClick={() => setLitVisibleCount((n) => n + 6)}
-                className="w-full rounded-xl border border-[#d7e4dc] bg-[#f7faf8] py-2.5 text-xs font-semibold text-[#0f2c20] hover:border-emerald-400 hover:bg-emerald-50"
-              >
-                Show more ({filteredLitList.length - litVisibleCount} remaining)
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="rounded-xl border border-dashed border-[#d7e4dc] bg-[#f7faf8] p-6 text-center text-xs text-[#8aa094]">
-            No scientific references found matching &ldquo;{litSearch}&rdquo;.
-          </div>
-        )}
-
-        <div className="border-t border-[#e8f0eb] pt-3">
-          <label className="mb-1.5 block text-[11px] font-semibold text-[#52645d]">
-            Compendial Reference Summary Note
-          </label>
+        <label className="mb-1 block text-[11px] font-semibold text-[#52645d]">
+          Extraction Method / Technique <span className="text-rose-500">*</span>
+        </label>
+        <select
+          value={methodSelectValue}
+          onChange={(e) => handleSimpleMethodChange(e.target.value)}
+          className={selectFieldClass}
+          disabled={readOnly}
+        >
+          {SIMPLE_METHODS.map((m) => (
+            <option key={m.label} value={m.label}>
+              {m.label}
+            </option>
+          ))}
+        </select>
+        {methodSelectValue === "Other" && !readOnly && (
           <input
             type="text"
-            value={extraction.extractionReferences ?? ""}
-            onChange={(e) => handleFieldChange("extractionReferences", e.target.value)}
-            placeholder="e.g. Philippine Herbal Pharmacopeia (2024); WHO Guidelines on Good Agricultural and Collection Practices (GACP)."
-            className="h-10 w-full rounded-xl border border-[#d5e3da] bg-[#fbfdfb] px-3 text-xs text-[#0f2c20] outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15"
+            placeholder="Custom extraction method..."
+            value={customMethod}
+            onChange={(e) => {
+              setCustomMethod(e.target.value);
+              handleFieldChange(
+                "extractionMethod",
+                e.target.value || "Other / Custom"
+              );
+            }}
+            className={`mt-1.5 ${fieldClass}`}
           />
-        </div>
-      </motion.div>
+        )}
+      </motion.section>
 
-      {/* ===================================================================== */}
-      {/* 5. OVERWRITE CONFIRMATION MODAL                                       */}
-      {/* ===================================================================== */}
-      {pendingMethod && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-md p-5 space-y-4 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-start gap-3">
-              <div className="w-9 h-9 rounded-xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center shrink-0">
-                <AlertTriangle className="w-5 h-5" />
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-sm font-bold text-slate-900">
-                  Update Extraction Parameters to {pendingMethod.name}?
-                </h3>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  You have customized existing solvent, temperature, ratio, or duration parameters. Selecting this preset will update operating suggestions to the standard catalog defaults for {pendingMethod.name}.
+      <AnimatePresence>
+        {pendingMethod && !readOnly && (
+          <motion.div
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" />
+                <p className="text-amber-950">
+                  Apply <strong>{pendingMethod.name}</strong> defaults, or keep your parameter edits?
                 </p>
               </div>
+              <button type="button" onClick={() => setPendingMethod(null)}>
+                <X className="h-3.5 w-3.5 text-amber-700" />
+              </button>
             </div>
-
-            <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs space-y-1">
-              <div className="flex justify-between">
-                <span className="text-slate-500">Suggested Solvent:</span>
-                <span className="font-semibold text-slate-800">{pendingMethod.defaultSolvent} ({pendingMethod.defaultConcentration})</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Operating Temperature:</span>
-                <span className="font-semibold text-slate-800">{pendingMethod.defaultTemperature}°C</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Duration:</span>
-                <span className="font-semibold text-slate-800">{formatMethodDefaultDuration(pendingMethod)}</span>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-2">
+            <div className="mt-2 flex justify-end gap-2">
               <button
                 type="button"
-                onClick={() => setPendingMethod(null)}
-                className="px-3.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
+                onClick={() => applyMethodPreset(pendingMethod, false)}
+                className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-amber-950"
               >
-                Keep Current Values
+                Keep My Edits
               </button>
               <button
                 type="button"
-                onClick={() => applyMethodPreset(pendingMethod)}
-                className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs cursor-pointer"
+                onClick={() => applyMethodPreset(pendingMethod, true)}
+                className="rounded-lg bg-[#0f2c20] px-3 py-1.5 text-[11px] font-semibold text-white"
               >
-                Apply Preset Suggestions
+                Apply Defaults
               </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 2. Extraction Parameters */}
+      <motion.section
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.28, delay: 0.03, ease: easeOut }}
+        className="rounded-2xl border border-[#d7e4dc]/90 bg-white p-4 shadow-[0_1px_2px_rgba(15,44,32,0.04)]"
+      >
+        <h3 className="mb-3 text-sm font-bold tracking-tight text-[#0f2c20]">
+          Extraction Parameters
+        </h3>
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {/* Solvent */}
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold text-[#52645d]">
+              Extraction Solvent System
+            </label>
+            <select
+              value={solventKey}
+              onChange={(e) => handleSolventKeyChange(e.target.value)}
+              className={selectFieldClass}
+              disabled={readOnly}
+            >
+              {SIMPLE_SOLVENTS.map((s) => (
+                <option key={s.key} value={s.key}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+            {solventKey === "other" && !readOnly && (
+              <input
+                type="text"
+                placeholder="Custom solvent system..."
+                value={customSolvent}
+                onChange={(e) => {
+                  setCustomSolvent(e.target.value);
+                  handleFieldChange(
+                    "extractionSolvent",
+                    e.target.value || "Other / Custom"
+                  );
+                }}
+                className={`mt-1.5 ${fieldClass}`}
+              />
+            )}
+          </div>
+
+          {/* Concentration */}
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold text-[#52645d]">
+              Solvent Concentration
+            </label>
+            {concentrationEditable ? (
+              <input
+                type="text"
+                value={
+                  customConcentration || extraction.solventConcentration || ""
+                }
+                onChange={(e) => {
+                  if (readOnly) return;
+                  setCustomConcentration(e.target.value);
+                  handleFieldChange("solventConcentration", e.target.value);
+                }}
+                readOnly={readOnly}
+                placeholder="e.g. 70% v/v"
+                className={selectFieldClass}
+              />
+            ) : (
+              <div className="flex h-9 items-center rounded-lg border border-[#eef4f0] bg-[#f7faf8] px-3 text-xs font-medium text-[#0f2c20]">
+                {extraction.solventConcentration || "—"}
+              </div>
+            )}
+          </div>
+
+          {/* Starting mass */}
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold text-[#52645d]">
+              Plant Starting Mass <span className="text-rose-500">*</span>
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                inputMode="decimal"
+                value={formatMassDisplay(extraction.plantMaterialMass || "")}
+                onChange={(e) => handleMassChange(e.target.value)}
+                readOnly={readOnly}
+                placeholder="100"
+                className={`${selectFieldClass} pr-10`}
+              />
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-[#8aa094]">
+                g
+              </span>
             </div>
           </div>
-        </div>
-      )}
 
-      {/* ===================================================================== */}
-      {/* 6. LITERATURE ABSTRACT & DETAILS MODAL                                */}
-      {/* ===================================================================== */}
-      {selectedLitModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-2xl p-5 space-y-4 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-start justify-between border-b border-slate-100 pb-3">
-              <div className="space-y-1 pr-3">
-                <h3 className="text-sm sm:text-base font-bold text-slate-900 leading-snug">
-                  {selectedLitModal.title}
-                </h3>
-                <p className="text-xs text-slate-500">
-                  {selectedLitModal.authors} • {selectedLitModal.journalOrPublisher} ({selectedLitModal.publicationYear})
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedLitModal(null)}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 cursor-pointer shrink-0"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-3 text-xs">
-              <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 space-y-1.5">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                  Study Abstract &amp; Extraction Findings
-                </span>
-                <p className="text-slate-800 leading-relaxed whitespace-pre-wrap">
-                  {selectedLitModal.shortSummary || "No detailed abstract provided in citation record."}
-                </p>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                {selectedLitModal.studyType && (
-                  <div className="p-2 rounded bg-slate-50 border border-slate-200">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase block">Study Type</span>
-                    <p className="font-medium text-slate-800">{selectedLitModal.studyType}</p>
-                  </div>
-                )}
-                {selectedLitModal.verification_source && (
-                  <div className="p-2 rounded bg-slate-50 border border-slate-200">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase block">Source Scope</span>
-                    <p className="font-medium text-slate-800">{selectedLitModal.verification_source}</p>
-                  </div>
-                )}
-                {selectedLitModal.plantOrIngredientStudied && (
-                  <div className="p-2 rounded bg-slate-50 border border-slate-200">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase block">Botanical Focus</span>
-                    <p className="font-medium text-slate-800">{selectedLitModal.plantOrIngredientStudied}</p>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex items-center gap-3 pt-1">
-                {selectedLitModal.doi && (
-                  <a
-                    href={`https://doi.org/${selectedLitModal.doi}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs font-semibold text-emerald-700 hover:underline inline-flex items-center gap-1"
-                  >
-                    <span>Open DOI Link</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                )}
-                {selectedLitModal.pubmedId && (
-                  <a
-                    href={`https://pubmed.ncbi.nlm.nih.gov/${selectedLitModal.pubmedId}/`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs font-semibold text-blue-600 hover:underline inline-flex items-center gap-1"
-                  >
-                    <span>View on PubMed</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                )}
-              </div>
-            </div>
-
-            <div className="pt-2 flex justify-end">
-              <button
-                type="button"
-                onClick={() => setSelectedLitModal(null)}
-                className="px-4 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 cursor-pointer"
-              >
-                Close
-              </button>
-            </div>
+          {/* Ratio */}
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold text-[#52645d]">
+              Solvent Ratio (mL/g)
+            </label>
+            <select
+              value={ratioSelect}
+              onChange={(e) => handleRatioChange(e.target.value)}
+              className={selectFieldClass}
+              disabled={readOnly}
+            >
+              {SIMPLE_RATIOS.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
-      )}
+
+        {/* Calculated menstruum */}
+        <div className={`mt-3 ${calcBoxClass}`}>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <Calculator className="h-4 w-4 shrink-0 text-emerald-700" />
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-800">
+                  Calculated Menstruum Volume
+                </p>
+                {volumeResult.isValid ? (
+                  <p className="truncate font-mono text-[11px] text-emerald-700">
+                    {volumeResult.startingMassGrams.toLocaleString()} g ×{" "}
+                    {volumeResult.ratioMlPerG} mL/g
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-amber-800">
+                    {volumeResult.error || "Enter mass and ratio"}
+                  </p>
+                )}
+              </div>
+            </div>
+            <p className="shrink-0 font-mono text-sm font-black text-emerald-950">
+              {volumeResult.isValid
+                ? `${volumeResult.volumeMl.toLocaleString()} mL`
+                : "—"}
+            </p>
+          </div>
+        </div>
+
+        {/* Temp + Duration */}
+        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div>
+            <label className="mb-1 flex items-center gap-1 text-[11px] font-semibold text-[#52645d]">
+              <Thermometer className="h-3 w-3" />
+              Operating Temperature (°C)
+            </label>
+            <select
+              value={tempSelect}
+              onChange={(e) => handleTempChange(e.target.value)}
+              className={selectFieldClass}
+              disabled={readOnly}
+            >
+              {SIMPLE_TEMPERATURES.map((t) => (
+                <option key={t} value={String(t)}>
+                  {t}°C
+                </option>
+              ))}
+              <option value="custom">Custom</option>
+            </select>
+            {tempSelect === "custom" && !readOnly && (
+              <input
+                type="text"
+                placeholder="e.g. 78°C"
+                value={customTemperature}
+                onChange={(e) => {
+                  setCustomTemperature(e.target.value);
+                  handleFieldChange("extractionTemperature", e.target.value);
+                }}
+                className={`mt-1.5 ${fieldClass}`}
+              />
+            )}
+          </div>
+
+          <div>
+            <label className="mb-1 flex items-center gap-1 text-[11px] font-semibold text-[#52645d]">
+              <Clock className="h-3 w-3" />
+              Extraction Duration
+            </label>
+            <select
+              value={durationSelect}
+              onChange={(e) => handleDurationChange(e.target.value)}
+              className={selectFieldClass}
+              disabled={readOnly}
+            >
+              {SIMPLE_DURATIONS.map((d) => (
+                <option key={d.value} value={d.value}>
+                  {d.label}
+                </option>
+              ))}
+              <option value="custom">Custom</option>
+            </select>
+            {durationSelect === "custom" && !readOnly && (
+              <input
+                type="text"
+                placeholder="e.g. 3 hours"
+                value={customDuration}
+                onChange={(e) => {
+                  setCustomDuration(e.target.value);
+                  handleFieldChange("extractionDuration", e.target.value);
+                }}
+                className={`mt-1.5 ${fieldClass}`}
+              />
+            )}
+          </div>
+        </div>
+      </motion.section>
+
+      {/* 3. Extract Measurement */}
+      <motion.section
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.28, delay: 0.06, ease: easeOut }}
+        className="rounded-2xl border border-[#d7e4dc]/90 bg-white p-4 shadow-[0_1px_2px_rgba(15,44,32,0.04)]"
+      >
+        <div className="mb-3 flex items-center gap-2">
+          <Scale className="h-4 w-4 text-teal-700" />
+          <h3 className="text-sm font-bold tracking-tight text-[#0f2c20]">
+            Extract Measurement
+          </h3>
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold text-[#52645d]">
+              Recovered Dry Extract Mass (g)
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                inputMode="decimal"
+                value={extraction.recoveredDryMass ?? ""}
+                onChange={(e) => handleRecoveredDryMassChange(e.target.value)}
+                readOnly={readOnly}
+                placeholder="0.00"
+                className={`${selectFieldClass} pr-10`}
+              />
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-[#8aa094]">
+                g
+              </span>
+            </div>
+            <p className="mt-1 flex items-start gap-1 text-[10px] text-amber-800">
+              <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+              Measure after complete solvent removal. Do not enter wet mass.
+            </p>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold text-[#52645d]">
+              Crude Extract Yield (%)
+            </label>
+            <div className={calcBoxClass}>
+              <p className="font-mono text-sm font-black text-emerald-950">
+                {yieldResult.yieldPercent !== null
+                  ? `${yieldResult.yieldPercent}% w/w`
+                  : "—"}
+              </p>
+              {yieldResult.yieldPercent !== null && numericPlantMass > 0 && (
+                <p className="mt-0.5 font-mono text-[10px] text-emerald-700">
+                  ({numericRecoveredDryMass} g ÷ {numericPlantMass} g) × 100
+                </p>
+              )}
+              {yieldResult.error && (
+                <p className="mt-1 text-[10px] text-amber-800">{yieldResult.error}</p>
+              )}
+            </div>
+          </div>
+
+          <div className="sm:col-span-2">
+            <div className="mb-1 flex items-center justify-between">
+              <label className="text-[11px] font-semibold text-[#52645d]">
+                Extract Fraction Identifier
+              </label>
+              {!readOnly && (
+                <button
+                  type="button"
+                  onClick={() => setFractionManual((v) => !v)}
+                  className="text-[10px] font-semibold text-emerald-800 hover:underline"
+                >
+                  {fractionManual ? "Auto" : "Edit"}
+                </button>
+              )}
+            </div>
+            <input
+              type="text"
+              value={extraction.extractFractionName || ""}
+              readOnly={readOnly || !fractionManual}
+              onChange={(e) => {
+                if (readOnly) return;
+                setFractionManual(true);
+                handleFieldChange("extractFractionName", e.target.value);
+              }}
+              className={`${selectFieldClass} font-mono ${
+                !readOnly && fractionManual ? "" : "cursor-default bg-[#f7faf8]"
+              }`}
+            />
+          </div>
+        </div>
+      </motion.section>
     </div>
   );
 }

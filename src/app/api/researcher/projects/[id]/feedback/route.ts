@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import pool from "@/lib/db";
 import { getSession } from "@/lib/auth";
+import { revisionDeepLinks } from "@/lib/revision-notification-links";
 
 export async function GET(
   request: Request,
@@ -160,6 +161,11 @@ export async function POST(
       }
     }
 
+    const { reviewerLink } = revisionDeepLinks(
+      item.sectionName || item.title || "",
+      projectId
+    );
+
     for (const revId of targetReviewerIds) {
       try {
         await pool.query(
@@ -168,8 +174,8 @@ export async function POST(
           [
             revId,
             `Revision Resubmitted · ${project.title || "Project"}`,
-            `Researcher responded to "${item.title || "Review finding"}": "${replyText.slice(0, 120)}${replyText.length > 120 ? "..." : ""}"`,
-            `/reviewer/revisions?projectId=${projectId}`,
+            `Researcher responded to "${item.title || "Review finding"}" (${item.sectionName || "step finding"}): "${replyText.slice(0, 120)}${replyText.length > 120 ? "..." : ""}"`,
+            reviewerLink,
           ]
         );
       } catch (notifErr) {

@@ -70,7 +70,7 @@ const SECTION_ROLE_CONFIGS: SectionRoleConfig[] = [
     areaKey: "formulation",
     roleTitle: "Formulation Science & Pharmacognosy",
     specialistTitle: "Formulation Scientist / Pharmacognosist",
-    evaluatorDefault: "Elena Rostova, RPh",
+    evaluatorDefault: "Formulation Scientist / Pharmacognosist",
     stepsCount: "6 Steps (Steps 1 to 6)",
     targetTab: "section1",
     summary:
@@ -89,31 +89,32 @@ const SECTION_ROLE_CONFIGS: SectionRoleConfig[] = [
     roleTitle: "Bioinformatics & In-Silico Modeling",
     specialistTitle: "Bioinformatician / Computational Scientist",
     evaluatorDefault: "Bioinformatics Specialist",
-    stepsCount: "8 Steps (Steps 1 to 8)",
+    stepsCount: "7 Steps (Steps 1 to 7)",
     targetTab: "section2",
     summary:
-      "Target receptor selection, PDB structure validation, Lipinski ADMET screening, AutoDock Vina binding affinities, and 2D/3D interaction contacts.",
+      "Target receptor selection, ADMET screening, AutoDock Vina docking, binding affinities, 2D/3D interactions, and scientific interpretation.",
     criteria: [
-      "Phytochemical ligand library curation & Lipinski Rule of 5 / ADMET drug-likeness screening (Steps 1 & 3)",
-      "Target receptor PDB crystallographic resolution & active site grid box definition (Steps 2 & 4)",
-      "AutoDock Vina binding energy thresholds (<-7.0 kcal/mol) & 2D/3D interaction validation (Steps 5 to 8)",
+      "Target protein selection & PDB structure validation (Step 1)",
+      "In-silico ADMET / physicochemical screening of project compounds (Step 2)",
+      "AutoDock Vina docking, binding affinities, 2D/3D contacts & interpretation (Steps 3–7)",
     ],
   },
   {
     number: "03",
     sectionNumber: 3,
-    sectionTitle: "Section 3: Research Paper & Manuscript",
+    sectionTitle: "Section 4: Research Paper & Manuscript",
     areaKey: "pharmacology",
     roleTitle: "Clinical Pharmacology & Paper Review",
     specialistTitle: "Clinical Pharmacologist / Medical Reviewer",
     evaluatorDefault: "Clinical Pharmacologist",
-    stepsCount: "2 Steps (Steps 1 to 2)",
+    stepsCount: "3 Steps (Steps 1 to 3)",
     targetTab: "section3",
     summary:
-      "Cross-disciplinary synthesis, research dossier overview, and scientific manuscript peer review.",
+      "Cross-disciplinary synthesis, laboratory results review, and scientific manuscript peer review.",
     criteria: [
       "Cross-disciplinary synthesis & therapeutic dosage safety justification (Step 1)",
-      "Scientific manuscript PDF / DOCX completeness & monograph formatting standards (Step 2)",
+      "Laboratory results completeness & measurement validity (Step 2)",
+      "Scientific manuscript PDF / DOCX completeness & monograph formatting standards (Step 3)",
     ],
   },
 ];
@@ -156,8 +157,10 @@ export default function ReviewerSpecialtyEvaluationSection({
 
     // Approved steps for this section
     const sectionKey = cfg.targetTab as "section1" | "section2" | "section3";
-    const approvedStepList = approvedStepsBySection?.[sectionKey] || [];
-    const totalSectionSteps = cfg.sectionNumber === 1 ? 6 : cfg.sectionNumber === 2 ? 8 : 2;
+    const totalSectionSteps = cfg.sectionNumber === 1 ? 6 : cfg.sectionNumber === 2 ? 7 : 3;
+    const approvedStepList = (approvedStepsBySection?.[sectionKey] || []).filter(
+      (n) => Number(n) >= 1 && Number(n) <= totalSectionSteps
+    );
     const stepApprovedPercent = Math.round((approvedStepList.length / totalSectionSteps) * 100);
 
     // Calculate percentage approved

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import pool from "@/lib/db";
 import { getSession } from "@/lib/auth";
+import { revisionDeepLinks } from "@/lib/revision-notification-links";
 
 export async function POST(
   request: Request,
@@ -22,7 +23,7 @@ export async function POST(
     const { action, notes } = body; // action: 'RESOLVE' | 'NEEDS_FURTHER_REVISION'
 
     const [rows]: any = await pool.query(
-      "SELECT id, projectId, submissionId, reviewerId, areaKey, title, comment FROM review_feedback WHERE id = ? LIMIT 1",
+      "SELECT id, projectId, submissionId, reviewerId, areaKey, title, comment, sectionName FROM review_feedback WHERE id = ? LIMIT 1",
       [findingId]
     );
 
@@ -68,14 +69,18 @@ export async function POST(
       // Notify researcher
       if (project?.researcherId) {
         try {
+          const { researcherLink } = revisionDeepLinks(
+            finding.sectionName || finding.title,
+            finding.projectId
+          );
           await pool.query(
             `INSERT INTO review_notifications (userId, type, title, message, link, isRead, createdAt)
              VALUES (?, 'REVISION_RESOLVED', ?, ?, ?, 0, CURRENT_TIMESTAMP(3))`,
             [
               project.researcherId,
               `Revision Verified & Resolved · ${project.title}`,
-              `Reviewer verified your response to "${finding.title || "finding"}" and signed off on the revision.`,
-              `/researcher/revisions?projectId=${finding.projectId}`,
+              `Reviewer verified your response to "${finding.title || "finding"}" (${finding.sectionName || "step finding"}) and signed off on the revision.`,
+              researcherLink,
             ]
           );
         } catch (notifErr) {
@@ -110,14 +115,18 @@ export async function POST(
       // Notify researcher
       if (project?.researcherId) {
         try {
+          const { researcherLink } = revisionDeepLinks(
+            finding.sectionName || finding.title,
+            finding.projectId
+          );
           await pool.query(
             `INSERT INTO review_notifications (userId, type, title, message, link, isRead, createdAt)
              VALUES (?, 'REVISION_REQUIRED', ?, ?, ?, 0, CURRENT_TIMESTAMP(3))`,
             [
               project.researcherId,
               `Further Revision Required · ${project.title}`,
-              `Reviewer reviewed your response to "${finding.title || "finding"}" and requested additional updates: "${(notes || "Please check revised instructions").slice(0, 120)}"`,
-              `/researcher/revisions?projectId=${finding.projectId}`,
+              `Reviewer reviewed your response to "${finding.title || "finding"}" (${finding.sectionName || "step finding"}) and requested additional updates: "${(notes || "Please check revised instructions").slice(0, 120)}"`,
+              researcherLink,
             ]
           );
         } catch (notifErr) {

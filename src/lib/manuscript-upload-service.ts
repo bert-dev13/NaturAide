@@ -314,8 +314,8 @@ export {
 
 function formatAffinityScore(val: number): string {
   if (!Number.isFinite(val)) return "—";
-  const fixed2 = val.toFixed(2);
-  return fixed2.endsWith("0") ? val.toFixed(1) : fixed2;
+  // Match Section 2 affinity display: always two decimal places (e.g. -6.78)
+  return val.toFixed(2);
 }
 
 export async function getSection3CompiledContext(
@@ -609,16 +609,18 @@ export async function getSection3CompiledContext(
     dockingLines,
   ];
 
-  if (keyFindings) {
-    summarySections.push(``, `6. Computational Findings & Target Binding Synthesis`, keyFindings);
-  }
-  if (potentialLimitations) {
-    summarySections.push(
-      ``,
-      `7. Computational Limitations & In-Vitro Verification Requirements`,
-      potentialLimitations
-    );
-  }
+  summarySections.push(
+    ``,
+    `6. Computational Findings & Target Binding Synthesis`,
+    keyFindings ||
+      "No computational findings have been saved in Section 2 · Step 7 yet."
+  );
+  summarySections.push(
+    ``,
+    `7. Computational Limitations & In-Vitro Verification Requirements`,
+    potentialLimitations ||
+      "No computational limitations text has been saved in Section 2 · Step 7 yet."
+  );
 
   return {
     plant: {

@@ -4,6 +4,8 @@ import {
   ensureReviewTables,
   getProjectApprovedSteps,
   SECTION_TOTAL_STEPS,
+  countValidSectionSteps,
+  syncCoverageFromStepApprovals,
 } from "@/lib/expert-review-assignment";
 import {
   EXPERT_REVIEW_AREAS,
@@ -337,6 +339,15 @@ export async function getProjectProfessionalApprovalState(
 
   const project = projRows[0];
 
+  const safeQuery = async <T = any>(fn: () => Promise<T>, fallback: T): Promise<T> => {
+    try {
+      return await fn();
+    } catch (error) {
+      console.warn("getProjectProfessionalApprovalState query failed:", error);
+      return fallback;
+    }
+  };
+
   const [
     [dossierRows],
     [completionRows],
@@ -345,24 +356,42 @@ export async function getProjectProfessionalApprovalState(
     manuscript,
     v2Progress,
   ]: any = await Promise.all([
-    pool.query(
-      `SELECT * FROM research_dossiers WHERE projectId = ? LIMIT 1`,
-      [projectId]
+    safeQuery(
+      () => pool.query(`SELECT * FROM research_dossiers WHERE projectId = ? LIMIT 1`, [projectId]),
+      [[]] as any
     ),
-    pool.query(
-      `SELECT * FROM research_completions WHERE projectId = ? LIMIT 1`,
-      [projectId]
+    safeQuery(
+      () => pool.query(`SELECT * FROM research_completions WHERE projectId = ? LIMIT 1`, [projectId]),
+      [[]] as any
     ),
-    pool.query(
-      `SELECT * FROM review_submissions WHERE projectId = ? ORDER BY reviewRound DESC, id DESC`,
-      [projectId]
+    safeQuery(
+      () =>
+        pool.query(
+          `SELECT * FROM review_submissions WHERE projectId = ? ORDER BY reviewRound DESC, id DESC`,
+          [projectId]
+        ),
+      [[]] as any
     ),
-    pool.query(
-      `SELECT * FROM review_feedback WHERE projectId = ? ORDER BY createdAt DESC`,
-      [projectId]
+    safeQuery(
+      () =>
+        pool.query(`SELECT * FROM review_feedback WHERE projectId = ? ORDER BY createdAt DESC`, [projectId]),
+      [[]] as any
     ),
-    getManuscriptRecord(projectId),
-    calculateV2ProjectProgress(projectId),
+    safeQuery(() => getManuscriptRecord(projectId), null),
+    safeQuery(() => calculateV2ProjectProgress(projectId), {
+      section1: { status: "NOT_STARTED", completedSteps: 0, totalSteps: 6, steps: [] },
+      section2: { status: "NOT_STARTED", completedSteps: 0, totalSteps: 7, steps: [] },
+      section3: { status: "NOT_STARTED", completedSteps: 0, totalSteps: 3, steps: [] },
+      section4: { status: "NOT_STARTED", completedSteps: 0, totalSteps: 3, steps: [] },
+      overallStatus: "Draft",
+      overallProgressPercent: Number(project.progressPercent || 0),
+      canSubmit: false,
+      approvedSpecialtiesCount: 0,
+      hasSubmittedForReview: false,
+      isCompleted: false,
+      approvedStepsBySection: { section1: [], section2: [], section3: [] },
+      sectionApprovalPercent: { section1: 0, section2: 0, section3: 0, overall: 0 },
+    } as any),
   ]);
 
   const dossier = dossierRows?.[0] || null;
@@ -405,13 +434,61 @@ export async function getProjectProfessionalApprovalState(
     allProfReviewRows = prRows || [];
   }
 
+  // Build specialties for the latest submission (or default Pending when not yet submitted)
+  const latestSubId = latestSub ? Number(latestSub.id) : null;
+  const approvedSteps = await getProjectApprovedSteps(projectId);
+
+  // Heal desync: all current steps approved but coverage still Pending/In Review
+  // (common after SECTION_TOTAL_STEPS changes, e.g. section2 8→7).
+  if (latestSubId !== null) {
+    const healed = await syncCoverageFromStepApprovals(projectId, latestSubId, approvedSteps);
+    if (healed) {
+      const [covRows]: any = await pool.query(
+        `
+        SELECT
+          rac.*,
+          u.name AS assignedReviewerName
+        FROM review_area_coverage rac
+        LEFT JOIN users u ON rac.reviewerId = u.id
+        WHERE rac.submissionId = ?
+        ORDER BY rac.id ASC
+        `,
+        [latestSubId]
+      );
+      allCoverageRows = [
+        ...(allCoverageRows || []).filter((r: any) => Number(r.submissionId) !== latestSubId),
+        ...(covRows || []),
+      ];
+      const [prRows]: any = await pool.query(
+        `
+        SELECT
+          pr.*,
+          u.name AS reviewerName
+        FROM professional_reviews pr
+        LEFT JOIN users u ON pr.reviewerId = u.id
+        WHERE pr.submissionId = ?
+        ORDER BY pr.updatedAt DESC
+        `,
+        [latestSubId]
+      );
+      allProfReviewRows = [
+        ...(allProfReviewRows || []).filter((r: any) => Number(r.submissionId) !== latestSubId),
+        ...(prRows || []),
+      ];
+      const [freshFeedback]: any = await pool.query(
+        `SELECT * FROM review_feedback WHERE projectId = ? ORDER BY createdAt DESC`,
+        [projectId]
+      );
+      feedbackRows.length = 0;
+      feedbackRows.push(...(freshFeedback || []));
+    }
+  }
+
   const openFeedbackItems = (feedbackRows || []).filter((f: any) => {
     const st = String(f.status || "OPEN").toUpperCase();
     return st === "OPEN" || st === "IN_REVIEW" || st === "IN_PROGRESS" || st === "PENDING";
   });
 
-  // Build specialties for the latest submission (or default Pending when not yet submitted)
-  const latestSubId = latestSub ? Number(latestSub.id) : null;
   const latestCoverageByArea = new Map<string, any>();
   const latestReviewByArea = new Map<string, any>();
 
@@ -447,8 +524,6 @@ export async function getProjectProfessionalApprovalState(
     }
   }
 
-  const approvedSteps = await getProjectApprovedSteps(projectId);
-
   const specialties: SpecialtyApprovalRow[] = EXPERT_REVIEW_AREAS.map((areaDef) => {
     const cov = latestCoverageByArea.get(areaDef.key) || null;
     const pr = latestReviewByArea.get(areaDef.key) || null;
@@ -464,7 +539,7 @@ export async function getProjectProfessionalApprovalState(
             ? null
             : pr?.assessment || null;
 
-    const uiStatus: SpecialtyReviewUiStatus = latestSubId
+    let uiStatus: SpecialtyReviewUiStatus = latestSubId
       ? mapRawSpecialtyStatusToUiStatus(rawStatus, assessment)
       : "Pending";
 
@@ -472,11 +547,6 @@ export async function getProjectProfessionalApprovalState(
     const reviewerName = cov?.assignedReviewerName || pr?.reviewerName || null;
     const reviewerQualification =
       cov?.assignedReviewerQualification || pr?.reviewerQualification || null;
-
-    const decisionDate =
-      uiStatus === "Approved" || uiStatus === "Revision Required"
-        ? toIsoOrNull(pr?.submittedAt || cov?.updatedAt || pr?.updatedAt)
-        : null;
 
     const areaOpenFeedback = openFeedbackItems.filter(
       (f: any) => normalizeReviewAreaKey(f.areaKey) === areaDef.key
@@ -493,10 +563,27 @@ export async function getProjectProfessionalApprovalState(
         : "section3";
     const secApprovedSteps = approvedSteps[secKey] || [];
     const totalSteps = SECTION_TOTAL_STEPS[secKey];
+    const approvedStepCount = countValidSectionSteps(secApprovedSteps, totalSteps);
+    const stepsFullyApproved = approvedStepCount >= totalSteps;
+
+    // Step approvals are source of truth when coverage lagged behind SECTION_TOTAL_STEPS changes
+    if (
+      stepsFullyApproved &&
+      uiStatus !== "Revision Required" &&
+      uiStatus !== "Approved"
+    ) {
+      uiStatus = "Approved";
+    }
+
+    const decisionDate =
+      uiStatus === "Approved" || uiStatus === "Revision Required"
+        ? toIsoOrNull(pr?.submittedAt || cov?.updatedAt || pr?.updatedAt || new Date())
+        : null;
+
     const approvedPercent =
-      uiStatus === "Approved"
+      uiStatus === "Approved" || stepsFullyApproved
         ? 100
-        : Math.round((secApprovedSteps.length / totalSteps) * 100);
+        : Math.round((approvedStepCount / totalSteps) * 100);
 
     const hasFeedback =
       uiStatus === "Revision Required" ||
@@ -512,8 +599,16 @@ export async function getProjectProfessionalApprovalState(
       reviewerName,
       reviewerQualification,
       status: uiStatus,
-      rawStatus: String(rawStatus || "PENDING"),
-      decision: assessment ? String(assessment) : null,
+      rawStatus:
+        uiStatus === "Approved"
+          ? "APPROVED"
+          : String(rawStatus || "PENDING"),
+      decision:
+        uiStatus === "Approved"
+          ? "ACCEPTABLE"
+          : assessment
+            ? String(assessment)
+            : null,
       decisionDate,
       comments,
       strengths: null,
@@ -523,8 +618,10 @@ export async function getProjectProfessionalApprovalState(
       openFeedbackCount: areaOpenFeedback,
       hasFeedback,
       secKey,
-      approvedSteps: secApprovedSteps,
-      approvedStepCount: secApprovedSteps.length,
+      approvedSteps: secApprovedSteps.filter(
+        (n) => Number(n) >= 1 && Number(n) <= totalSteps
+      ),
+      approvedStepCount,
       totalSteps,
       approvedPercent,
     };
@@ -1080,7 +1177,7 @@ export async function getCompletedResearchDetail(
       [projectId]
     ),
     pool.query(
-      `SELECT executiveSummary FROM research_dossiers WHERE projectId = ? LIMIT 1`,
+      `SELECT * FROM research_dossiers WHERE projectId = ? LIMIT 1`,
       [projectId]
     ),
     pool.query(

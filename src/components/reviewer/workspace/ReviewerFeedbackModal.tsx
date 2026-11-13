@@ -40,14 +40,13 @@ const SECTION_OPTIONS = [
   {
     group: "Section 2: In-Silico Molecular Docking",
     items: [
-      "Section 2: Step 1 — Phytochemical Selection & Ligand Library",
-      "Section 2: Step 2 — Target Protein Selection & PDB Validation",
-      "Section 2: Step 3 — In-Silico Screening (Lipinski & ADMET)",
-      "Section 2: Step 4 — Molecular Docking Setup & AutoDock Vina Execution",
-      "Section 2: Step 5 — Binding Affinity Results & Energetics Leaderboard",
-      "Section 2: Step 6 — 2D Pharmacophore & Interaction Profiling",
-      "Section 2: Step 7 — 3D Molecular Complex Visualization",
-      "Section 2: Step 8 — Scientific Interpretation & Study Limitations",
+      "Section 2: Step 1 — Target Protein Selection & PDB Validation",
+      "Section 2: Step 2 — In-Silico Screening (Lipinski & ADMET)",
+      "Section 2: Step 3 — Molecular Docking Setup & AutoDock Vina Execution",
+      "Section 2: Step 4 — Binding Affinity Results & Energetics Leaderboard",
+      "Section 2: Step 5 — 2D Pharmacophore & Interaction Profiling",
+      "Section 2: Step 6 — 3D Molecular Complex Visualization",
+      "Section 2: Step 7 — Scientific Interpretation & Study Limitations",
     ],
   },
   {

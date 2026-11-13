@@ -23,8 +23,8 @@ async function runTests() {
 
   await ensureReviewTables();
 
-  const researcherId = 2; // Dr. Aris Dela Cruz
-  const reviewerId = 3; // Elena Rostova, RPh
+  const researcherId = 2; // researcher@natureaide.test
+  const reviewerId = 3; // reviewer@natureaide.test
 
   // Create a dedicated temporary test project cloned from Project 36 so we never corrupt existing researcher work
   const [proj36Rows]: any = await pool.query(
@@ -229,7 +229,7 @@ async function runTests() {
          projectId, submissionId, reviewerId, reviewRound, areaKey, sectionName, title,
          commentType, severity, reviewerName, comment, recommendation, status, affectedStage
        ) VALUES (?, ?, ?, 1, 'formulation', 'Formulation Science Review', 'Batch Viscosity Clarification',
-                 'REQUIRED_CORRECTION', 'MAJOR', 'Elena Rostova, RPh', ?, ?, 'OPEN', 'formulation')`,
+                 'REQUIRED_CORRECTION', 'MAJOR', 'Lead Reviewer', ?, ?, 'OPEN', 'formulation')`,
       [testProjectId, subV1.submissionId, reviewerId, revisionComment, revisionComment]
     );
 

@@ -780,7 +780,7 @@ export default function PlantResearchClient({
                     type="text"
                     value={authenticatedBy}
                     onChange={(e) => setAuthenticatedBy(e.target.value)}
-                    placeholder="e.g. Dr. R. Santos, Museum of Natural History, UPLB"
+                    placeholder="e.g. Herbarium curator, Museum of Natural History, UPLB"
                     className="w-full p-2.5 rounded-xl border border-[#dde6df] bg-white text-xs text-[#0f2c20] focus:outline-none focus:border-[#16a34a]"
                   />
                 </div>

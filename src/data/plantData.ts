@@ -148,13 +148,5 @@ export interface ReviewerProfile {
   avatarText: string;
 }
 
-export const EXPERT_REVIEWERS: ReviewerProfile[] = [
-  {
-    name: "Dr. Elena Rostova",
-    role: "Pharmacognosy Specialist",
-    institution: "Natural Products Research",
-    discipline: "Botanical Research",
-    verifiedReviews: 142,
-    avatarText: "ER",
-  },
-];
+/** Role-based peer-review disciplines only — no hardcoded personal doctor names. */
+export const EXPERT_REVIEWERS: ReviewerProfile[] = [];

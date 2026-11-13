@@ -41,9 +41,9 @@ async function run() {
 
     // 2. Test Researcher Profile Update
     console.log("\n[1/2] Testing Researcher Profile Update...");
-    const newResearcherFirst = "Dr. Aris";
-    const newResearcherLast = "Dela Cruz";
-    const expectedResearcherFullName = "Dr. Aris Dela Cruz";
+    const newResearcherFirst = "Lead";
+    const newResearcherLast = "Researcher";
+    const expectedResearcherFullName = "Lead Researcher";
 
     const rReq = new Request("http://localhost:3000/api/researcher/profile", {
       method: "PUT",
@@ -106,7 +106,7 @@ async function run() {
       name: reviewer.name,
     });
 
-    const newReviewerFullName = "Dr. Elena Rostova, RPh";
+    const newReviewerFullName = "Lead Reviewer";
 
     const revReq = new Request("http://localhost:3000/api/reviewer/profile", {
       method: "PUT",

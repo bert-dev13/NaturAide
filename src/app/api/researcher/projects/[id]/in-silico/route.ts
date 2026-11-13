@@ -882,6 +882,25 @@ export async function POST(
         return NextResponse.json({ error: "Compound ID is required" }, { status: 400 });
       }
 
+      if (selectedForDocking) {
+        const [cRows]: any = await pool.query(
+          "SELECT id, smiles FROM research_compounds WHERE id = ? AND projectId = ? LIMIT 1",
+          [compoundId, projectId]
+        );
+        if (cRows.length === 0) {
+          return NextResponse.json({ error: "Compound not found" }, { status: 404 });
+        }
+        if (!String(cRows[0].smiles || "").trim()) {
+          return NextResponse.json(
+            {
+              error:
+                "This compound has no valid molecular structure (SMILES) and cannot be selected for docking.",
+            },
+            { status: 400 }
+          );
+        }
+      }
+
       await pool.query(
         "UPDATE research_compounds SET selectedForDocking = ? WHERE id = ? AND projectId = ?",
         [selectedForDocking ? 1 : 0, compoundId, projectId]
@@ -890,6 +909,140 @@ export async function POST(
       return NextResponse.json({
         success: true,
         message: selectedForDocking ? "Selected compound for molecular docking." : "Deselected compound.",
+      });
+    }
+
+    // =========================================================================
+    // 3a. ENSURE SECTION 1 STRUCTURE-READY COMPOUNDS ARE DOCKING LIGANDS
+    // Auto-selects eligible SMILES-bearing compounds; preserves existing IDs.
+    // =========================================================================
+    if (action === "ensure-section1-ligands") {
+      const [existing]: any = await pool.query(
+        "SELECT id, compoundName, smiles, selectedForDocking FROM research_compounds WHERE projectId = ? ORDER BY id ASC",
+        [projectId]
+      );
+
+      const eligible = (existing || []).filter((c: any) => String(c.smiles || "").trim());
+      const ineligible = (existing || []).filter((c: any) => !String(c.smiles || "").trim());
+
+      let activated = 0;
+      for (const row of eligible) {
+        if (row.selectedForDocking === 1 || row.selectedForDocking === true) continue;
+        await pool.query(
+          "UPDATE research_compounds SET selectedForDocking = 1 WHERE id = ? AND projectId = ?",
+          [row.id, projectId]
+        );
+        activated += 1;
+      }
+
+      // Deselect compounds that cannot dock (missing structure) so downstream steps stay valid
+      for (const row of ineligible) {
+        if (!row.selectedForDocking) continue;
+        await pool.query(
+          "UPDATE research_compounds SET selectedForDocking = 0 WHERE id = ? AND projectId = ?",
+          [row.id, projectId]
+        );
+      }
+
+      const [refreshed]: any = await pool.query(
+        "SELECT * FROM research_compounds WHERE projectId = ? ORDER BY id ASC",
+        [projectId]
+      );
+
+      return NextResponse.json({
+        success: true,
+        compounds: refreshed,
+        counts: {
+          total: refreshed.length,
+          structureReady: eligible.length,
+          activated,
+          missingStructure: ineligible.length,
+        },
+        message:
+          eligible.length === 0
+            ? refreshed.length === 0
+              ? "No phytochemicals found from Section 1. Identify compounds in Plant Information first."
+              : "Section 1 compounds are present but none have valid molecular structures (SMILES) for docking."
+            : `Using ${eligible.length} structure-ready compound(s) from Section 1 for in-silico analysis.`,
+      });
+    }
+
+    // =========================================================================
+    // 3b. ENRICH EXISTING SECTION 1 COMPOUNDS FROM CATALOG (NULL FIELDS ONLY)
+    // Does not insert new rows or overwrite existing scientific values.
+    // =========================================================================
+    if (action === "enrich-from-section1-catalog") {
+      const [existing]: any = await pool.query(
+        "SELECT * FROM research_compounds WHERE projectId = ? ORDER BY id ASC",
+        [projectId]
+      );
+
+      const catalog = await loadVerifiedPhytochemicals({
+        plantId: resolveCanonicalPlantId(project.plantId) || project.plantId,
+        scientificName: project.plantScientificName,
+        commonName: project.plantName,
+      });
+
+      const byName = new Map<string, any>();
+      const byCid = new Map<string, any>();
+      for (const row of catalog || []) {
+        const nameKey = String(row.compoundName || "")
+          .toLowerCase()
+          .trim();
+        if (nameKey) byName.set(nameKey, row);
+        if (row.pubchemId) byCid.set(String(row.pubchemId), row);
+      }
+
+      let enrichedCount = 0;
+      for (const row of existing) {
+        const match =
+          (row.pubchemId && byCid.get(String(row.pubchemId))) ||
+          byName.get(String(row.compoundName || "").toLowerCase().trim());
+        if (!match) continue;
+
+        const nextFormula = row.molecularFormula || match.molecularFormula || null;
+        const nextWeight =
+          row.molecularWeight != null && row.molecularWeight !== ""
+            ? row.molecularWeight
+            : match.molecularWeight != null
+              ? match.molecularWeight
+              : null;
+        const nextSmiles = row.smiles || match.smiles || null;
+        const nextIupac = row.iupacName || match.iupacName || null;
+        const nextCid = row.pubchemId || (match.pubchemId ? String(match.pubchemId) : null);
+
+        const changed =
+          nextFormula !== row.molecularFormula ||
+          String(nextWeight ?? "") !== String(row.molecularWeight ?? "") ||
+          nextSmiles !== row.smiles ||
+          nextIupac !== row.iupacName ||
+          nextCid !== row.pubchemId;
+
+        if (!changed) continue;
+
+        // Note: research_compounds has no compoundClass column — class is display-enriched from catalog.
+        await pool.query(
+          `UPDATE research_compounds
+           SET molecularFormula = ?, molecularWeight = ?, smiles = ?, iupacName = ?, pubchemId = ?
+           WHERE id = ? AND projectId = ?`,
+          [nextFormula, nextWeight, nextSmiles, nextIupac, nextCid, row.id, projectId]
+        );
+        enrichedCount += 1;
+      }
+
+      const [refreshed]: any = await pool.query(
+        "SELECT * FROM research_compounds WHERE projectId = ? ORDER BY id ASC",
+        [projectId]
+      );
+
+      return NextResponse.json({
+        success: true,
+        enrichedCount,
+        compounds: refreshed,
+        message:
+          enrichedCount > 0
+            ? `Updated ${enrichedCount} compound(s) with missing catalog fields from Section 1.`
+            : "Section 1 compounds are already up to date.",
       });
     }
 

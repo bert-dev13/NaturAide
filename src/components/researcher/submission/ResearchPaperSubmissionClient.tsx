@@ -15,15 +15,20 @@ import {
   Loader2,
   X,
   Leaf,
-  Cpu,
+  Beaker,
 } from "lucide-react";
 import { V2SectionProgress } from "@/lib/v2-progress-service";
 import type { CompiledResearchOverview } from "@/lib/manuscript-upload-service";
-import { resolveResearchSummaryText } from "@/lib/research-summary-utils";
+import {
+  resolveResearchSummaryText,
+  diffCompiledSectionLabels,
+  isLikelyResearcherEditedSummary,
+} from "@/lib/research-summary-utils";
 import type { ProfessionalApprovalState } from "@/lib/research-approval-completion-service";
 import ResearchStepFooterNav from "@/components/researcher/ResearchStepFooterNav";
 import ResearcherStepRevisionBanner from "@/components/researcher/ResearcherStepRevisionBanner";
 import ResearchSummaryStep1Section from "./ResearchSummaryStep1Section";
+import LaboratoryResultsStepSection from "./LaboratoryResultsStepSection";
 import UploadPaperStep2Section from "./UploadPaperStep2Section";
 
 interface Props {
@@ -70,9 +75,9 @@ export default function ResearchPaperSubmissionClient({
   project,
   dossier: initialDossier,
   manuscript: initialManuscript,
-  compiledOverview,
+  compiledOverview: initialCompiledOverview,
   submissionHistory: initialHistory = [],
-  v2Progress,
+  v2Progress: initialV2Progress,
   initialStep = 1,
   initialApprovalState = null,
 }: Props) {
@@ -80,27 +85,58 @@ export default function ResearchPaperSubmissionClient({
   const [approvalState, setApprovalState] = useState<ProfessionalApprovalState | null>(
     initialApprovalState
   );
+  const [v2Progress, setV2Progress] = useState<V2SectionProgress>(initialV2Progress);
   const [activeStep, setActiveStep] = useState<number>(
-    initialStep >= 1 && initialStep <= 2 ? initialStep : 1
+    initialStep >= 1 && initialStep <= 3 ? initialStep : 1
+  );
+  const [labResultsCount, setLabResultsCount] = useState(
+    initialV2Progress.laboratoryResults?.count ?? 0
   );
 
   useEffect(() => {
-    if (initialStep && initialStep >= 1 && initialStep <= 2) {
+    setV2Progress(initialV2Progress);
+    setLabResultsCount(initialV2Progress.laboratoryResults?.count ?? 0);
+  }, [initialV2Progress]);
+
+  const handleLabProgressChange = useCallback(
+    (
+      info: { count: number; progressPercent: number; status: "NOT_STARTED" | "COMPLETED" },
+      fullProgress?: V2SectionProgress
+    ) => {
+      setLabResultsCount((prev) => (prev === info.count ? prev : info.count));
+      if (fullProgress) {
+        setV2Progress(fullProgress);
+      }
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (initialStep && initialStep >= 1 && initialStep <= 3) {
       setActiveStep(initialStep);
     }
   }, [initialStep]);
 
   const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [isRecompiling, setIsRecompiling] = useState<boolean>(false);
   const [isUploading, setIsUploading] = useState<boolean>(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [pendingRetryFile, setPendingRetryFile] = useState<File | null>(null);
+  const uploadXhrRef = useRef<XMLHttpRequest | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [showSubmitModal, setShowSubmitModal] = useState<boolean>(false);
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
+  const [compiledOverview, setCompiledOverview] =
+    useState<CompiledResearchOverview>(initialCompiledOverview);
+  const [updatedSectionLabels, setUpdatedSectionLabels] = useState<string[]>([]);
+  const [lastCompiledAt, setLastCompiledAt] = useState<string | null>(null);
 
   // Prefer a real compiled dossier over seed/stub one-liners saved in research_dossiers
   const initialSummaryText = resolveResearchSummaryText(
     initialDossier?.executiveSummary,
-    compiledOverview.compiledSummaryText
+    initialCompiledOverview.compiledSummaryText
   );
   const [executiveSummary, setExecutiveSummary] = useState<string>(initialSummaryText);
   const [savedSummaryBaseline, setSavedSummaryBaseline] = useState<string>(initialSummaryText);
@@ -124,7 +160,8 @@ export default function ResearchPaperSubmissionClient({
 
   const STEPS = [
     { number: 1, title: "Research Summary", icon: FileText },
-    { number: 2, title: "Upload Research Paper", icon: Upload },
+    { number: 2, title: "Laboratory Results", icon: Beaker },
+    { number: 3, title: "Upload Research Paper", icon: Upload },
   ];
 
   const isSummaryReady = Boolean(executiveSummary && executiveSummary.trim().length > 0);
@@ -182,7 +219,19 @@ export default function ResearchPaperSubmissionClient({
   }, [project.id]);
 
   const handleStepNavigation = (targetStep: number) => {
+    if (
+      targetStep !== activeStep &&
+      activeStep === 1 &&
+      hasUnsavedSummaryEdits &&
+      typeof window !== "undefined"
+    ) {
+      const leave = window.confirm(
+        "You have unsaved research summary edits. Leave without saving?"
+      );
+      if (!leave) return;
+    }
     setMessage(null);
+    setUpdatedSectionLabels([]);
     setActiveStep(targetStep);
   };
 
@@ -201,36 +250,64 @@ export default function ResearchPaperSubmissionClient({
   // ---------------------------------------------------------------------------
   // STEP 1 HANDLERS: RESEARCH SUMMARY
   // ---------------------------------------------------------------------------
-  const handleRecompileSummary = () => {
-    const freshCompiled = String(compiledOverview.compiledSummaryText || "").trim();
-    if (!freshCompiled) {
-      setMessage({
-        text: "No compiled dossier is available yet. Complete Sections 1 and 2 first.",
-        type: "error",
-      });
-      return;
-    }
+  const handleRecompileSummary = async () => {
+    if (isRecompiling || isSaving) return;
 
-    const currentTrimmed = executiveSummary.trim();
-    const replacingRealEdit =
-      currentTrimmed.length > 0 &&
-      currentTrimmed !== freshCompiled &&
-      // Skip confirm for short stubs / seed placeholders
-      currentTrimmed.length >= 120 &&
-      !/^Executive research summary of .+\.?$/i.test(currentTrimmed);
+    const previousCompiled = String(compiledOverview.compiledSummaryText || "").trim();
+    const replacingRealEdit = isLikelyResearcherEditedSummary(
+      executiveSummary,
+      previousCompiled
+    );
 
     if (replacingRealEdit && typeof window !== "undefined") {
       const confirmed = window.confirm(
-        "Recompiling the Research Summary from Sections 1 and 2 will replace your current text in the editor. Do you want to continue?"
+        "Recompiling retrieves the latest Sections 1 and 2 records and may replace your current dossier edits. Continue?"
       );
       if (!confirmed) return;
     }
 
-    setExecutiveSummary(freshCompiled);
-    setMessage({
-      text: "Research summary recompiled from Sections 1 and 2. Click Save to persist.",
-      type: "success",
-    });
+    setIsRecompiling(true);
+    setMessage(null);
+    setUpdatedSectionLabels([]);
+
+    try {
+      const res = await fetch(
+        `/api/researcher/projects/${project.id}/compiled-overview`,
+        { cache: "no-store" }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.compiledOverview) {
+        throw new Error(data.error || "Failed to recompile research overview.");
+      }
+
+      const nextOverview = data.compiledOverview as CompiledResearchOverview;
+      const freshCompiled = String(nextOverview.compiledSummaryText || "").trim();
+      if (!freshCompiled) {
+        throw new Error(
+          "No compiled dossier is available yet. Complete Sections 1 and 2 first."
+        );
+      }
+
+      const changed = diffCompiledSectionLabels(previousCompiled, freshCompiled);
+      setCompiledOverview(nextOverview);
+      setExecutiveSummary(freshCompiled);
+      setUpdatedSectionLabels(changed);
+      setLastCompiledAt(data.compiledAt || new Date().toISOString());
+      setMessage({
+        text:
+          changed.length > 0
+            ? `Dossier recompiled. Updated: ${changed.join(", ")}. Save to persist.`
+            : "Dossier recompiled from Sections 1 and 2 (no section text changes detected). Save to persist.",
+        type: "success",
+      });
+    } catch (e: any) {
+      setMessage({
+        text: e?.message || "Compilation failed. Please try again.",
+        type: "error",
+      });
+    } finally {
+      setIsRecompiling(false);
+    }
   };
 
   const handleSaveSummary = async (): Promise<boolean> => {
@@ -250,6 +327,7 @@ export default function ResearchPaperSubmissionClient({
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Failed to save research summary");
       setSavedSummaryBaseline(cleanText);
+      setUpdatedSectionLabels([]);
       setMessage({ text: "Research summary saved to database.", type: "success" });
       return true;
     } catch (e: any) {
@@ -263,60 +341,118 @@ export default function ResearchPaperSubmissionClient({
   // ---------------------------------------------------------------------------
   // STEP 2 HANDLERS: UPLOAD RESEARCH PAPER (PDF / DOCX)
   // ---------------------------------------------------------------------------
-  const handleFileUpload = async (file: File) => {
+  useEffect(() => {
+    return () => {
+      uploadXhrRef.current?.abort();
+      uploadXhrRef.current = null;
+    };
+  }, []);
+
+  const handleFileUpload = (file: File) => {
     setMessage(null);
+    setUploadError(null);
+
     const nameLower = file.name.toLowerCase();
     if (!nameLower.endsWith(".pdf") && !nameLower.endsWith(".docx")) {
-      setMessage({
-        text: "Invalid file format. Please upload your manuscript in PDF (.pdf) or DOCX (.docx) format.",
-        type: "error",
-      });
+      const err =
+        "Unsupported format. Please upload a PDF (.pdf) or DOCX (.docx) manuscript.";
+      setUploadError(err);
+      setMessage({ text: err, type: "error" });
       return;
     }
     if (file.size <= 0) {
-      setMessage({ text: "Selected file is empty.", type: "error" });
+      const err = "Selected file is empty.";
+      setUploadError(err);
+      setMessage({ text: err, type: "error" });
       return;
     }
     if (file.size > 25 * 1024 * 1024) {
-      setMessage({
-        text: "File size exceeds the 25 MB maximum limit.",
-        type: "error",
-      });
+      const err = "File exceeds the 25 MB maximum size limit.";
+      setUploadError(err);
+      setMessage({ text: err, type: "error" });
       return;
     }
 
+    if (isUploading) return;
+
+    uploadXhrRef.current?.abort();
+    setPendingRetryFile(file);
     setIsUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
+    setUploadProgress(0);
 
-      const res = await fetch(`/api/researcher/projects/${project.id}/manuscript`, {
-        method: "POST",
-        body: formData,
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to upload research paper.");
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const xhr = new XMLHttpRequest();
+    uploadXhrRef.current = xhr;
+    xhr.open("POST", `/api/researcher/projects/${project.id}/manuscript`);
+
+    xhr.upload.onprogress = (event) => {
+      if (!event.lengthComputable || event.total <= 0) return;
+      const pct = Math.round((event.loaded / event.total) * 100);
+      setUploadProgress(Math.min(100, Math.max(0, pct)));
+    };
+
+    xhr.onload = () => {
+      uploadXhrRef.current = null;
+      let data: any = {};
+      try {
+        data = JSON.parse(xhr.responseText || "{}");
+      } catch {
+        data = {};
       }
 
-      setManuscript(data.manuscript);
-      setMessage({
-        text: `Uploaded "${file.name}" (${formatFileSize(file.size)}) successfully.`,
-        type: "success",
-      });
-    } catch (e: any) {
-      setMessage({ text: e.message || "Upload failed.", type: "error" });
-    } finally {
+      if (xhr.status >= 200 && xhr.status < 300 && data.manuscript) {
+        setManuscript(data.manuscript);
+        setPendingRetryFile(null);
+        setUploadError(null);
+        setUploadProgress(100);
+        setMessage({
+          text: `Uploaded "${file.name}" (${formatFileSize(file.size)}) successfully.`,
+          type: "success",
+        });
+      } else {
+        const err = data.error || "Failed to upload research paper.";
+        setUploadError(err);
+        setMessage({ text: err, type: "error" });
+      }
       setIsUploading(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-    }
+      setUploadProgress(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    };
+
+    xhr.onerror = () => {
+      uploadXhrRef.current = null;
+      const err = "Upload failed due to a network error. Please retry.";
+      setUploadError(err);
+      setMessage({ text: err, type: "error" });
+      setIsUploading(false);
+      setUploadProgress(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    };
+
+    xhr.onabort = () => {
+      uploadXhrRef.current = null;
+      setIsUploading(false);
+      setUploadProgress(null);
+      setUploadError("Upload was interrupted. You can retry when ready.");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    };
+
+    xhr.send(formData);
+  };
+
+  const handleRetryUpload = () => {
+    if (!pendingRetryFile || isUploading) return;
+    handleFileUpload(pendingRetryFile);
   };
 
   const handleRemoveUploadedFile = async () => {
+    if (isUploading || isSubmitting) return;
+    uploadXhrRef.current?.abort();
     setIsUploading(true);
     setMessage(null);
+    setUploadError(null);
     try {
       const res = await fetch(`/api/researcher/projects/${project.id}/manuscript`, {
         method: "DELETE",
@@ -326,11 +462,13 @@ export default function ResearchPaperSubmissionClient({
         throw new Error(data.error || "Failed to remove uploaded file.");
       }
       setManuscript(data.manuscript || null);
+      setPendingRetryFile(null);
       setMessage({ text: "Uploaded research paper removed.", type: "success" });
     } catch (e: any) {
       setMessage({ text: e.message || "Failed to remove file.", type: "error" });
     } finally {
       setIsUploading(false);
+      setUploadProgress(null);
     }
   };
 
@@ -366,10 +504,10 @@ export default function ResearchPaperSubmissionClient({
 
     if (!isManuscriptReady) {
       setMessage({
-        text: "Please upload your Research Paper (PDF or DOCX) in Step 2 before submitting.",
+        text: "Please upload your Research Paper (PDF or DOCX) in Step 3 before submitting.",
         type: "error",
       });
-      setActiveStep(2);
+      setActiveStep(3);
       return;
     }
 
@@ -386,9 +524,14 @@ export default function ResearchPaperSubmissionClient({
   };
 
   const handleConfirmSubmitFinal = async () => {
+    if (isSubmitting) return;
     setIsSubmitting(true);
+    setMessage(null);
     try {
-      await handleSaveSummary();
+      const saved = await handleSaveSummary();
+      if (!saved) {
+        throw new Error("Could not save the research summary before submission.");
+      }
 
       const res = await fetch(`/api/researcher/projects/${project.id}/submit-final`, {
         method: "POST",
@@ -418,6 +561,7 @@ export default function ResearchPaperSubmissionClient({
       });
       router.push(`/researcher/projects/${project.id}/completion`);
     } catch (e: any) {
+      // Preserve manuscript + summary on failure; only show error.
       setMessage({ text: e.message || "Submission failed.", type: "error" });
     } finally {
       setIsSubmitting(false);
@@ -440,11 +584,15 @@ export default function ResearchPaperSubmissionClient({
       ? "Revisions required"
       : hasSubmittedDossier
         ? `${latestSubmission?.versionTag || "v1.0"} · ${approvalState?.approvedCount ?? 0}/${approvalState?.totalSpecialties ?? 5}`
-        : isSaving
-          ? "Saving…"
-          : message?.type === "success"
-            ? "Saved"
-            : "Draft";
+        : isSaving || isRecompiling
+          ? isRecompiling
+            ? "Recompiling…"
+            : "Saving…"
+          : hasUnsavedSummaryEdits
+            ? "Unsaved"
+            : message?.type === "success"
+              ? "Saved"
+              : "Draft";
 
   return (
     <div className="w-full max-w-none space-y-5 pb-32 text-slate-800">
@@ -468,7 +616,7 @@ export default function ResearchPaperSubmissionClient({
                 </Link>
                 <span className="text-emerald-700">/</span>
                 <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-emerald-200">
-                  Section 3 · Step {String(activeStep).padStart(2, "0")} / 02
+                  Section 3 · Step {String(activeStep).padStart(2, "0")} / 03
                 </span>
                 <span
                   className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
@@ -538,10 +686,16 @@ export default function ResearchPaperSubmissionClient({
             ) : (
               <button
                 type="button"
-                onClick={() => handleStepNavigation(activeStep === 1 ? 2 : 1)}
+                onClick={() =>
+                  handleStepNavigation(activeStep < 3 ? activeStep + 1 : 1)
+                }
                 className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-emerald-400 px-3.5 py-2 text-xs font-semibold text-[#091a13] shadow-sm transition hover:bg-emerald-300"
               >
-                {activeStep === 1 ? "Upload paper" : "Back to summary"}
+                {activeStep === 1
+                  ? "Laboratory results"
+                  : activeStep === 2
+                    ? "Upload paper"
+                    : "Back to summary"}
                 <ArrowRight className="h-3.5 w-3.5" />
               </button>
             )}
@@ -553,7 +707,8 @@ export default function ResearchPaperSubmissionClient({
               const isCurrent = activeStep === step.number;
               const isDone =
                 (step.number === 1 && isSummaryReady && !hasUnsavedSummaryEdits) ||
-                (step.number === 2 && isManuscriptReady);
+                (step.number === 2 && labResultsCount > 0) ||
+                (step.number === 3 && isManuscriptReady);
               return (
                 <button
                   key={step.number}
@@ -631,36 +786,65 @@ export default function ResearchPaperSubmissionClient({
               projectId={project.id}
               compiledOverview={compiledOverview}
               executiveSummary={executiveSummary}
-              onSummaryChange={setExecutiveSummary}
+              onSummaryChange={(value) => {
+                setExecutiveSummary(value);
+                setUpdatedSectionLabels([]);
+              }}
               summaryTextareaRef={summaryTextareaRef}
               hasUnsavedSummaryEdits={hasUnsavedSummaryEdits}
               isSaving={isSaving}
-              onRecompile={handleRecompileSummary}
+              isRecompiling={isRecompiling}
+              onRecompile={() => {
+                void handleRecompileSummary();
+              }}
               onSave={() => {
                 void handleSaveSummary();
               }}
               findingsParagraphs={findingsParagraphs}
               limitationsParagraphs={limitationsParagraphs}
+              updatedSectionLabels={updatedSectionLabels}
+              lastCompiledAt={lastCompiledAt}
             />
           )}
 
           {activeStep === 2 && (
+            <LaboratoryResultsStepSection
+              projectId={project.id}
+              projectTitle={project.title}
+              readOnly={isCompletedProject}
+              onCountChange={setLabResultsCount}
+              onProgressChange={handleLabProgressChange}
+            />
+          )}
+
+          {activeStep === 3 && (
             <UploadPaperStep2Section
               projectId={project.id}
               manuscript={manuscript}
               fileInputRef={fileInputRef}
               fileViewUrl={fileViewUrl}
               isUploading={isUploading}
+              uploadProgress={uploadProgress}
+              uploadError={uploadError}
+              onRetryUpload={pendingRetryFile ? handleRetryUpload : undefined}
               isDragging={isDragging}
               onDraggingChange={setIsDragging}
               onFileUpload={handleFileUpload}
-              onRemove={handleRemoveUploadedFile}
+              onRemove={() => {
+                void handleRemoveUploadedFile();
+              }}
               hasUploadedFile={hasUploadedFile}
+              isSummaryReady={isSummaryReady}
+              hasUnsavedSummaryEdits={hasUnsavedSummaryEdits}
+              sectionsReady={
+                v2Progress.section1.status === "COMPLETED" &&
+                v2Progress.section2.status === "COMPLETED"
+              }
               isCompletedProject={isCompletedProject}
               hasSubmittedDossier={hasSubmittedDossier}
               isAlreadyUnderReview={Boolean(isAlreadyUnderReview)}
               isAlreadyApproved={Boolean(isAlreadyApproved)}
-              canSubmitNow={canSubmitNow}
+              canSubmitNow={canSubmitNow && !hasUnsavedSummaryEdits}
               isSubmitting={isSubmitting}
               onSubmit={handleSubmitFinal}
               revisionsRequiredSpecialties={approvalState?.revisionsRequiredSpecialties || []}
@@ -686,17 +870,19 @@ export default function ResearchPaperSubmissionClient({
             ? () => router.push(`/researcher/projects/${project.id}/completion`)
             : handleSubmitFinal
         }
-        canSubmitFinal={hasSubmittedDossier ? true : canSubmitNow}
+        canSubmitFinal={
+          hasSubmittedDossier ? true : canSubmitNow && !hasUnsavedSummaryEdits && !isUploading
+        }
         nextLabelOverride={
-          activeStep === 2 && hasSubmittedDossier
+          activeStep === 3 && hasSubmittedDossier
             ? { full: "View Professional Approval →", short: "Approval →" }
-            : activeStep === 2 && !hasSubmittedDossier
+            : activeStep === 3 && !hasSubmittedDossier
               ? { full: "Submit for Professional Review", short: "Submit" }
               : undefined
         }
-        isSaving={isSaving || isUploading || isSubmitting}
+        isSaving={isSaving || isUploading || isSubmitting || isRecompiling}
         saveStatus={
-          isSaving || isUploading || isSubmitting
+          isSaving || isUploading || isSubmitting || isRecompiling
             ? "saving"
             : message?.type === "success"
               ? "saved"
@@ -744,26 +930,21 @@ export default function ResearchPaperSubmissionClient({
 
             <div className="space-y-4 p-5">
               <p className="text-sm font-medium leading-relaxed text-[#1a2e24]">
-                Submit your research summary and manuscript for professional review?
+                The research dossier will be submitted for professional review. Reviewers will
+                receive the saved summary and uploaded manuscript through the existing review
+                workflow.
               </p>
               <div className="space-y-2.5 rounded-xl border border-[#e6ebe7] bg-[#f8fbf9] p-3.5 text-[11px]">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="inline-flex items-center gap-1.5 font-medium text-[#52645d]">
-                    <Leaf className="h-3.5 w-3.5 text-emerald-700" />
-                    Botanical
-                  </span>
-                  <span className="font-semibold text-[#0f2c20]">
-                    {compiledOverview.plant.commonName} · {compiledOverview.formulation.dosageForm}
+                  <span className="font-medium text-[#52645d]">Project</span>
+                  <span className="max-w-[240px] truncate font-semibold text-[#0f2c20]">
+                    {project.title}
                   </span>
                 </div>
                 <div className="flex items-center justify-between gap-2">
-                  <span className="inline-flex items-center gap-1.5 font-medium text-[#52645d]">
-                    <Cpu className="h-3.5 w-3.5 text-emerald-700" />
-                    In-silico
-                  </span>
+                  <span className="font-medium text-[#52645d]">Research summary</span>
                   <span className="font-semibold text-[#0f2c20]">
-                    {compiledOverview.screening.totalCompounds} compounds ·{" "}
-                    {compiledOverview.docking.completedRunsCount} runs
+                    {isSummaryReady && !hasUnsavedSummaryEdits ? "Saved" : "Incomplete"}
                   </span>
                 </div>
                 <div className="flex items-center justify-between gap-2">
@@ -772,7 +953,16 @@ export default function ResearchPaperSubmissionClient({
                     Manuscript
                   </span>
                   <span className="max-w-[220px] truncate font-semibold text-[#0f2c20]">
-                    {manuscript?.fileName || "Uploaded Research Paper"}
+                    {manuscript?.fileName || "Missing"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="inline-flex items-center gap-1.5 font-medium text-[#52645d]">
+                    <Leaf className="h-3.5 w-3.5 text-emerald-700" />
+                    Botanical
+                  </span>
+                  <span className="font-semibold text-[#0f2c20]">
+                    {compiledOverview.plant.commonName} · {compiledOverview.formulation.dosageForm}
                   </span>
                 </div>
               </div>

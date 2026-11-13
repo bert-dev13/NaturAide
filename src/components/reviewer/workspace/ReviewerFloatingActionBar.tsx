@@ -98,10 +98,9 @@ export default function ReviewerFloatingActionBar({
           </div>
         </div>
 
-        {/* Right: Step Navigation Controls (Previous Step, Approve Step, Next Step) */}
+        {/* Right: Step Navigation Controls */}
         {isSectionStepMode && (
           <div className="flex items-center gap-2 shrink-0 w-full md:w-auto justify-end">
-            {/* 1. Previous Step Button */}
             <button
               type="button"
               onClick={onPrevStep}
@@ -114,7 +113,6 @@ export default function ReviewerFloatingActionBar({
               <span className="sm:hidden">Prev</span>
             </button>
 
-            {/* 2. Approve Current Step Toggle */}
             <button
               type="button"
               onClick={onToggleApproveCurrentStep}
@@ -125,7 +123,7 @@ export default function ReviewerFloatingActionBar({
               }`}
               title={
                 isCurrentStepApproved
-                  ? `Step ${currentStep} is approved. Click to unapprove.`
+                  ? `Step ${currentStep} is approved.`
                   : `Mark Step ${currentStep} as approved.`
               }
             >
@@ -135,13 +133,10 @@ export default function ReviewerFloatingActionBar({
                 }`}
               />
               <span>
-                {isCurrentStepApproved
-                  ? `Step ${currentStep} Approved`
-                  : `Approve Step ${currentStep}`}
+                {isCurrentStepApproved ? `Step Approved` : `Approve Step`}
               </span>
             </button>
 
-            {/* 3. Next Step / Next Section / Consolidated Feedback Button */}
             <button
               type="button"
               onClick={onNextStep}

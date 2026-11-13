@@ -124,8 +124,8 @@ async function runTests() {
 
   await ensureReviewTables();
 
-  const researcherId = 2; // Dr. Aris Dela Cruz
-  const reviewerId = 3; // Elena Rostova, RPh
+  const researcherId = 2; // researcher@natureaide.test
+  const reviewerId = 3; // reviewer@natureaide.test
 
   // Ensure all 5 specialties are assigned to reviewerId at start
   const allFiveKeys = EXPERT_REVIEW_AREAS.map((a) => a.key);
@@ -528,7 +528,7 @@ async function runTests() {
     );
     await pool.query(
       `INSERT INTO review_feedback (projectId, submissionId, reviewerId, reviewRound, areaKey, sectionName, title, commentType, severity, reviewerName, comment, recommendation, status, affectedStage)
-       VALUES (?, ?, ?, 1, 'formulation', 'Formulation Science Review', 'Formulation Science Revision Request', 'REQUIRED_CORRECTION', 'MAJOR', 'Elena Rostova, RPh', ?, ?, 'OPEN', 'formulation')`,
+       VALUES (?, ?, ?, 1, 'formulation', 'Formulation Science Review', 'Formulation Science Revision Request', 'REQUIRED_CORRECTION', 'MAJOR', 'Lead Reviewer', ?, ?, 'OPEN', 'formulation')`,
       [testProjectId, subV1Id, reviewerId, revisionComment, revisionComment]
     );
     await pool.query(

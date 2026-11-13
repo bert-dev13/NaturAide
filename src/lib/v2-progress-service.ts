@@ -1,50 +1,78 @@
 import pool from "@/lib/db";
 import { getProjectApprovedSteps } from "@/lib/expert-review-assignment";
+import { addColumnIfNotExists } from "@/lib/migration-helpers";
+
+let executiveSummaryEnsurePromise: Promise<void> | null = null;
+
+/** Older migrate-only DBs created research_dossiers without executiveSummary. */
+async function ensureResearchDossierExecutiveSummaryColumn(): Promise<void> {
+  if (!executiveSummaryEnsurePromise) {
+    executiveSummaryEnsurePromise = (async () => {
+      try {
+        await addColumnIfNotExists(
+          pool,
+          "research_dossiers",
+          "executiveSummary",
+          "LONGTEXT NULL"
+        );
+      } catch (error) {
+        console.warn("Could not ensure research_dossiers.executiveSummary:", error);
+        executiveSummaryEnsurePromise = null;
+      }
+    })();
+  }
+  await executiveSummaryEnsurePromise;
+}
+
+export type V2StepStatus = "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED";
+
+export interface V2ProgressStep {
+  stepKey: string;
+  title: string;
+  completed: boolean;
+  detail?: string;
+  /** Binary step progress: 0 or 100 (Laboratory Results uses saved-record count). */
+  progressPercent?: number;
+  status?: V2StepStatus;
+}
 
 export interface V2SectionProgress {
   section1: {
-    status: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED";
+    status: V2StepStatus;
     completedSteps: number;
     totalSteps: 6;
-    steps: {
-      stepKey: string;
-      title: string;
-      completed: boolean;
-      detail?: string;
-    }[];
+    progressPercent?: number;
+    steps: V2ProgressStep[];
   };
   section2: {
-    status: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED";
+    status: V2StepStatus;
     completedSteps: number;
-    totalSteps: 8;
-    steps: {
-      stepKey: string;
-      title: string;
-      completed: boolean;
-      detail?: string;
-    }[];
+    totalSteps: 7;
+    progressPercent?: number;
+    steps: V2ProgressStep[];
   };
   section3: {
-    status: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED";
+    status: V2StepStatus;
     completedSteps: number;
     totalSteps: number;
-    steps: {
-      stepKey: string;
-      title: string;
-      completed: boolean;
-      detail?: string;
-    }[];
+    progressPercent?: number;
+    steps: V2ProgressStep[];
   };
   section4: {
-    status: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED";
+    status: V2StepStatus;
     completedSteps: number;
     totalSteps: number;
-    steps: {
-      stepKey: string;
-      title: string;
-      completed: boolean;
-      detail?: string;
-    }[];
+    progressPercent?: number;
+    steps: V2ProgressStep[];
+  };
+  /**
+   * Laboratory Results step (inside Paper Submission).
+   * 0 saved → 0% NOT_STARTED; ≥1 saved → 100% COMPLETED.
+   */
+  laboratoryResults?: {
+    count: number;
+    progressPercent: number;
+    status: "NOT_STARTED" | "COMPLETED";
   };
   overallStatus: string;
   overallProgressPercent: number;
@@ -65,7 +93,58 @@ export interface V2SectionProgress {
   };
 }
 
+function emptyV2Progress(progressPercent = 0): V2SectionProgress {
+  return {
+    section1: {
+      status: "NOT_STARTED",
+      completedSteps: 0,
+      totalSteps: 6,
+      progressPercent: 0,
+      steps: [],
+    },
+    section2: {
+      status: "NOT_STARTED",
+      completedSteps: 0,
+      totalSteps: 7,
+      progressPercent: 0,
+      steps: [],
+    },
+    section3: {
+      status: "NOT_STARTED",
+      completedSteps: 0,
+      totalSteps: 3,
+      progressPercent: 0,
+      steps: [],
+    },
+    section4: {
+      status: "NOT_STARTED",
+      completedSteps: 0,
+      totalSteps: 3,
+      progressPercent: 0,
+      steps: [],
+    },
+    laboratoryResults: { count: 0, progressPercent: 0, status: "NOT_STARTED" },
+    overallStatus: "Draft",
+    overallProgressPercent: progressPercent,
+    canSubmit: false,
+    approvedSpecialtiesCount: 0,
+    hasSubmittedForReview: false,
+    isCompleted: false,
+    approvedStepsBySection: { section1: [], section2: [], section3: [] },
+    sectionApprovalPercent: { section1: 0, section2: 0, section3: 0, overall: 0 },
+  };
+}
+
 export async function calculateV2ProjectProgress(projectId: number): Promise<V2SectionProgress> {
+  try {
+    return await calculateV2ProjectProgressUnsafe(projectId);
+  } catch (error) {
+    console.warn("calculateV2ProjectProgress failed; returning draft progress:", error);
+    return emptyV2Progress();
+  }
+}
+
+async function calculateV2ProjectProgressUnsafe(projectId: number): Promise<V2SectionProgress> {
   // Query Section 1 data
   // Query project for plant identity
   const [projIdentityRows]: any = await pool.query(
@@ -147,105 +226,120 @@ export async function calculateV2ProjectProgress(projectId: number): Promise<V2S
   const sec1Status: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED" =
     sec1CompletedCount === 6 ? "COMPLETED" : sec1CompletedCount > 0 ? "IN_PROGRESS" : "NOT_STARTED";
 
-  // Section 2: In-Silico Analysis (8 steps)
-  // Step 1: Phytochemical Selection
+  // Section 2: In-Silico Analysis (7 steps) — ligands come from Section 1 research_compounds
   const [compoundsRows]: any = await pool.query(
-    "SELECT COUNT(*) as count FROM research_compounds WHERE projectId = ?",
+    `SELECT
+       COUNT(*) as total,
+       SUM(CASE WHEN smiles IS NOT NULL AND TRIM(smiles) <> '' THEN 1 ELSE 0 END) as structureReady
+     FROM research_compounds WHERE projectId = ?`,
     [projectId]
   );
-  const compoundsCount = Number(compoundsRows[0]?.count || 0);
-  const step2_1 = compoundsCount > 0;
+  const compoundsCount = Number(compoundsRows[0]?.total || 0);
+  const structureReadyCount = Number(compoundsRows[0]?.structureReady || 0);
 
-  // Step 2: Target Protein Selection
+  // Step 1: Target Protein Selection
   const [targetsRows]: any = await pool.query(
     "SELECT COUNT(*) as count FROM docking_targets WHERE projectId = ?",
     [projectId]
   );
   const targetsCount = Number(targetsRows[0]?.count || 0);
-  const step2_2 = targetsCount > 0;
+  const step2_1 = targetsCount > 0;
 
-  // Step 3: In-Silico Screening
+  // Step 2: In-Silico Screening
   const [screenRows]: any = await pool.query(
     "SELECT COUNT(*) as count FROM insilico_results WHERE projectId = ?",
     [projectId]
   );
-  const step2_3 = Number(screenRows[0]?.count || 0) > 0;
+  const step2_2 = Number(screenRows[0]?.count || 0) > 0;
 
-  // Step 4: Molecular Docking
+  // Step 3: Molecular Docking
   const [dockingRuns]: any = await pool.query(
     "SELECT COUNT(*) as count FROM docking_runs WHERE projectId = ?",
     [projectId]
   );
-  const step2_4 = Number(dockingRuns[0]?.count || 0) > 0;
+  const step2_3 = Number(dockingRuns[0]?.count || 0) > 0;
 
-  // Step 5: Binding Affinity Results
+  // Step 4: Binding Affinity Results
   const [affinityRuns]: any = await pool.query(
     "SELECT COUNT(*) as count FROM docking_runs WHERE projectId = ? AND bindingAffinity IS NOT NULL",
     [projectId]
   );
-  const step2_5 = Number(affinityRuns[0]?.count || 0) > 0;
+  const step2_4 = Number(affinityRuns[0]?.count || 0) > 0;
 
-  // Step 6: 2D Interaction Visualization
-  let step2_6 = step2_5;
+  // Step 5: 2D Interaction Visualization
+  let step2_5 = step2_4;
   try {
     const [synth2DRows]: any = await pool.query(
       "SELECT id, importantInteractions FROM research_docking_syntheses WHERE projectId = ? LIMIT 1",
       [projectId]
     );
-    step2_6 = step2_5 && (synth2DRows.length > 0 || step2_4);
+    step2_5 = step2_4 && (synth2DRows.length > 0 || step2_3);
   } catch {
-    step2_6 = step2_5;
+    step2_5 = step2_4;
   }
 
-  // Step 7: 3D Visualization
-  const step2_7 = step2_5;
+  // Step 6: 3D Visualization
+  const step2_6 = step2_4;
 
-  // Step 8: Results & Interpretation
-  let step2_8 = false;
+  // Step 7: Results & Interpretation
+  let step2_7 = false;
   try {
     const [dockSynth]: any = await pool.query(
       "SELECT id, keyFindings FROM research_docking_syntheses WHERE projectId = ? LIMIT 1",
       [projectId]
     );
     if (dockSynth.length > 0 && !!dockSynth[0].keyFindings) {
-      step2_8 = true;
+      step2_7 = true;
     } else {
       const [synthRows]: any = await pool.query(
         "SELECT id, keyFindings FROM research_insilico_syntheses WHERE projectId = ? LIMIT 1",
         [projectId]
       );
-      step2_8 = synthRows.length > 0 && !!synthRows[0].keyFindings;
+      step2_7 = synthRows.length > 0 && !!synthRows[0].keyFindings;
     }
   } catch {
-    step2_8 = step2_5;
+    step2_7 = step2_4;
   }
 
   const sec2Steps = [
-    { stepKey: "phytochemical-selection", title: "Phytochemical Selection", completed: step2_1, detail: step2_1 ? `${compoundsCount} compound(s) selected` : "Pending botanical metabolites" },
-    { stepKey: "target-protein-selection", title: "Target Protein Selection", completed: step2_2, detail: step2_2 ? `${targetsCount} biological target(s) mapped` : "Pending receptor target" },
-    { stepKey: "insilico-screening", title: "In-Silico Screening", completed: step2_3, detail: step2_3 ? "ADMET & Lipinski screened" : "Pending drug-likeness screen" },
-    { stepKey: "molecular-docking", title: "Molecular Docking", completed: step2_4, detail: step2_4 ? "AutoDock simulation executed" : "Pending docking execution" },
-    { stepKey: "binding-affinity", title: "Binding Affinity Results", completed: step2_5, detail: step2_5 ? "Binding affinity (ΔG) recorded" : "Pending energy calculations" },
-    { stepKey: "2d-interaction", title: "2D Protein-Ligand Interactions", completed: step2_6, detail: step2_6 ? "Key active site residues mapped" : "Pending residue contact mapping" },
-    { stepKey: "3d-visualization", title: "3D Molecular Visualization", completed: step2_7, detail: step2_7 ? "3D conformation inspected" : "Pending 3D model validation" },
-    { stepKey: "results-interpretation", title: "Results and Interpretation", completed: step2_8, detail: step2_8 ? "Computational synthesis complete" : "Pending in-silico conclusion" },
+    {
+      stepKey: "target-protein-selection",
+      title: "Target Protein Selection",
+      completed: step2_1,
+      detail: step2_1
+        ? `${targetsCount} biological target(s) mapped · ${structureReadyCount}/${compoundsCount || 0} Section 1 ligands ready`
+        : structureReadyCount > 0
+          ? `Pending receptor target · ${structureReadyCount} Section 1 ligand(s) ready`
+          : compoundsCount > 0
+            ? "Pending receptor target · Section 1 compounds lack molecular structures"
+            : "Pending receptor target · identify phytochemicals in Section 1 first",
+    },
+    { stepKey: "insilico-screening", title: "In-Silico Screening", completed: step2_2, detail: step2_2 ? "ADMET & Lipinski screened" : "Pending drug-likeness screen" },
+    { stepKey: "molecular-docking", title: "Molecular Docking Execution", completed: step2_3, detail: step2_3 ? "AutoDock simulation executed" : "Pending docking execution" },
+    { stepKey: "binding-affinity", title: "Binding Affinity Results", completed: step2_4, detail: step2_4 ? "Binding affinity (ΔG) recorded" : "Pending energy calculations" },
+    { stepKey: "2d-interaction", title: "2D Interaction Visualization", completed: step2_5, detail: step2_5 ? "Key active site residues mapped" : "Pending residue contact mapping" },
+    { stepKey: "3d-visualization", title: "3D Molecular Visualization", completed: step2_6, detail: step2_6 ? "3D conformation inspected" : "Pending 3D model validation" },
+    { stepKey: "results-interpretation", title: "Results & Interpretation", completed: step2_7, detail: step2_7 ? "Computational synthesis complete" : "Pending in-silico conclusion" },
   ];
 
   const sec2CompletedCount = sec2Steps.filter((s) => s.completed).length;
   const sec2Status: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED" =
-    sec2CompletedCount === 8 ? "COMPLETED" : sec2CompletedCount > 0 ? "IN_PROGRESS" : "NOT_STARTED";
+    sec2CompletedCount === 7 ? "COMPLETED" : sec2CompletedCount > 0 ? "IN_PROGRESS" : "NOT_STARTED";
 
   // Section 3: Research Paper Submission (3 steps)
   // Step 1: Research Summary
-  const [dossierRows]: any = await pool.query(
-    "SELECT id, executiveSummary FROM research_dossiers WHERE projectId = ? LIMIT 1",
-    [projectId]
-  );
-  const step3_1 = Boolean(
-    dossierRows.length > 0 &&
-      dossierRows[0].executiveSummary &&
-      String(dossierRows[0].executiveSummary).trim().length > 0
-  );
+  let step3_1 = false;
+  try {
+    await ensureResearchDossierExecutiveSummaryColumn();
+    const [dossierRows]: any = await pool.query(
+      "SELECT * FROM research_dossiers WHERE projectId = ? LIMIT 1",
+      [projectId]
+    );
+    const summary = dossierRows[0]?.executiveSummary;
+    step3_1 = Boolean(summary && String(summary).trim().length > 0);
+  } catch {
+    step3_1 = false;
+  }
 
   // Step 2: Upload Research Paper (also supports legacy structured manuscripts)
   let manuscript: any = null;
@@ -332,19 +426,51 @@ export async function calculateV2ProjectProgress(projectId: number): Promise<V2S
       "COMPLETED",
     ].includes(currentDbStatus);
 
-  const sec3Steps = [
+  // Laboratory results live inside Paper Submission (optional; not required for canSubmit)
+  let labResultsCount = 0;
+  try {
+    const [labRows]: any = await pool.query(
+      "SELECT COUNT(*) AS cnt FROM research_laboratory_results WHERE projectId = ?",
+      [projectId]
+    );
+    labResultsCount = Number(labRows[0]?.cnt || 0);
+  } catch {
+    labResultsCount = 0;
+  }
+  // Lab step: 0 saved → 0% / NOT_STARTED; ≥1 saved → 100% / COMPLETED
+  const labStepRecorded = labResultsCount > 0;
+  const labProgressPercent = labStepRecorded ? 100 : 0;
+  const labStepStatus: "NOT_STARTED" | "COMPLETED" = labStepRecorded
+    ? "COMPLETED"
+    : "NOT_STARTED";
+
+  const sec3Steps: V2ProgressStep[] = [
     {
       stepKey: "research-summary",
       title: "Research Summary",
       completed: step3_1,
+      progressPercent: step3_1 ? 100 : 0,
+      status: step3_1 ? "COMPLETED" : "NOT_STARTED",
       detail: step3_1
         ? "Executive multi-stage summary compiled"
         : "Pending research summary review",
     },
     {
+      stepKey: "laboratory-results",
+      title: "Laboratory Results",
+      completed: labStepRecorded,
+      progressPercent: labProgressPercent,
+      status: labStepStatus,
+      detail: labStepRecorded
+        ? `${labResultsCount} laboratory result${labResultsCount === 1 ? "" : "s"} saved · Complete`
+        : "Not Started — optional: save at least one laboratory result",
+    },
+    {
       stepKey: "upload-research-paper",
       title: "Upload Research Paper",
       completed: step3_2,
+      progressPercent: step3_2 ? 100 : 0,
+      status: step3_2 ? "COMPLETED" : "NOT_STARTED",
       detail: hasUploadedManuscriptFile
         ? `Uploaded: ${manuscript.fileName || "Research Paper"}`
         : hasLegacyManuscriptContent
@@ -353,9 +479,20 @@ export async function calculateV2ProjectProgress(projectId: number): Promise<V2S
     },
   ];
 
+  // Required for section COMPLETED / submit: summary + manuscript (lab optional)
+  const sec3RequiredCompleted = (step3_1 ? 1 : 0) + (step3_2 ? 1 : 0);
   const sec3CompletedCount = sec3Steps.filter((s) => s.completed).length;
-  const sec3Status: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED" =
-    sec3CompletedCount === 2 ? "COMPLETED" : sec3CompletedCount > 0 ? "IN_PROGRESS" : "NOT_STARTED";
+  const sec3Status: V2StepStatus =
+    sec3RequiredCompleted === 2
+      ? "COMPLETED"
+      : sec3CompletedCount > 0 || step3_3
+        ? "IN_PROGRESS"
+        : "NOT_STARTED";
+  // Section bar: 100% only when required steps are done; otherwise reflect all 3 step states
+  const sec3ProgressPercent =
+    sec3Status === "COMPLETED"
+      ? 100
+      : Math.round((sec3CompletedCount / 3) * 100);
 
   // Query live reviewer step approvals from review_step_approvals
   let approvedSteps = {
@@ -369,16 +506,20 @@ export async function calculateV2ProjectProgress(projectId: number): Promise<V2S
     // fallback if table query fails
   }
 
-  const s1Pct = Math.round((approvedSteps.section1.length / 6) * 100);
-  const s2Pct = Math.round((approvedSteps.section2.length / 8) * 100);
-  const s3Pct = Math.round((approvedSteps.section3.length / 2) * 100);
-  const totalApprovedSteps =
-    approvedSteps.section1.length + approvedSteps.section2.length + approvedSteps.section3.length;
+  const s1Valid = approvedSteps.section1.filter((n) => n >= 1 && n <= 6);
+  const s2Valid = approvedSteps.section2.filter((n) => n >= 1 && n <= 7);
+  const s3Valid = approvedSteps.section3.filter((n) => n >= 1 && n <= 3);
+  const s1Pct = Math.round((s1Valid.length / 6) * 100);
+  const s2Pct = Math.round((s2Valid.length / 7) * 100);
+  const s3Pct = Math.round((s3Valid.length / 3) * 100);
+  const totalApprovedSteps = s1Valid.length + s2Valid.length + s3Valid.length;
+  // Section 1 (6) + Section 2 (7) + Section 3 (3) = 16 reviewable steps
   const overallApprovalPct = Math.round((totalApprovedSteps / 16) * 100);
 
-  const sec1ApprovedBySteps = approvedSteps.section1.length >= 6;
-  const sec2ApprovedBySteps = approvedSteps.section2.length >= 8;
-  const sec3ApprovedBySteps = approvedSteps.section3.length >= 2;
+  const sec1ApprovedBySteps = s1Valid.length >= 6;
+  // Accept legacy 8-step approvals (≥7 or ≥8) as Section 2 complete
+  const sec2ApprovedBySteps = s2Valid.length >= 7 || approvedSteps.section2.length >= 7;
+  const sec3ApprovedBySteps = s3Valid.length >= 3;
   const stepBasedApprovedSpecialties =
     (sec1ApprovedBySteps ? 1 : 0) +
     (sec2ApprovedBySteps ? 1 : 0) +
@@ -418,12 +559,17 @@ export async function calculateV2ProjectProgress(projectId: number): Promise<V2S
       ? "IN_PROGRESS"
       : "NOT_STARTED";
 
-  // Total steps across Section 1 (6), Section 2 (8), Section 3 (2), and Section 4 (3) = 19
-  const totalCompleted = sec1CompletedCount + sec2CompletedCount + sec3CompletedCount + sec4CompletedCount;
+  // Total: Sec1(6) + Sec2(7) + Paper required(2) + Approval(3) = 18; lab optional bonus not required
+  const totalCompleted =
+    sec1CompletedCount +
+    sec2CompletedCount +
+    sec3RequiredCompleted +
+    sec4CompletedCount;
   const overallProgressPercent = isCompleted
     ? 100
-    : Math.min(99, Math.round((totalCompleted / 19) * 100));
+    : Math.min(99, Math.round((totalCompleted / 18) * 100));
 
+  // Paper submission requires Sec1+Sec2+summary+manuscript (lab optional for submit)
   const canSubmit = sec1Status === "COMPLETED" && sec2Status === "COMPLETED" && step3_1 && step3_2;
 
   let overallStatus: V2SectionProgress["overallStatus"] = "Draft";
@@ -455,25 +601,35 @@ export async function calculateV2ProjectProgress(projectId: number): Promise<V2S
       status: sec1Status,
       completedSteps: sec1CompletedCount,
       totalSteps: 6,
+      progressPercent: Math.round((sec1CompletedCount / 6) * 100),
       steps: sec1Steps,
     },
     section2: {
       status: sec2Status,
       completedSteps: sec2CompletedCount,
-      totalSteps: 8,
+      totalSteps: 7,
+      progressPercent: Math.round((sec2CompletedCount / 7) * 100),
       steps: sec2Steps,
     },
     section3: {
       status: sec3Status,
+      // Include lab in step count so workspace done/total reflects saved results
       completedSteps: sec3CompletedCount,
-      totalSteps: 2,
+      totalSteps: 3,
+      progressPercent: sec3ProgressPercent,
       steps: sec3Steps,
     },
     section4: {
       status: sec4Status,
       completedSteps: sec4CompletedCount,
       totalSteps: 3,
+      progressPercent: Math.round((sec4CompletedCount / 3) * 100),
       steps: sec4Steps,
+    },
+    laboratoryResults: {
+      count: labResultsCount,
+      progressPercent: labProgressPercent,
+      status: labStepStatus,
     },
     overallStatus,
     overallProgressPercent,

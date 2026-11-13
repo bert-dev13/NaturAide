@@ -254,13 +254,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Research Title is required" }, { status: 400 });
     }
 
+    const hasCatalogPlant = typeof plantId === "string" && plantId.trim().length > 0;
+    const hasCustomPlant =
+      typeof plantCustomName === "string" && plantCustomName.trim().length > 0;
+    if (!hasCatalogPlant && !hasCustomPlant) {
+      return NextResponse.json(
+        { error: "A medicinal plant or custom specimen is required" },
+        { status: 400 }
+      );
+    }
+
     const status = isDraft ? "DRAFT" : "IN_PROGRESS";
     const initialProgress = 0; // Starts at 0 / 6 stages completed
 
-    // Format planned scope if provided as an array
-    const scopeString = Array.isArray(plannedScope) && plannedScope.length > 0
-      ? plannedScope.join(", ")
-      : areaOfInterest?.trim() || "Comprehensive Botanical Evidence Dossier";
+    // Optional context fields may be omitted at creation (collected later in the workflow).
+    // Preserve explicit values when clients still send them; do not invent placeholders.
+    const scopeString =
+      Array.isArray(plannedScope) && plannedScope.length > 0
+        ? plannedScope.join(", ")
+        : areaOfInterest?.trim() || null;
 
     const [insertResult]: any = await pool.query(
       `
@@ -278,7 +290,7 @@ export async function POST(request: Request) {
         researchObjective?.trim() || null,
         researchQuestion?.trim() || null,
         scopeString,
-        expectedOutcome?.trim() || "Scientific monograph & empirical validation benchmarks",
+        expectedOutcome?.trim() || null,
         status,
         initialProgress,
       ]

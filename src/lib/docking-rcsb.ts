@@ -60,52 +60,86 @@ function pubmedOf(raw: unknown): string | null {
   return m ? m[0] : null;
 }
 
+function curatedHit(id: string): StructureHit | null {
+  const curated = lookupTargetByPdbId(id);
+  if (!curated) return null;
+  const resMatch = String(curated.resolution || "").match(/([\d.]+)/);
+  const resolution = resMatch ? Number(resMatch[1]) : null;
+  return {
+    pdbId: id,
+    title: curated.targetName,
+    description: curated.targetName,
+    gene: curated.geneOrProtein || null,
+    organism: curated.organism || null,
+    method: curated.method || null,
+    resolution: Number.isFinite(resolution) ? resolution : null,
+    pubmedId: null,
+    doi: null,
+    rcsbUrl: `https://www.rcsb.org/structure/${id}`,
+  };
+}
+
 export async function describeStructure(pdbId: string): Promise<StructureHit | null> {
   const id = pdbId.trim().toUpperCase();
   if (!pdbOk(id)) return null;
-  const entryRes = await fetch(`https://data.rcsb.org/rest/v1/core/entry/${id}`, { cache: "no-store" });
-  if (!entryRes.ok) return null;
-  const entry = await entryRes.json();
-  const title = String(entry?.struct?.title || "").trim();
-  if (!title) return null;
 
-  let description = title;
-  let gene: string | null = null;
-  let organism: string | null = null;
+  // Curated library entries are available instantly — avoid blocking RCSB round-trips on select.
+  const fromCatalog = curatedHit(id);
+  if (fromCatalog) return fromCatalog;
+
   try {
-    const polyRes = await fetch(`https://data.rcsb.org/rest/v1/core/polymer_entity/${id}/1`, { cache: "no-store" });
-    if (polyRes.ok) {
-      const poly = await polyRes.json();
-      const desc = String(poly?.rcsb_polymer_entity?.pdbx_description || "").trim();
-      if (desc) description = cleanTargetProteinName(desc, id);
-      const geneName = poly?.rcsb_polymer_entity?.rcsb_gene_name;
-      const symbol = Array.isArray(geneName) ? geneName[0]?.value || geneName[0] : geneName;
-      if (typeof symbol === "string" && symbol.trim()) gene = symbol.trim();
-      const org = poly?.rcsb_entity_source_organism?.[0];
-      const sci = org?.ncbi_scientific_name || org?.scientific_name;
-      if (typeof sci === "string" && sci.trim()) organism = sci.trim();
+    const entryRes = await fetch(`https://data.rcsb.org/rest/v1/core/entry/${id}`, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!entryRes.ok) return null;
+    const entry = await entryRes.json();
+    const title = String(entry?.struct?.title || "").trim();
+    if (!title) return null;
+
+    let description = title;
+    let gene: string | null = null;
+    let organism: string | null = null;
+    try {
+      const polyRes = await fetch(`https://data.rcsb.org/rest/v1/core/polymer_entity/${id}/1`, {
+        cache: "no-store",
+        signal: AbortSignal.timeout(8000),
+      });
+      if (polyRes.ok) {
+        const poly = await polyRes.json();
+        const desc = String(poly?.rcsb_polymer_entity?.pdbx_description || "").trim();
+        if (desc) description = cleanTargetProteinName(desc, id);
+        const geneName = poly?.rcsb_polymer_entity?.rcsb_gene_name;
+        const symbol = Array.isArray(geneName) ? geneName[0]?.value || geneName[0] : geneName;
+        if (typeof symbol === "string" && symbol.trim()) gene = symbol.trim();
+        const org = poly?.rcsb_entity_source_organism?.[0];
+        const sci = org?.ncbi_scientific_name || org?.scientific_name;
+        if (typeof sci === "string" && sci.trim()) organism = sci.trim();
+      }
+    } catch {
+      /* polymer metadata is optional; the entry title is enough to identify the deposit */
     }
+
+    const citation = entry?.rcsb_primary_citation || {};
+    const resolution = Array.isArray(entry?.rcsb_entry_info?.resolution_combined)
+      ? Number(entry.rcsb_entry_info.resolution_combined[0])
+      : null;
+
+    return {
+      pdbId: id,
+      title,
+      description,
+      gene,
+      organism,
+      method: entry?.exptl?.[0]?.method ? String(entry.exptl[0].method) : null,
+      resolution: Number.isFinite(resolution) ? resolution : null,
+      pubmedId: pubmedOf(citation.pdbx_database_id_PubMed),
+      doi: doiOf(citation.pdbx_database_id_DOI),
+      rcsbUrl: `https://www.rcsb.org/structure/${id}`,
+    };
   } catch {
-    /* polymer metadata is optional; the entry title is enough to identify the deposit */
+    return null;
   }
-
-  const citation = entry?.rcsb_primary_citation || {};
-  const resolution = Array.isArray(entry?.rcsb_entry_info?.resolution_combined)
-    ? Number(entry.rcsb_entry_info.resolution_combined[0])
-    : null;
-
-  return {
-    pdbId: id,
-    title,
-    description,
-    gene,
-    organism,
-    method: entry?.exptl?.[0]?.method ? String(entry.exptl[0].method) : null,
-    resolution: Number.isFinite(resolution) ? resolution : null,
-    pubmedId: pubmedOf(citation.pdbx_database_id_PubMed),
-    doi: doiOf(citation.pdbx_database_id_DOI),
-    rcsbUrl: `https://www.rcsb.org/structure/${id}`,
-  };
 }
 
 export async function searchStructures(query: string): Promise<StructureHit[]> {

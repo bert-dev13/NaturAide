@@ -179,20 +179,44 @@ export async function generateInSilicoInterpretation(
     );
   }
 
-  // Build structured context strings for Together AI
+  // Build structured context strings for Together AI from stored records only
   const screeningSummaryLines = compounds.map((c: any) => {
     const s =
       screenByCompound.get(String(c.id)) ||
       screenByCompound.get(String(c.compoundName || "").toLowerCase());
-    const mw = c.molecularWeight ?? "N/A";
-    const logP = s?.logP ?? "N/A";
-    const tpsa = s?.tpsa ?? "N/A";
-    const hbd = s?.hBondDonors ?? "N/A";
-    const hba = s?.hBondAcceptors ?? "N/A";
-    const rot = s?.rotatableBonds ?? "N/A";
-    const viol = s?.lipinskiViolations ?? 0;
-    const gi = s?.giAbsorption || (Number(viol) <= 1 ? "High/Moderate" : "Low");
-    return `- ${c.compoundName} (${c.molecularFormula || "formula N/A"}): MW=${mw} g/mol, LogP=${logP}, TPSA=${tpsa} Å², HBD=${hbd}, HBA=${hba}, Rotatable Bonds=${rot}, Lipinski Violations=${viol}, Predicted GI/Permeability=${gi}`;
+
+    let metrics: any = {};
+    if (s?.detailedMetrics) {
+      try {
+        metrics =
+          typeof s.detailedMetrics === "string"
+            ? JSON.parse(s.detailedMetrics)
+            : s.detailedMetrics;
+      } catch {
+        metrics = {};
+      }
+    }
+    const prop = metrics.physicochemicalProperties || {};
+    const lip = metrics.drugLikeness?.lipinskiRuleOfFive || {};
+    const admet = metrics.admet || {};
+
+    const fmt = (v: any) =>
+      v === null || v === undefined || v === "" || v === "Unavailable" ? "unavailable" : String(v);
+
+    const mw = c.molecularWeight ?? prop.molecularWeight?.value ?? "unavailable";
+    const logP = s?.logP ?? prop.logP?.value ?? "unavailable";
+    const tpsa = s?.tpsa ?? prop.tpsa?.value ?? "unavailable";
+    const hbd = s?.hBondDonors ?? prop.hBondDonors?.value ?? "unavailable";
+    const hba = s?.hBondAcceptors ?? prop.hBondAcceptors?.value ?? "unavailable";
+    const rot = s?.rotatableBonds ?? prop.rotatableBonds?.value ?? "unavailable";
+    const viol =
+      s?.lipinskiViolations ??
+      (lip.violations !== undefined ? lip.violations : "unavailable");
+    const gi = admet.giAbsorption?.prediction || "not evaluated";
+    const skin = admet.skinPermeability?.prediction || "not evaluated";
+    const engine = s?.engineStatus || metrics.status || "not screened";
+
+    return `- ${c.compoundName} (${c.molecularFormula || "formula unavailable"}): MW=${fmt(mw)}, LogP=${fmt(logP)}, TPSA=${fmt(tpsa)}, HBD=${fmt(hbd)}, HBA=${fmt(hba)}, Rotatable Bonds=${fmt(rot)}, Lipinski Violations=${fmt(viol)}, GI absorption=${gi}, Skin permeability=${skin}, Screening status=${engine}`;
   });
 
   const targetSummaryLines = targets.map((t: any) => {
@@ -207,24 +231,38 @@ export async function generateInSilicoInterpretation(
   const dockingSummaryLines = completedRuns.map(
     (r, idx) =>
       `Rank #${idx + 1}: ${r.ligandName} × ${r.targetProtein} (${r.pdbId}) -> ${r.affinityNum.toFixed(
-        3
+        2
       )} kcal/mol (${r.poseCount || 9} poses, ${r.vinaVersion || "AutoDock Vina v1.2.7"})`
   );
 
+  const allowedCompoundNames = compounds
+    .map((c: any) => c.compoundName)
+    .filter(Boolean)
+    .join(", ");
+  const allowedTargetNames = targets
+    .map((t: any) => `${t.targetName} (${t.pdbId})`)
+    .filter(Boolean)
+    .join(", ");
+
   const systemPrompt = `You are a Principal Computational Chemist and Pharmaceutical Researcher on the NatureAide scientific platform.
-Generate a rigorous, publication-grade scientific interpretation of the project's actual in-silico screening and AutoDock Vina molecular docking results.
+Generate a rigorous scientific interpretation of the project's actual in-silico screening and AutoDock Vina molecular docking results.
 
 CRITICAL SCIENTIFIC INTEGRITY RULES:
-1. Ground every statement strictly in the provided phytochemical screening metrics, target proteins, PDB IDs, and AutoDock Vina binding affinities (kcal/mol).
-2. NEVER fabricate wet-lab experimental results, IC50/Ki measurements, clinical trials, DOIs, or unverified therapeutic cure claims.
-3. In "computationalFindings":
-   - Discuss the leading docked complexes by name, PDB ID, and exact predicted binding affinity (kcal/mol).
-   - Compare how the screened phytochemicals (e.g., aglycones vs. glycosides, Lipinski Rule of Five compliance, TPSA, H-bonding capacity) interact within the catalytic binding pockets of the selected target proteins.
-   - Connect the predicted target engagement to the project's research objective and ${formulationType} formulation context.
-4. In "computationalLimitations":
-   - Explain the methodological constraints of semi-rigid receptor docking in AutoDock Vina, empirical free-energy scoring functions, and implicit solvent approximations.
-   - Address physicochemical/permeability constraints (such as high polar surface area or molecular weight of glycosides vs. aglycones in ${formulationType} delivery).
-   - Specify the required in-vitro enzymatic/cell-based bioassays and Franz diffusion / formulation release studies needed to experimentally validate these computational predictions.
+1. Ground every statement ONLY in the provided compound list, screening metrics, target proteins, PDB IDs, and AutoDock Vina binding affinities (kcal/mol).
+2. NEVER invent compounds, receptors, ADMET values, Lipinski results, residue contacts, biological mechanisms, experimental findings, or binding classifications that are not explicitly present in the project data.
+3. Allowed compounds for this project: ${allowedCompoundNames || "(none)"}. Allowed targets: ${allowedTargetNames || "(none)"}. Do not mention any other phytochemicals or receptors.
+4. If a descriptor is marked unavailable or not evaluated, say so explicitly. Do not invent substitutes.
+5. Report binding affinities rounded to two decimal places (e.g., -6.78 kcal/mol). Do not invent "Strong/Favorable" labels.
+6. NEVER claim that a predicted docking score proves therapeutic effectiveness, clinical benefit, or experimental activity.
+7. NEVER fabricate wet-lab results, IC50/Ki values, clinical trials, or DOIs.
+8. In "computationalFindings":
+   - Discuss only the listed compounds and completed docking complexes by name, PDB ID, and predicted ΔG (kcal/mol).
+   - Use only the ADMET / physicochemical values supplied for those compounds.
+   - Connect predictions cautiously to the research objective and ${formulationType} context as a computational hypothesis only.
+9. In "computationalLimitations":
+   - Explain AutoDock Vina semi-rigid docking limits, empirical scoring, and implicit solvent approximations.
+   - Note that experimental validation (e.g., in-vitro assays and formulation-relevant permeability/release studies) is required.
+   - Do not invent compound-class-specific constraints unless those compounds appear in the data.
 
 Respond ONLY with a valid JSON object matching this exact schema:
 {
@@ -279,34 +317,46 @@ Return the JSON object with "computationalFindings" and "computationalLimitation
     const top1 = completedRuns[0];
     const top2 = completedRuns[1];
     const top3 = completedRuns[2];
-    const targetListStr = targets.map((t: any) => `${t.targetName} (PDB: ${t.pdbId})`).join(", ");
-    const compoundListStr = compounds.map((c: any) => c.compoundName).join(", ");
+    const targetListStr =
+      targets.map((t: any) => `${t.targetName} (PDB: ${t.pdbId})`).join(", ") ||
+      "no targets recorded";
+    const compoundListStr =
+      compounds.map((c: any) => c.compoundName).join(", ") || "no compounds recorded";
 
     const topComplexSummary = top1
-      ? `The highest-ranking complex was ${top1.ligandName} docked against ${top1.targetProtein} (${top1.pdbId}) with a predicted binding affinity of ${top1.affinityNum.toFixed(
-          3
+      ? `The highest-ranking completed complex was ${top1.ligandName} docked against ${top1.targetProtein} (${top1.pdbId}) with a predicted binding affinity of ${top1.affinityNum.toFixed(
+          2
         )} kcal/mol${
           top2
             ? `, followed by ${top2.ligandName} × ${top2.targetProtein} (${top2.pdbId}) at ${top2.affinityNum.toFixed(
-                3
+                2
               )} kcal/mol`
             : ""
         }${
           top3
             ? ` and ${top3.ligandName} × ${top3.targetProtein} (${top3.pdbId}) at ${top3.affinityNum.toFixed(
-                3
+                2
               )} kcal/mol`
             : ""
         }.`
-      : `Docking evaluations were configured across ${compounds.length} phytochemical candidates.`;
+      : `No completed docking complexes with binding affinity scores were available at the time of this synthesis.`;
+
+    const screeningNote =
+      screenByCompound.size > 0
+        ? `Stored ADMET and physicochemical descriptors were available for ${screenByCompound.size} screened compound record(s); values marked unavailable were not evaluated in this project.`
+        : `No completed ADMET/physicochemical screening records were available for this project at the time of synthesis.`;
 
     findingsText =
       findingsText ||
-      `In-silico molecular screening and AutoDock Vina (v1.2.7) docking were conducted for ${compounds.length} phytochemical constituent(s) of ${project.plantName} (${project.plantScientificName || "botanical extract"})—specifically ${compoundListStr}—against ${targets.length} therapeutic target receptor(s): ${targetListStr}. Across ${completedRuns.length} completed ligand–receptor simulations, all evaluated phytochemicals demonstrated favorable negative binding free energies within the co-crystallized catalytic binding pockets. ${topComplexSummary}\n\nPhysicochemical and ADMET profiling indicated that the low-molecular-weight anthraquinone aglycones comply with Lipinski's Rule of Five with favorable lipophilicity (LogP) and topological polar surface area (TPSA) for membrane partitioning in the ${formulationType} system, whereas polyphenolic glycosides contributed extensive hydrogen-bond donor/acceptor networks that stabilized binding within polar catalytic residues. Together, these computational results provide a mechanistic hypothesis supporting target engagement relevant to ${researchObjective.toLowerCase()}.`;
+      `In-silico screening and AutoDock Vina docking were reviewed for ${project.plantName}${
+        project.plantScientificName ? ` (${project.plantScientificName})` : ""
+      }. Project compounds included ${compoundListStr}. Selected target receptor(s): ${targetListStr}. ${
+        completedRuns.length
+      } completed ligand–receptor simulation(s) with predicted binding affinities were available. ${topComplexSummary}\n\n${screeningNote} These computational predictions provide a hypothesis-generating basis related to ${researchObjective}, but they are not experimental proof of biological activity or therapeutic efficacy.`;
 
     limitationsText =
       limitationsText ||
-      `These binding affinity values represent computational free-energy approximations generated using AutoDock Vina's empirical scoring function under a semi-rigid receptor assumption and implicit solvation model. They do not account for full protein backbone flexibility, explicit water-mediated bridges, metabolic biotransformation, or stratum corneum permeation kinetics from the ${formulationType} matrix (particularly for higher-molecular-weight glycosides with elevated TPSA and hydrogen-bond counts). Consequently, these in-silico findings must not be interpreted as proof of clinical efficacy; targeted in-vitro enzymatic inhibition assays, cellular cytotoxicity screening, and Franz diffusion cell release studies are required to empirically validate biological activity.`;
+      `Predicted binding affinities are computational free-energy estimates from AutoDock Vina under a semi-rigid receptor model and empirical scoring with implicit solvation. They do not capture full protein flexibility, explicit water networks, metabolism, or formulation-dependent delivery from the ${formulationType} matrix. These results must not be interpreted as clinical efficacy. Experimental validation—such as relevant in-vitro assays and formulation-appropriate permeability or release studies—is required before biological or therapeutic conclusions can be drawn.`;
   }
 
   const { savedAt } = await saveInSilicoInterpretationToDb(projectId, findingsText, limitationsText);

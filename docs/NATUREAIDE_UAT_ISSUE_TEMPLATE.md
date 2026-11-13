@@ -126,7 +126,7 @@ When a test step deviates from the **Expected Result** in [NATUREAIDE_UAT_TEST_C
 
 **Issue ID**: ISS-UAT-REV-001  
 **Date**: 2026-10-26  
-**Tester**: Dr. Elena Rostova  
+**Tester**: Lead Reviewer  
 **Role**: REVIEWER  
 **Module**: Reviewer Workspace  
 **Test Case ID**: REV-UAT-007  
@@ -213,7 +213,7 @@ The submit button spins for 500ms, then a toast appears stating "Failed to save 
 
 ### Retest & Verification
 - **Retest Result**: PASS
-- **Retested By**: Dr. Elena Rostova
+- **Retested By**: Lead Reviewer
 - **Retest Date**: 2026-10-26
 - **Retest Notes**: Form submitted successfully, comment pinned to Section 4 thread with "EVIDENCE_NEEDED" badge. Workflow unblocked.
 ```

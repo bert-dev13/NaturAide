@@ -46,3 +46,58 @@ export function resolveResearchSummaryText(
   }
   return saved || compiled;
 }
+
+const SECTION_TITLES: Record<string, string> = {
+  "1": "Botanical & Extraction",
+  "2": "Formulation Development",
+  "3": "Batch Analysis & QC",
+  "4": "In-Silico Screening",
+  "5": "Molecular Docking",
+  "6": "Computational Findings",
+  "7": "Limitations & Validation",
+};
+
+/** Split a compiled dossier into numbered section bodies for change detection. */
+export function parseCompiledSections(text: string): Record<string, string> {
+  const sections: Record<string, string> = {};
+  const parts = String(text || "").split(/(?=^\d+\.\s)/m);
+  for (const part of parts) {
+    const match = part.match(/^(\d+)\.\s*([^\n]*)([\s\S]*)$/);
+    if (!match) continue;
+    sections[match[1]] = part.trim();
+  }
+  return sections;
+}
+
+/** Return human-readable labels for dossier sections that differ between two compiles. */
+export function diffCompiledSectionLabels(
+  previousText: string,
+  nextText: string
+): string[] {
+  const prev = parseCompiledSections(previousText);
+  const next = parseCompiledSections(nextText);
+  const keys = Array.from(
+    new Set([...Object.keys(prev), ...Object.keys(next)])
+  ).sort((a, b) => Number(a) - Number(b));
+
+  const changed: string[] = [];
+  for (const key of keys) {
+    if ((prev[key] || "").trim() !== (next[key] || "").trim()) {
+      changed.push(SECTION_TITLES[key] || `Section ${key}`);
+    }
+  }
+  return changed;
+}
+
+export function isLikelyResearcherEditedSummary(
+  currentText: string,
+  compiledText: string
+): boolean {
+  const current = String(currentText || "").trim();
+  const compiled = String(compiledText || "").trim();
+  if (!current) return false;
+  if (current === compiled) return false;
+  if (current.length < 120) return false;
+  if (/^Executive research summary of .+\.?$/i.test(current)) return false;
+  return true;
+}

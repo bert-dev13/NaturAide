@@ -46,85 +46,76 @@ export default function CompletedResearchDetailClient({ detail }: Props) {
 
   return (
     <div className="min-h-screen bg-slate-50/70 pb-24">
-      {/* Header Banner (Matching Forest Emerald Design Language & Broad Max Width) */}
-      <div className="w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 pt-6">
+      {/* Compact completed-dossier header */}
+      <div className="w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 pt-4">
         <motion.div
-          initial={{ opacity: 0, y: -8 }}
+          initial={{ opacity: 0, y: -6 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35 }}
-          className="w-full bg-gradient-to-br from-[#0f2c20] via-[#14392a] to-[#0a1e16] rounded-2xl border border-emerald-900/60 p-6 sm:p-7 shadow-lg shadow-emerald-950/20 text-white relative overflow-hidden space-y-4"
+          transition={{ duration: 0.28 }}
+          className="relative w-full overflow-hidden rounded-xl border border-emerald-900/50 bg-[linear-gradient(120deg,#0f2c20_0%,#14392a_50%,#0a1e16_100%)] px-3.5 py-3 text-white shadow-[0_10px_24px_-16px_rgba(15,44,32,0.5)] sm:px-4"
         >
-          <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
-          <div className="absolute bottom-0 left-1/3 w-64 h-64 bg-teal-500/10 rounded-full blur-2xl pointer-events-none" />
+          <div className="pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full bg-emerald-500/10 blur-2xl" />
 
-          {/* Top navigation row */}
-          <div className="relative z-10 flex flex-wrap items-center justify-between gap-3 text-xs border-b border-white/10 pb-3">
-            <Link
-              href="/researcher/completed"
-              className="inline-flex items-center gap-1.5 font-semibold text-emerald-300 hover:text-white transition-colors group"
-            >
-              <ArrowLeft className="w-3.5 h-3.5 transition-transform group-hover:-translate-x-0.5" />
-              <span>Back to Completed Research Archive</span>
-            </Link>
-
-            <div className="flex items-center gap-2">
-              <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-900/50 text-emerald-300 border border-emerald-700/50 font-medium">
-                <ShieldCheck className="w-3 h-3 text-emerald-400" />
-                <span>Verified Dossier</span>
-              </span>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950/90 text-emerald-200 border border-emerald-500/40 font-semibold shadow-xs">
-                <Lock className="w-3 h-3 text-emerald-400" />
-                <span>Read-Only Completed Dossier ({detail.approvedVersionTag})</span>
-              </span>
+          <div className="relative z-10 flex flex-col gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Link
+                href="/researcher/completed"
+                className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-300 transition hover:text-white"
+              >
+                <ArrowLeft className="h-3 w-3" />
+                Archive
+              </Link>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="inline-flex items-center gap-1 rounded-md border border-emerald-700/50 bg-emerald-900/45 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-200">
+                  <ShieldCheck className="h-3 w-3 text-emerald-400" />
+                  Verified
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/35 bg-emerald-950/80 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-200">
+                  <Lock className="h-3 w-3 text-emerald-400" />
+                  Read-only · {detail.approvedVersionTag}
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300">
+                  <Sparkles className="h-3 w-3" />
+                  100% verified
+                </span>
+              </div>
             </div>
-          </div>
 
-          {/* Title & Badge */}
-          <div className="relative z-10 space-y-1.5">
-            <div className="text-xs font-bold uppercase tracking-wider text-emerald-300 flex items-center gap-2">
-              <Award className="w-4 h-4 text-emerald-400" />
-              <span>Completed Multidisciplinary Research Dossier</span>
+            <div className="min-w-0">
+              <p className="mb-0.5 inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.12em] text-emerald-300/90">
+                <Award className="h-3 w-3 text-emerald-400" />
+                Completed dossier
+              </p>
+              <h1 className="truncate text-base font-semibold tracking-tight text-white sm:text-lg">
+                {detail.title}
+              </h1>
             </div>
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white tracking-tight">
-              {detail.title}
-            </h1>
-          </div>
 
-          {/* Metadata Row */}
-          <div className="relative z-10 flex flex-wrap items-center gap-x-5 gap-y-2 pt-1 text-xs text-emerald-100/90">
-            <span className="inline-flex items-center gap-1.5 font-semibold bg-emerald-900/60 px-3 py-1.5 rounded-lg border border-emerald-700/60 text-white shadow-2xs">
-              <Leaf className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Plant: {detail.plantName}</span>
-              {showScientificName && (
-                <span className="font-normal italic text-emerald-300">({detail.scientificName})</span>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-emerald-100/85">
+              <span className="inline-flex min-w-0 items-center gap-1">
+                <Leaf className="h-3 w-3 shrink-0 text-emerald-400" />
+                <span className="truncate font-medium text-white">{detail.plantName}</span>
+                {showScientificName && (
+                  <span className="truncate italic text-emerald-300/80">({detail.scientificName})</span>
+                )}
+              </span>
+              {detail.dosageForm && (
+                <>
+                  <span className="text-emerald-700/80">·</span>
+                  <span className="truncate text-emerald-200/90">{detail.dosageForm}</span>
+                </>
               )}
-            </span>
-
-            {detail.dosageForm && (
-              <span className="inline-flex items-center gap-1 bg-emerald-900/50 px-3 py-1.5 rounded-lg border border-emerald-700/50 text-emerald-200">
-                Formulation: <strong className="text-white ml-1">{detail.dosageForm}</strong>
+              <span className="text-emerald-700/80">·</span>
+              <span className="inline-flex items-center gap-1 text-emerald-200/90" suppressHydrationWarning>
+                <Calendar className="h-3 w-3 text-emerald-400" />
+                {new Date(detail.completedAt).toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                  timeZone: "UTC",
+                })}
               </span>
-            )}
-
-            <span className="inline-flex items-center gap-1.5 text-emerald-300/90 bg-emerald-950/40 px-3 py-1.5 rounded-lg border border-emerald-800/40">
-              <Calendar className="w-3.5 h-3.5 text-emerald-400" />
-              <span suppressHydrationWarning>
-                Completion Date:{" "}
-                <strong className="text-white font-mono">
-                  {new Date(detail.completedAt).toLocaleDateString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                    timeZone: "UTC",
-                  })}
-                </strong>
-              </span>
-            </span>
-
-            <span className="inline-flex items-center gap-1.5 text-emerald-400 font-semibold ml-auto text-xs">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>100% Panel Verified</span>
-            </span>
+            </div>
           </div>
         </motion.div>
       </div>
@@ -139,7 +130,7 @@ export default function CompletedResearchDetailClient({ detail }: Props) {
                 Professional Review
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                Verified across all five multidisciplinary review specialties.
+                Verified across all three multidisciplinary review specialties.
               </p>
             </div>
 
@@ -164,7 +155,7 @@ export default function CompletedResearchDetailClient({ detail }: Props) {
                   <span className="text-slate-300">•</span>
                   <span className="text-slate-600 inline-flex items-center gap-1">
                     <UserCheck className="w-3.5 h-3.5 text-slate-400" />
-                    <span>{spec.reviewerName || spec.roleTitle}</span>
+                    <span>{spec.roleTitle}</span>
                   </span>
                 </div>
 
@@ -547,9 +538,6 @@ export default function CompletedResearchDetailClient({ detail }: Props) {
                               {sp.code}
                             </span>
                             <span className="font-bold text-slate-900">{sp.specialty}</span>
-                            {sp.reviewerName && (
-                              <span className="text-slate-500">({sp.reviewerName})</span>
-                            )}
                           </div>
                           <span
                             className={`px-2 py-0.5 rounded font-bold text-[11px] ${

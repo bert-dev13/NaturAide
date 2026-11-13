@@ -35,22 +35,101 @@ import {
   ShieldAlert,
   Beaker,
   Leaf,
+  CheckCircle2,
+  MoreHorizontal,
+  Eye,
 } from "lucide-react";
 import {
   MATERIAL_TYPES,
   MaterialTypeKey,
   MaterialPresetItem,
-  EXCIPIENT_PRESETS,
-  SOLVENT_PRESETS,
-  PRESERVATIVE_PRESETS,
-  COMMON_GRADES,
   COMMON_UNITS,
-  FUNCTIONAL_ROLES,
-  CURATED_SUPPLIERS,
-  getActiveBotanicalPresets,
-  getAnalyticalStandardPresets,
+  SIMPLE_INGREDIENT_ROLES,
+  SimpleIngredientRoleKey,
+  getAllMaterialPresets,
+  resolveSimpleIngredientRole,
 } from "@/lib/materials-catalog";
 import { MaterialRecommendation } from "@/lib/materials-ai-service";
+
+/** Display-only role labels — underlying scientific roles stay unchanged. */
+function simplifyRoleLabel(role?: string | null): string {
+  const r = (role || "").toLowerCase();
+  if (!r) return "Ingredient";
+  if (
+    r.includes("active botanical") ||
+    r.includes("therapeutic constituent") ||
+    r.includes("botanical active")
+  ) {
+    return "Main Ingredient";
+  }
+  if (r.includes("gelling") || r.includes("matrix builder") || r.includes("stiffening")) {
+    return "Gelling Agent";
+  }
+  if (r.includes("ph neutral") || r.includes("ph adjust") || r.includes("crosslinking")) {
+    return "pH Adjuster";
+  }
+  if (
+    r.includes("humectant") ||
+    r.includes("plasticizer") ||
+    r.includes("moisturizer") ||
+    r.includes("emollient") ||
+    r.includes("levigating")
+  ) {
+    return "Moisturizer";
+  }
+  if (
+    r.includes("hydrophilic vehicle") ||
+    r.includes("aqueous phase") ||
+    r.includes("diluent") ||
+    r.includes("continuous") ||
+    r.includes("ointment base") ||
+    r.includes("occlusive") ||
+    r.includes("binder")
+  ) {
+    return "Base Ingredient";
+  }
+  if (r.includes("preservative") || r.includes("antimicrobial")) return "Preservative";
+  if (
+    r.includes("analytical") ||
+    r.includes("reference standard") ||
+    r.includes("chemical reference")
+  ) {
+    return "Testing Reference";
+  }
+  if (r.includes("emulsif")) return "Emulsifier";
+  if (r.includes("extraction solvent") || r.includes("solvent")) return "Solvent";
+  if (r.includes("lubricant") || r.includes("glidant") || r.includes("sweetener")) {
+    return "Processing Aid";
+  }
+  return role || "Ingredient";
+}
+
+function simplifyCategoryLabel(type?: string | null): string {
+  switch (type) {
+    case "ACTIVE_BOTANICAL":
+      return "Main Ingredient";
+    case "EXCIPIENT":
+      return "Helper Ingredient";
+    case "SOLVENT":
+      return "Solvent";
+    case "PRESERVATIVE":
+      return "Preservative";
+    case "ANALYTICAL_STANDARD":
+      return "Testing Reference";
+    default:
+      return "Ingredient";
+  }
+}
+
+function simplifyInventoryStatus(mat: {
+  inventoryStatus?: string;
+  quantityAvailable?: string | number | null;
+}): "Suggested" | "Added" | "Available" {
+  const hasStock =
+    mat.quantityAvailable != null && String(mat.quantityAvailable).trim() !== "";
+  if (hasStock && mat.inventoryStatus !== "PLANNED") return "Available";
+  return "Added";
+}
 
 export interface MaterialItem {
   id: number;
@@ -97,6 +176,8 @@ interface Props {
   onDeleteMaterial: (materialId: number) => Promise<boolean | void>;
   onRefreshMaterials?: () => Promise<void>;
   isSaving: boolean;
+  /** Reviewer / read-only mode: hide AI suggest, add/edit/delete controls */
+  readOnly?: boolean;
 }
 
 export default function MaterialsStep4Section({
@@ -109,6 +190,7 @@ export default function MaterialsStep4Section({
   onDeleteMaterial,
   onRefreshMaterials,
   isSaving,
+  readOnly = false,
 }: Props) {
   // Inventory Table Search & Type Filter
   const [tableSearch, setTableSearch] = useState("");
@@ -117,36 +199,21 @@ export default function MaterialsStep4Section({
   // Editing state
   const [editingMaterialId, setEditingMaterialId] = useState<number | null>(null);
 
-  // Manual Form State
+  // Manual Form State (simplified Add Ingredient)
   const [formType, setFormType] = useState<MaterialTypeKey>("EXCIPIENT");
   const [formName, setFormName] = useState("");
-  const [formGrade, setFormGrade] = useState<string>("USP / NF (Compendial Grade)");
-  const [formSupplier, setFormSupplier] = useState("");
-  const [formLot, setFormLot] = useState("");
-  const [formQuantity, setFormQuantity] = useState("500");
+  const [formRoleKey, setFormRoleKey] = useState<SimpleIngredientRoleKey>("GELLING");
+  const [formCustomRole, setFormCustomRole] = useState("");
+  const [formQuantity, setFormQuantity] = useState("");
   const [formUnit, setFormUnit] = useState("g");
-  const [formRole, setFormRole] = useState("Gelling Agent");
-  const [formStorage, setFormStorage] = useState("Cool, dry place (15-25°C)");
-  const [customPurityNote, setCustomPurityNote] = useState("");
+  const [formSource, setFormSource] = useState<"CUSTOM" | "CATALOG_PRESET">("CUSTOM");
+  const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
   const [isManualFormOpen, setIsManualFormOpen] = useState(false);
+  const [formSuccess, setFormSuccess] = useState<string | null>(null);
 
   // Dropdown visibility states
-  const [isTypeDropdownOpen, setIsTypeDropdownOpen] = useState(false);
-  const typeDropdownRef = useRef<HTMLDivElement>(null);
-
   const [isNameDropdownOpen, setIsNameDropdownOpen] = useState(false);
-  const [nameSearchQuery, setNameSearchQuery] = useState("");
   const nameDropdownRef = useRef<HTMLDivElement>(null);
-
-  const [isGradeDropdownOpen, setIsGradeDropdownOpen] = useState(false);
-  const gradeDropdownRef = useRef<HTMLDivElement>(null);
-
-  const [isSupplierDropdownOpen, setIsSupplierDropdownOpen] = useState(false);
-  const [supplierSearchQuery, setSupplierSearchQuery] = useState("");
-  const supplierDropdownRef = useRef<HTMLDivElement>(null);
-
-  const [isRoleDropdownOpen, setIsRoleDropdownOpen] = useState(false);
-  const roleDropdownRef = useRef<HTMLDivElement>(null);
 
   const [isUnitDropdownOpen, setIsUnitDropdownOpen] = useState(false);
   const unitDropdownRef = useRef<HTMLDivElement>(null);
@@ -180,166 +247,206 @@ export default function MaterialsStep4Section({
     return new Set(materials.map((m) => (m.materialName || "").toLowerCase().trim()));
   }, [materials]);
 
-  // Close dropdowns on outside click
+  // Close name/unit dropdowns on outside click
   useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (typeDropdownRef.current && !typeDropdownRef.current.contains(event.target as Node)) {
-        setIsTypeDropdownOpen(false);
-      }
-      if (nameDropdownRef.current && !nameDropdownRef.current.contains(event.target as Node)) {
-        setIsNameDropdownOpen(false);
-      }
-      if (gradeDropdownRef.current && !gradeDropdownRef.current.contains(event.target as Node)) {
-        setIsGradeDropdownOpen(false);
-      }
-      if (supplierDropdownRef.current && !supplierDropdownRef.current.contains(event.target as Node)) {
-        setIsSupplierDropdownOpen(false);
-      }
-      if (roleDropdownRef.current && !roleDropdownRef.current.contains(event.target as Node)) {
-        setIsRoleDropdownOpen(false);
-      }
-      if (unitDropdownRef.current && !unitDropdownRef.current.contains(event.target as Node)) {
-        setIsUnitDropdownOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    const ac = new AbortController();
+    document.addEventListener(
+      "mousedown",
+      (event: MouseEvent) => {
+        const target = event.target as Node;
+        if (nameDropdownRef.current && !nameDropdownRef.current.contains(target)) {
+          setIsNameDropdownOpen(false);
+        }
+        if (unitDropdownRef.current && !unitDropdownRef.current.contains(target)) {
+          setIsUnitDropdownOpen(false);
+        }
+      },
+      { signal: ac.signal }
+    );
+    return () => ac.abort();
   }, []);
 
-  // Compute all available preset items for current selected Material Type
-  const catalogPresetsForCurrentType = useMemo(() => {
-    switch (formType) {
-      case "ACTIVE_BOTANICAL":
-        return getActiveBotanicalPresets(project.plantName, extraction?.extractFractionName);
-      case "EXCIPIENT":
-        return EXCIPIENT_PRESETS;
-      case "SOLVENT":
-        return SOLVENT_PRESETS;
-      case "PRESERVATIVE":
-        return PRESERVATIVE_PRESETS;
-      case "ANALYTICAL_STANDARD":
-        return getAnalyticalStandardPresets(verifiedPhytochemicals);
-      default:
-        return [];
-    }
-  }, [formType, project.plantName, extraction?.extractFractionName, verifiedPhytochemicals]);
+  const allCatalogPresets = useMemo(
+    () =>
+      getAllMaterialPresets({
+        plantName: project.plantName,
+        extractFractionName: extraction?.extractFractionName,
+        verifiedPhytochemicals,
+      }),
+    [project.plantName, extraction?.extractFractionName, verifiedPhytochemicals]
+  );
 
-  // Filtered preset options based on nameSearchQuery
+  // Autocomplete suggestions across full catalog (only when typing)
   const filteredCatalogPresets = useMemo(() => {
-    if (!nameSearchQuery.trim()) return catalogPresetsForCurrentType;
-    const q = nameSearchQuery.toLowerCase();
-    return catalogPresetsForCurrentType.filter(
-      (p) =>
-        p.name.toLowerCase().includes(q) ||
-        p.description.toLowerCase().includes(q) ||
-        p.suggestedRole.toLowerCase().includes(q)
-    );
-  }, [catalogPresetsForCurrentType, nameSearchQuery]);
+    const q = formName.trim().toLowerCase();
+    if (!q) return [];
+    return allCatalogPresets
+      .filter(
+        (p) =>
+          p.name.toLowerCase().includes(q) ||
+          p.suggestedRole.toLowerCase().includes(q) ||
+          p.description.toLowerCase().includes(q)
+      )
+      .slice(0, 8);
+  }, [allCatalogPresets, formName]);
 
-  // Existing unique suppliers across saved materials + curated list
-  const availableSuppliers = useMemo(() => {
-    const set = new Set<string>();
-    materials.forEach((m) => {
-      if (m.supplierOrSource && m.supplierOrSource.trim()) {
-        set.add(m.supplierOrSource.trim());
-      }
+  const duplicateMatches = useMemo(() => {
+    const q = formName.trim().toLowerCase();
+    if (!q) return [];
+    return materials.filter((m) => {
+      if (editingMaterialId && m.id === editingMaterialId) return false;
+      return (m.materialName || "").trim().toLowerCase() === q;
     });
-    CURATED_SUPPLIERS.forEach((s) => set.add(s));
-    return Array.from(set);
-  }, [materials]);
+  }, [materials, formName, editingMaterialId]);
 
-  const filteredSuppliers = useMemo(() => {
-    if (!supplierSearchQuery.trim()) return availableSuppliers;
-    const q = supplierSearchQuery.toLowerCase();
-    return availableSuppliers.filter((s) => s.toLowerCase().includes(q));
-  }, [availableSuppliers, supplierSearchQuery]);
+  const nearDuplicateMatches = useMemo(() => {
+    const q = formName.trim().toLowerCase();
+    if (q.length < 3) return [];
+    return materials
+      .filter((m) => {
+        if (editingMaterialId && m.id === editingMaterialId) return false;
+        const name = (m.materialName || "").trim().toLowerCase();
+        return name !== q && (name.includes(q) || q.includes(name));
+      })
+      .slice(0, 3);
+  }, [materials, formName, editingMaterialId]);
+
+  const resolvedRoleOption = useMemo(
+    () => SIMPLE_INGREDIENT_ROLES.find((r) => r.key === formRoleKey) || SIMPLE_INGREDIENT_ROLES[1],
+    [formRoleKey]
+  );
+
+  const resolvedFunctionDescription =
+    formRoleKey === "OTHER"
+      ? formCustomRole.trim()
+      : resolvedRoleOption.functionDescription;
+
+  const isFormValid =
+    formName.trim().length > 0 &&
+    resolvedFunctionDescription.length > 0 &&
+    (formRoleKey !== "OTHER" || formCustomRole.trim().length > 0);
 
   // Preset Selection Handler for manual form
   const handleSelectPreset = (preset: MaterialPresetItem) => {
+    if (readOnly) return;
     setFormName(preset.name);
-    setFormRole(preset.suggestedRole);
+    setFormType(preset.type);
     setFormUnit(preset.suggestedUnit);
-    setFormGrade(preset.suggestedGrade);
+    setSelectedPresetId(preset.id);
+    setFormSource("CATALOG_PRESET");
+    const mapped = resolveSimpleIngredientRole(preset.type, preset.suggestedRole);
+    setFormRoleKey(mapped.key);
+    setFormCustomRole(mapped.key === "OTHER" ? preset.suggestedRole : "");
     setIsNameDropdownOpen(false);
     setIsDirty(true);
+    setFormError(null);
+  };
+
+  const resetManualFormFields = () => {
+    setFormType("EXCIPIENT");
+    setFormName("");
+    setFormRoleKey("GELLING");
+    setFormCustomRole("");
+    setFormQuantity("");
+    setFormUnit("g");
+    setFormSource("CUSTOM");
+    setSelectedPresetId(null);
+    setFormError(null);
+    setFormSuccess(null);
   };
 
   // Open Manual Add Modal for a fresh entry
   const handleOpenManualAddModal = () => {
+    if (readOnly) return;
     setEditingMaterialId(null);
-    setFormType("EXCIPIENT");
-    setFormName("");
-    setFormGrade("USP / NF (Compendial Grade)");
-    setFormSupplier("");
-    setFormLot("");
-    setFormQuantity("500");
-    setFormUnit("g");
-    setFormRole("Gelling Agent");
-    setFormStorage("Cool, dry place (15-25°C)");
-    setFormError(null);
+    resetManualFormFields();
     setIsManualFormOpen(true);
   };
 
   // Start Editing a Material in Modal
   const handleStartEditing = (mat: MaterialItem) => {
+    if (readOnly) return;
     setEditingMaterialId(mat.id);
     setFormType((mat.materialType as MaterialTypeKey) || "EXCIPIENT");
     setFormName(mat.materialName);
-    setFormGrade(mat.gradeOrPurity || "USP / NF (Compendial Grade)");
-    setFormSupplier(mat.supplierOrSource || "");
-    setFormLot(mat.lotOrBatchNumber || "");
-    setFormQuantity(String(mat.quantityAvailable ?? ""));
+    setFormQuantity(
+      mat.quantityAvailable != null && String(mat.quantityAvailable).trim() !== ""
+        ? String(mat.quantityAvailable)
+        : ""
+    );
     setFormUnit(mat.unit || "g");
-    setFormRole(mat.functionDescription || "Compounding Agent");
-    setFormStorage(mat.storageConditions || "Cool, dry place (15-25°C)");
+    const mapped = resolveSimpleIngredientRole(mat.materialType, mat.functionDescription);
+    setFormRoleKey(mapped.key);
+    setFormCustomRole(mapped.customLabel);
+    setFormSource(
+      mat.source === "CATALOG_PRESET" || mat.source === "AI_RECOMMENDATION"
+        ? "CATALOG_PRESET"
+        : "CUSTOM"
+    );
+    setSelectedPresetId(null);
     setFormError(null);
+    setFormSuccess(null);
     setIsManualFormOpen(true);
   };
 
   // Close Manual / Edit Modal
   const handleCancelEditing = () => {
     setEditingMaterialId(null);
-    setFormName("");
-    setFormSupplier("");
-    setFormLot("");
-    setFormQuantity("500");
-    setFormRole("Gelling Agent");
-    setFormError(null);
+    resetManualFormFields();
     setIsManualFormOpen(false);
-    setIsTypeDropdownOpen(false);
     setIsNameDropdownOpen(false);
-    setIsGradeDropdownOpen(false);
     setIsUnitDropdownOpen(false);
   };
 
   // Submit Manual Material Form
   const handleSubmitForm = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (readOnly) return;
     if (!formName.trim()) {
-      setFormError("Material Name is required. Please select a preset or enter a name.");
+      setFormError("Ingredient name is required.");
+      return;
+    }
+    if (!resolvedFunctionDescription) {
+      setFormError("Role is required.");
       return;
     }
 
     setFormError(null);
+    setFormSuccess(null);
+
+    // Preserve any previously stored grade/supplier/lot/storage without exposing them in the UI
+    const existing =
+      editingMaterialId != null
+        ? materials.find((m) => m.id === editingMaterialId)
+        : null;
+
     const materialPayload = {
-      materialType: formType,
+      materialType: formRoleKey === "OTHER" ? formType || "EXCIPIENT" : resolvedRoleOption.materialType,
       materialName: formName.trim(),
-      gradeOrPurity: formGrade,
-      supplierOrSource: formSupplier.trim() || null,
-      lotOrBatchNumber: formLot.trim() || null,
-      storageConditions: formStorage,
-      functionDescription: formRole.trim(),
+      gradeOrPurity: existing?.gradeOrPurity ?? null,
+      supplierOrSource: existing?.supplierOrSource ?? null,
+      lotOrBatchNumber: existing?.lotOrBatchNumber ?? null,
+      storageConditions: existing?.storageConditions ?? null,
+      functionDescription: resolvedFunctionDescription,
       quantityAvailable: formQuantity.trim() || null,
-      unit: formUnit,
+      unit: formUnit || "g",
       inventoryStatus: formQuantity.trim() ? "AVAILABLE" : "PLANNED",
-      source: "MANUAL",
+      source: formSource === "CATALOG_PRESET" && selectedPresetId ? "CATALOG_PRESET" : "CUSTOM",
     };
 
     const success = await onSaveMaterial(materialPayload, editingMaterialId);
     if (success !== false) {
-      handleCancelEditing();
+      setFormSuccess(
+        editingMaterialId ? "Ingredient updated." : "Ingredient added to My Ingredients."
+      );
       setIsDirty(false);
       if (onRefreshMaterials) await onRefreshMaterials();
+      // Brief success flash then close
+      window.setTimeout(() => {
+        handleCancelEditing();
+      }, 450);
+    } else {
+      setFormError("Could not save ingredient. Please try again.");
     }
   };
 
@@ -347,6 +454,7 @@ export default function MaterialsStep4Section({
   // AI MATERIALS RECOMMENDATION HANDLERS
   // =========================================================================
   const handleFetchAiRecommendations = async () => {
+    if (readOnly) return;
     setIsLoadingAi(true);
     setAiError(null);
     setImportFeedback(null);
@@ -397,6 +505,7 @@ export default function MaterialsStep4Section({
 
   // Toggle selection for a single recommendation
   const handleToggleSelect = (recId: string, isAlreadyInInventory: boolean) => {
+    if (readOnly) return;
     if (isAlreadyInInventory) return;
     setSelectedRecIds((prev) => {
       const next = new Set(prev);
@@ -411,6 +520,7 @@ export default function MaterialsStep4Section({
 
   // Select all non-duplicate recommendations
   const handleSelectAll = () => {
+    if (readOnly) return;
     const next = new Set<string>();
     aiRecommendations.forEach((rec) => {
       const norm = rec.materialName.toLowerCase().trim();
@@ -423,6 +533,7 @@ export default function MaterialsStep4Section({
 
   // Deselect all
   const handleDeselectAll = () => {
+    if (readOnly) return;
     setSelectedRecIds(new Set());
   };
 
@@ -441,6 +552,7 @@ export default function MaterialsStep4Section({
 
   // Bulk Import Selected Materials
   const handleImportSelected = async () => {
+    if (readOnly) return;
     const selectedList = aiRecommendations.filter((rec) => selectedRecIds.has(rec.id));
     if (selectedList.length === 0) return;
 
@@ -496,19 +608,41 @@ export default function MaterialsStep4Section({
     }
   };
 
-  // Filtered Materials Table
+  // Filtered Materials list (category = materialType; search = name + role)
   const filteredMaterials = useMemo(() => {
+    const q = tableSearch.trim().toLowerCase();
     return materials.filter((m) => {
       const matchesType = tableTypeFilter === "ALL" || m.materialType === tableTypeFilter;
-      const matchesSearch =
-        !tableSearch.trim() ||
-        m.materialName.toLowerCase().includes(tableSearch.toLowerCase()) ||
-        (m.supplierOrSource && m.supplierOrSource.toLowerCase().includes(tableSearch.toLowerCase())) ||
-        (m.lotOrBatchNumber && m.lotOrBatchNumber.toLowerCase().includes(tableSearch.toLowerCase())) ||
-        (m.functionDescription && m.functionDescription.toLowerCase().includes(tableSearch.toLowerCase()));
-      return matchesType && matchesSearch;
+      if (!matchesType) return false;
+      if (!q) return true;
+      const roleLabel = simplifyRoleLabel(m.functionDescription).toLowerCase();
+      const categoryLabel = simplifyCategoryLabel(m.materialType).toLowerCase();
+      return (
+        (m.materialName || "").toLowerCase().includes(q) ||
+        (m.functionDescription || "").toLowerCase().includes(q) ||
+        roleLabel.includes(q) ||
+        categoryLabel.includes(q)
+      );
     });
   }, [materials, tableTypeFilter, tableSearch]);
+
+  const [openActionMenuId, setOpenActionMenuId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (openActionMenuId == null) return;
+    function closeMenu() {
+      setOpenActionMenuId(null);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") closeMenu();
+    }
+    document.addEventListener("click", closeMenu);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("click", closeMenu);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [openActionMenuId]);
 
   const activeBotanicalCount = materials.filter((m) => m.materialType === "ACTIVE_BOTANICAL").length;
   const excipientCount = materials.filter((m) => m.materialType === "EXCIPIENT").length;
@@ -523,105 +657,45 @@ export default function MaterialsStep4Section({
 
   const inventoryFilters = [
     { key: "ALL", label: "All", count: materials.length },
-    { key: "ACTIVE_BOTANICAL", label: "Botanical", count: activeBotanicalCount },
-    { key: "EXCIPIENT", label: "Excipients", count: excipientCount },
+    { key: "ACTIVE_BOTANICAL", label: "Main", count: activeBotanicalCount },
+    { key: "EXCIPIENT", label: "Helpers", count: excipientCount },
     { key: "SOLVENT", label: "Solvents", count: solventCount },
-    { key: "PRESERVATIVE", label: "Preservative", count: preservativeCount },
-    { key: "ANALYTICAL_STANDARD", label: "Analytical", count: analyticalCount },
+    { key: "PRESERVATIVE", label: "Preservatives", count: preservativeCount },
+    { key: "ANALYTICAL_STANDARD", label: "Testing", count: analyticalCount },
   ];
 
   return (
     <div className="space-y-4">
-      {/* Compact status strip — step chrome lives in parent workspace header */}
-      <motion.div
+      {/* A. Your Formulation */}
+      <motion.section
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.28, ease: easeOut }}
-        className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[#d7e4dc]/90 bg-white px-4 py-2.5 shadow-[0_1px_2px_rgba(15,44,32,0.04)]"
+        className="relative overflow-hidden rounded-2xl border border-[#d7e4dc]/90 bg-white p-3.5 shadow-[0_1px_2px_rgba(15,44,32,0.04)]"
       >
-        <div className="flex items-center gap-2 text-[11px] text-[#6d7f76]">
-          <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-800">
-            <Boxes className="h-3.5 w-3.5" />
+        <div className="absolute inset-y-0 left-0 w-1 bg-emerald-600" />
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-100 bg-emerald-50 text-emerald-800">
+            <Leaf className="h-4 w-4" />
           </span>
-          <span className="font-semibold text-[#0f2c20]">Materials &amp; Excipients</span>
-          <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-900">
-            {materials.length} cataloged
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-[#8aa094]">
+              Your Formulation
+            </p>
+            <h2 className="truncate text-sm font-bold text-[#0f2c20]">{project.plantName}</h2>
+            <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-[#6d7f76]">
+              <span className="font-semibold text-[#52645d]">{currentDosageForm}</span>
+              <span className="font-mono text-[#52645d]">{currentExtractId}</span>
+              <span className="truncate text-[#8aa094]">{currentExtractionMethod}</span>
+            </p>
+          </div>
+          <span className="ml-auto shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 font-mono text-[10px] font-bold text-emerald-900">
+            {materials.length} added
           </span>
-        </div>
-        <div className="flex items-center gap-2 text-[11px] font-semibold">
-          {isSaving ? (
-            <span className="inline-flex items-center gap-1 text-amber-700">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
-              Saving...
-            </span>
-          ) : isDirty ? (
-            <span className="inline-flex items-center gap-1 text-amber-700">
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-              Unsaved
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1 text-emerald-800">
-              <Check className="h-3.5 w-3.5" />
-              Saved
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={handleOpenManualAddModal}
-            className="inline-flex items-center gap-1 rounded-xl border border-[#d7e4dc] bg-[#f7faf8] px-2.5 py-1 text-[11px] font-semibold text-[#52645d] hover:border-emerald-400 hover:bg-emerald-50"
-          >
-            <Plus className="h-3 w-3" />
-            Manual Add
-          </button>
-        </div>
-      </motion.div>
-
-      {/* Project context */}
-      <motion.section
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, ease: easeOut }}
-        className="relative overflow-hidden rounded-2xl border border-[#d7e4dc]/90 bg-[linear-gradient(165deg,#ffffff_0%,#f8fbf9_100%)] p-4 shadow-[0_1px_2px_rgba(15,44,32,0.04)]"
-      >
-        <div className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-emerald-600 via-teal-400 to-cyan-300" />
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex min-w-0 items-start gap-2.5">
-            <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-800">
-              <Leaf className="h-4 w-4" />
-            </span>
-            <div className="min-w-0">
-              <h2 className="text-sm font-semibold text-[#0f2c20]">{project.plantName}</h2>
-              <p className="mt-0.5 text-[11px] text-[#8aa094]">
-                <span className="font-semibold text-[#52645d]">{currentDosageForm}</span>
-                <span className="mx-1.5 text-[#d7e4dc]">·</span>
-                <span className="font-mono text-[#52645d]">{currentExtractId}</span>
-                <span className="mx-1.5 text-[#d7e4dc]">·</span>
-                {currentExtractionMethod}
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {[
-              { n: "1", label: "Suggest" },
-              { n: "2", label: "Select & add" },
-              { n: "3", label: "Review inventory" },
-            ].map((step, idx) => (
-              <span
-                key={step.n}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-[#d7e4dc] bg-white px-2.5 py-1 text-[10px] font-semibold text-[#52645d]"
-              >
-                <span className="inline-flex h-4 w-4 items-center justify-center rounded-md bg-emerald-600 text-[9px] font-bold text-white">
-                  {step.n}
-                </span>
-                {step.label}
-                {idx < 2 && <ChevronRight className="h-3 w-3 text-[#c5d4cb]" />}
-              </span>
-            ))}
-          </div>
         </div>
       </motion.section>
 
-      {/* 1. AI Suggest */}
+      {/* B. Suggested Ingredients */}
       <motion.section
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -630,23 +704,15 @@ export default function MaterialsStep4Section({
       >
         <div className="flex flex-col gap-3 border-b border-[#e8f0eb] pb-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h3 className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-[#52645d]">
-              <span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-emerald-600 text-[10px] font-bold text-white">
-                1
-              </span>
+            <h3 className="inline-flex items-center gap-1.5 text-sm font-bold tracking-tight text-[#0f2c20]">
               <Sparkles className="h-3.5 w-3.5 text-emerald-700" />
-              Suggest compatible materials
+              Suggested Ingredients
             </h3>
-            <p className="mt-1 text-[11px] text-[#8aa094]">
-              Grounded in {project.plantName}, {currentExtractionMethod}, and {currentDosageForm}.
+            <p className="mt-0.5 text-[11px] text-[#8aa094]">
+              Based on {project.plantName} · {currentDosageForm}
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            {aiProvenance && (
-              <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-900">
-                {aiProvenance === "ai" ? "AI Grounded" : "Compendial"}
-              </span>
-            )}
+          {!readOnly && (
             <button
               type="button"
               onClick={handleFetchAiRecommendations}
@@ -655,12 +721,12 @@ export default function MaterialsStep4Section({
             >
               <Wand2 className={`h-3.5 w-3.5 ${isLoadingAi ? "animate-spin" : ""}`} />
               {isLoadingAi
-                ? "Analyzing..."
+                ? "Suggesting..."
                 : aiRecommendations.length > 0
-                  ? "Regenerate"
-                  : "AI Suggest Materials"}
+                  ? "Regenerate Suggestions"
+                  : "Suggest Ingredients"}
             </button>
-          </div>
+          )}
         </div>
 
         <AnimatePresence>
@@ -728,51 +794,41 @@ export default function MaterialsStep4Section({
         )}
 
         {!isLoadingAi && aiRecommendations.length === 0 && (
-          <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-emerald-300/80 bg-[linear-gradient(180deg,#f7faf8_0%,#ffffff_100%)] px-4 py-8 text-center">
+          <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-emerald-300/80 bg-[#f7faf8] px-4 py-8 text-center">
             <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
               <Wand2 className="h-5 w-5" />
             </div>
-            <div className="max-w-md space-y-1">
-              <p className="text-sm font-semibold text-[#0f2c20]">
-                Build a starter inventory for {project.plantName}
-              </p>
-              <p className="text-[11px] leading-relaxed text-[#8aa094]">
-                One click suggests botanical actives, gelling agents, vehicles, preservatives, and
-                analytical standards matched to this hydrogel protocol.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={handleFetchAiRecommendations}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-700 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-800"
-            >
-              <Sparkles className="h-3.5 w-3.5" />
-              Start with AI Suggest
-            </button>
-            <p className="text-[10px] text-[#8aa094]">
-              Or use <button type="button" onClick={handleOpenManualAddModal} className="font-semibold text-emerald-800 underline-offset-2 hover:underline">Manual Add</button> for a single known material.
+            <p className="text-sm font-semibold text-[#0f2c20]">
+              Get ingredient suggestions for {project.plantName}
             </p>
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={handleFetchAiRecommendations}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-700 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-800"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                Suggest Ingredients
+              </button>
+            )}
           </div>
         )}
 
         {!isLoadingAi && aiRecommendations.length > 0 && (
           <div className="space-y-3">
+            {!readOnly && (
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#e8f0eb] bg-[#f7faf8] px-3 py-2">
               <div className="flex flex-wrap items-center gap-2 text-[11px]">
-                <span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-emerald-600 text-[10px] font-bold text-white">
-                  2
-                </span>
-                <span className="font-semibold text-[#0f2c20]">Select candidates to add</span>
+                <span className="font-semibold text-[#0f2c20]">Choose Ingredients</span>
                 <span className="text-[#c5d4cb]">|</span>
                 <button type="button" onClick={handleSelectAll} className="font-semibold text-emerald-800 hover:underline">
                   Select All
                 </button>
                 <button type="button" onClick={handleDeselectAll} className="font-semibold text-[#6d7f76] hover:underline">
-                  Clear
+                  Clear Selection
                 </button>
                 <span className="text-[#8aa094]">
-                  <span className="font-bold text-emerald-800">{selectedRecIds.size}</span> of{" "}
-                  {aiRecommendations.length} selected
+                  <span className="font-bold text-emerald-800">{selectedRecIds.size}</span> selected
                 </span>
               </div>
               <button
@@ -784,17 +840,18 @@ export default function MaterialsStep4Section({
                 {isImporting ? (
                   <>
                     <RotateCcw className="h-3.5 w-3.5 animate-spin" />
-                    Importing...
+                    Adding...
                   </>
                 ) : (
                   <>
                     <Plus className="h-3.5 w-3.5 stroke-[2.5]" />
-                    Add {selectedRecIds.size > 0 ? selectedRecIds.size : ""} to Inventory
-                    <ArrowRight className="h-3.5 w-3.5" />
+                    Add Selected Ingredients
+                    {selectedRecIds.size > 0 ? ` (${selectedRecIds.size})` : ""}
                   </>
                 )}
               </button>
             </div>
+            )}
 
             <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-3">
               {aiRecommendations.map((rec, idx) => {
@@ -802,7 +859,6 @@ export default function MaterialsStep4Section({
                 const isAlreadyInInventory = existingMaterialNamesNormalized.has(norm);
                 const isSelected = selectedRecIds.has(rec.id);
                 const isExpanded = expandedRecIds.has(rec.id);
-                const typeSpec = MATERIAL_TYPES.find((t) => t.key === rec.materialType);
 
                 return (
                   <motion.div
@@ -810,68 +866,59 @@ export default function MaterialsStep4Section({
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.25, delay: Math.min(idx * 0.03, 0.24), ease: easeOut }}
-                    onClick={() => handleToggleSelect(rec.id, isAlreadyInInventory)}
-                    className={`flex cursor-pointer flex-col justify-between gap-2 rounded-2xl border p-3.5 text-left transition ${
+                    onClick={
+                      readOnly
+                        ? undefined
+                        : () => handleToggleSelect(rec.id, isAlreadyInInventory)
+                    }
+                    className={`flex flex-col justify-between gap-2 rounded-2xl border p-3.5 text-left transition ${
+                      readOnly ? "border-[#d7e4dc]/90 bg-white" : "cursor-pointer"
+                    } ${
                       isAlreadyInInventory
                         ? "cursor-default border-[#e8f0eb] bg-[#f7faf8] opacity-75"
                         : isSelected
                           ? "border-emerald-400 bg-emerald-50/70 ring-1 ring-emerald-400/40 shadow-sm"
-                          : "border-[#d7e4dc]/90 bg-white hover:border-emerald-300 hover:shadow-sm"
+                          : readOnly
+                            ? "border-[#d7e4dc]/90 bg-white"
+                            : "border-[#d7e4dc]/90 bg-white hover:border-emerald-300 hover:shadow-sm"
                     }`}
                   >
                     <div className="space-y-1.5">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex min-w-0 items-start gap-2">
-                          <input
-                            type="checkbox"
-                            checked={isSelected || isAlreadyInInventory}
-                            disabled={isAlreadyInInventory}
-                            onChange={() => {}}
-                            className="mt-0.5 cursor-pointer rounded text-emerald-600 focus:ring-emerald-500 disabled:cursor-default"
-                          />
+                          {!readOnly && (
+                            <input
+                              type="checkbox"
+                              checked={isSelected || isAlreadyInInventory}
+                              disabled={isAlreadyInInventory}
+                              onChange={() => {}}
+                              className="mt-0.5 cursor-pointer rounded text-emerald-600 focus:ring-emerald-500 disabled:cursor-default"
+                            />
+                          )}
                           <div className="min-w-0">
                             <span className="block truncate text-xs font-bold leading-tight text-[#0f2c20]">
                               {rec.materialName}
                             </span>
-                            <span className="block truncate text-[10px] font-medium text-[#8aa094]">
-                              {rec.functionalRole}
+                            <span className="block truncate text-[10px] font-medium text-[#6d7f76]">
+                              {simplifyRoleLabel(rec.functionalRole)}
                             </span>
                           </div>
                         </div>
                         <div className="flex shrink-0 flex-col items-end gap-1">
+                          <span className="whitespace-nowrap rounded-md border border-[#d7e4dc] bg-[#f7faf8] px-1.5 py-0.5 text-[9px] font-bold text-[#52645d]">
+                            {simplifyCategoryLabel(rec.materialType)}
+                          </span>
                           <span
-                            className={`whitespace-nowrap rounded-md border px-1.5 py-0.5 text-[9px] font-bold ${
-                              typeSpec?.badgeClass || "border-[#d7e4dc] bg-[#f7faf8] text-[#52645d]"
+                            className={`rounded px-1.5 py-0.5 text-[8px] font-bold ${
+                              isAlreadyInInventory
+                                ? "bg-emerald-100 text-emerald-800"
+                                : "bg-amber-50 text-amber-800"
                             }`}
                           >
-                            {typeSpec?.label || rec.materialType}
+                            {isAlreadyInInventory ? "Added" : "Suggested"}
                           </span>
-                          {isAlreadyInInventory && (
-                            <span className="rounded bg-[#e8f0eb] px-1.5 py-0.5 text-[8px] font-bold text-[#52645d]">
-                              In Inventory
-                            </span>
-                          )}
                         </div>
                       </div>
-
-                      {rec.materialType === "ACTIVE_BOTANICAL" && (
-                        <div className="space-y-0.5 rounded-xl border border-emerald-200/80 bg-emerald-50/70 p-2 text-[10px] text-emerald-900">
-                          <div className="flex items-center justify-between">
-                            <span className="font-semibold">Linked Extract</span>
-                            <span className="font-mono font-bold text-emerald-800">
-                              {rec.extractFractionId || currentExtractId}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1 text-[9px] text-emerald-700">
-                            <Beaker className="h-2.5 w-2.5" />
-                            {extraction?.extractionSolvent || "Hydroethanolic"}
-                          </div>
-                        </div>
-                      )}
-
-                      <p className="line-clamp-2 text-[11px] leading-relaxed text-[#6d7f76]">
-                        {rec.scientificJustification}
-                      </p>
 
                       <AnimatePresence>
                         {isExpanded && (
@@ -879,27 +926,40 @@ export default function MaterialsStep4Section({
                             initial={{ opacity: 0, height: 0 }}
                             animate={{ opacity: 1, height: "auto" }}
                             exit={{ opacity: 0, height: 0 }}
-                            className="space-y-1 overflow-hidden border-t border-[#e8f0eb] pt-1.5 text-[10px] text-[#6d7f76]"
+                            className="space-y-1.5 overflow-hidden border-t border-[#e8f0eb] pt-1.5 text-[10px] text-[#6d7f76]"
                             onClick={(e) => e.stopPropagation()}
                           >
+                            {rec.materialType === "ACTIVE_BOTANICAL" && (
+                              <p className="font-mono text-[10px] text-emerald-800">
+                                Extract: {rec.extractFractionId || currentExtractId}
+                              </p>
+                            )}
                             <div>
-                              <span className="block font-bold text-[#52645d]">Compatibility</span>
-                              <p>{rec.compatibilityNotes}</p>
+                              <span className="block font-bold text-[#52645d]">Purpose</span>
+                              <p>{rec.functionalRole}</p>
                             </div>
+                            {rec.scientificJustification && (
+                              <div>
+                                <span className="block font-bold text-[#52645d]">Details</span>
+                                <p>{rec.scientificJustification}</p>
+                              </div>
+                            )}
+                            {rec.compatibilityNotes && (
+                              <div>
+                                <span className="block font-bold text-[#52645d]">Notes</span>
+                                <p>{rec.compatibilityNotes}</p>
+                              </div>
+                            )}
                             <div className="flex items-center justify-between font-mono text-[9px] text-[#8aa094]">
                               <span>{rec.suggestedGrade}</span>
                               <span>{rec.suggestedUnit}</span>
                             </div>
-                            {rec.supportingReferences?.[0] && (
-                              <p className="truncate italic text-[#8aa094]">{rec.supportingReferences[0]}</p>
-                            )}
                           </motion.div>
                         )}
                       </AnimatePresence>
                     </div>
 
-                    <div className="flex items-center justify-between border-t border-[#e8f0eb] pt-1.5 text-[10px] text-[#8aa094]">
-                      <span className="font-medium">Planned · unverified</span>
+                    <div className="flex items-center justify-end border-t border-[#e8f0eb] pt-1.5 text-[10px]">
                       <button
                         type="button"
                         onClick={(e) => {
@@ -908,79 +968,86 @@ export default function MaterialsStep4Section({
                         }}
                         className="font-semibold text-emerald-800 hover:text-emerald-950"
                       >
-                        {isExpanded ? "Hide" : "Details"}
+                        {isExpanded ? "Hide Details" : "View Details"}
                       </button>
                     </div>
                   </motion.div>
                 );
               })}
             </div>
-
-            <div className="flex items-start gap-1.5 rounded-xl border border-[#e8f0eb] bg-[#f7faf8] p-2.5 text-[10px] text-[#8aa094]">
-              <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#c5d4cb]" />
-              <span>
-                Suggestions are for research scoping. Confirm stability and QC on the bench before
-                clinical claims.
-              </span>
-            </div>
           </div>
         )}
       </motion.section>
 
-      {/* 3. Inventory */}
+      {/* C. My Ingredients — compact library list */}
       <motion.section
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3, delay: 0.08, ease: easeOut }}
-        className="space-y-2 rounded-2xl border border-[#d7e4dc]/90 bg-white p-3 shadow-[0_1px_2px_rgba(15,44,32,0.04)] sm:p-4"
+        className="space-y-3 rounded-2xl border border-[#d7e4dc]/90 bg-white p-3 shadow-[0_1px_2px_rgba(15,44,32,0.04)] sm:p-4"
       >
-        <div className="flex flex-col gap-2 border-b border-[#e8f0eb] pb-2.5 sm:flex-row sm:items-center sm:justify-between">
-          <h3 className="inline-flex flex-wrap items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-[#52645d]">
-            <span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-emerald-600 text-[10px] font-bold text-white">
-              3
-            </span>
-            Project inventory
-            <span className="font-medium normal-case tracking-normal text-[#8aa094]">
-              · {filteredMaterials.length}/{materials.length}
+        <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+          <h3 className="inline-flex flex-wrap items-baseline gap-2 text-sm font-bold tracking-tight text-[#0f2c20]">
+            My Ingredients
+            <span className="text-[11px] font-medium text-[#8aa094]">
+              {filteredMaterials.length}
+              {tableSearch || tableTypeFilter !== "ALL"
+                ? ` shown · ${materials.length} total`
+                : materials.length === 1
+                  ? " ingredient"
+                  : " ingredients"}
             </span>
           </h3>
-          <div className="relative">
-            <Search className="absolute left-2 top-1.5 h-3.5 w-3.5 text-[#8aa094]" />
-            <input
-              type="text"
-              value={tableSearch}
-              onChange={(e) => setTableSearch(e.target.value)}
-              placeholder="Search name, lot, supplier..."
-              className="w-full rounded-lg border border-[#d5e3da] bg-[#fbfdfb] py-1 pl-7 pr-7 text-[11px] text-[#0f2c20] outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15 sm:w-52"
-            />
-            {tableSearch && (
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative min-w-0 flex-1 sm:flex-none">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#8aa094]" />
+              <input
+                type="text"
+                value={tableSearch}
+                onChange={(e) => setTableSearch(e.target.value)}
+                placeholder="Search name or role"
+                className="w-full rounded-lg border border-[#d5e3da] bg-[#fbfdfb] py-1.5 pl-8 pr-8 text-[11px] text-[#0f2c20] outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15 sm:w-48"
+              />
+              {tableSearch && (
+                <button
+                  type="button"
+                  onClick={() => setTableSearch("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-[#8aa094] hover:text-[#52645d]"
+                  aria-label="Clear search"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+            {!readOnly && (
               <button
                 type="button"
-                onClick={() => setTableSearch("")}
-                className="absolute right-1.5 top-1.5 text-[#8aa094] hover:text-[#52645d]"
+                onClick={handleOpenManualAddModal}
+                className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-emerald-700 px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-emerald-800"
               >
-                <X className="h-3.5 w-3.5" />
+                <Plus className="h-3 w-3" />
+                Add Ingredient
               </button>
             )}
           </div>
         </div>
 
-        <div className="flex gap-1 overflow-x-auto pb-0.5">
+        <div className="flex gap-1 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {inventoryFilters.map((f) => (
             <button
               key={f.key}
               type="button"
               onClick={() => setTableTypeFilter(f.key)}
-              className={`inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-semibold transition ${
+              className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold transition ${
                 tableTypeFilter === f.key
-                  ? "bg-emerald-700 text-white shadow-sm"
-                  : "border border-[#d7e4dc] bg-[#f7faf8] text-[#52645d] hover:border-emerald-400 hover:bg-emerald-50"
+                  ? "bg-[#0f2c20] text-white"
+                  : "bg-[#f3f7f4] text-[#52645d] hover:bg-[#e8f0eb]"
               }`}
             >
               {f.label}
               <span
-                className={`rounded px-1 py-0.5 text-[9px] font-bold tabular-nums ${
-                  tableTypeFilter === f.key ? "bg-white/20 text-white" : "bg-white text-[#8aa094]"
+                className={`tabular-nums ${
+                  tableTypeFilter === f.key ? "text-white/70" : "text-[#8aa094]"
                 }`}
               >
                 {f.count}
@@ -990,148 +1057,136 @@ export default function MaterialsStep4Section({
         </div>
 
         {filteredMaterials.length > 0 ? (
-          <div className="overflow-hidden rounded-xl border border-[#d7e4dc]/90">
-            <div className="hidden grid-cols-[minmax(0,1.4fr)_6.5rem_7rem_minmax(0,1fr)_4.5rem] gap-2 border-b border-[#e8f0eb] bg-[#f7faf8] px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-wider text-[#8aa094] md:grid">
-              <span>Material</span>
-              <span>Status</span>
-              <span>Stock</span>
-              <span>Supplier / lot</span>
-              <span className="text-right">Actions</span>
-            </div>
-            <div className="divide-y divide-[#e8f0eb]">
-              <AnimatePresence mode="popLayout">
-                {filteredMaterials.map((mat) => {
-                  const typeSpec = MATERIAL_TYPES.find((t) => t.key === mat.materialType);
-                  const isPlanned = mat.inventoryStatus === "PLANNED" || !mat.quantityAvailable;
+          <ul className="divide-y divide-[#eef3ef]">
+              {filteredMaterials.map((mat) => {
+                const status = simplifyInventoryStatus(mat);
+                const hasStock =
+                  mat.quantityAvailable != null && String(mat.quantityAvailable).trim() !== "";
+                const roleLabel = simplifyRoleLabel(mat.functionDescription);
+                const menuOpen = openActionMenuId === mat.id;
 
-                  return (
-                    <motion.div
-                      key={mat.id}
-                      layout
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.15, ease: easeOut }}
-                      className="grid grid-cols-1 items-center gap-1.5 bg-white px-2.5 py-1.5 transition hover:bg-[#f7faf8] md:grid-cols-[minmax(0,1.4fr)_6.5rem_7rem_minmax(0,1fr)_4.5rem] md:gap-2"
-                    >
-                      <div className="min-w-0">
-                        <div className="flex min-w-0 items-center gap-1.5">
-                          <span className="truncate text-xs font-semibold text-[#0f2c20]">
-                            {mat.materialName}
-                          </span>
-                          <span
-                            className={`shrink-0 rounded border px-1 py-0.5 text-[8px] font-bold ${
-                              typeSpec?.badgeClass ||
-                              "border-[#d7e4dc] bg-[#f7faf8] text-[#52645d]"
-                            }`}
-                          >
-                            {typeSpec?.label || mat.materialType}
-                          </span>
-                        </div>
-                        <p className="truncate text-[10px] text-[#8aa094]">
-                          {mat.functionDescription || "Compounding component"}
-                          {mat.gradeOrPurity ? ` · ${mat.gradeOrPurity}` : ""}
+                return (
+                  <li
+                    key={mat.id}
+                    className="group relative flex items-start gap-2 py-2.5 first:pt-1 last:pb-1"
+                  >
+                    <div className="min-w-0 flex-1 overflow-hidden">
+                      <p className="truncate text-[13px] font-semibold leading-snug text-[#0f2c20]">
+                        {mat.materialName}
+                      </p>
+                      <p className="mt-0.5 truncate text-[11px] text-[#6d7f76]">
+                        <span>{roleLabel}</span>
+                        <span className="mx-1.5 text-[#c5d4cb]">·</span>
+                        <span
+                          className={
+                            status === "Available"
+                              ? "font-medium text-emerald-800"
+                              : "text-[#6d7f76]"
+                          }
+                        >
+                          {status}
+                        </span>
+                      </p>
+                      {hasStock && (
+                        <p className="mt-0.5 font-mono text-[10px] text-[#8aa094]">
+                          {mat.quantityAvailable} {mat.unit || "g"}
                         </p>
-                      </div>
+                      )}
+                    </div>
 
-                      <div>
-                        {isPlanned ? (
-                          <span className="inline-flex items-center gap-1 rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-semibold text-amber-800">
-                            <Clock className="h-2.5 w-2.5" />
-                            Planned
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-800">
-                            <Check className="h-2.5 w-2.5" />
-                            In stock
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="font-mono text-[11px] font-bold text-[#0f2c20]">
-                        {isPlanned
-                          ? <span className="font-sans text-[10px] font-medium text-amber-700">Pending</span>
-                          : `${mat.quantityAvailable} ${mat.unit || "g"}`}
-                      </div>
-
-                      <div className="min-w-0 text-[11px]">
-                        <span className="block truncate font-medium text-[#52645d]">
-                          {mat.supplierOrSource || "Unassigned"}
-                        </span>
-                        <span className="block truncate font-mono text-[10px] text-[#8aa094]">
-                          {mat.lotOrBatchNumber || "Lot pending"}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center justify-end gap-0.5">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedDetailMaterial(mat)}
-                          className="rounded p-1 text-[#8aa094] transition hover:bg-emerald-50 hover:text-emerald-800"
-                          title="View details"
+                    <div className="relative shrink-0">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpenActionMenuId(menuOpen ? null : mat.id);
+                        }}
+                        className="rounded-lg p-1.5 text-[#8aa094] transition hover:bg-[#f3f7f4] hover:text-[#52645d]"
+                        aria-label={`Actions for ${mat.materialName}`}
+                        aria-expanded={menuOpen}
+                      >
+                        <MoreHorizontal className="h-4 w-4" />
+                      </button>
+                      {menuOpen && (
+                        <div
+                          role="menu"
+                          onClick={(e) => e.stopPropagation()}
+                          className="absolute right-0 top-full z-40 mt-1 w-40 overflow-hidden rounded-xl border border-[#d7e4dc] bg-white py-1 shadow-lg"
                         >
-                          <ChevronRight className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleStartEditing(mat)}
-                          className="rounded p-1 text-[#8aa094] transition hover:bg-emerald-50 hover:text-emerald-800"
-                          title="Edit Material"
-                        >
-                          <Edit2 className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onDeleteMaterial(mat.id)}
-                          className="rounded p-1 text-[#8aa094] transition hover:bg-rose-50 hover:text-rose-600"
-                          title="Remove Material"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </motion.div>
-                  );
-                })}
-              </AnimatePresence>
-            </div>
-          </div>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              setOpenActionMenuId(null);
+                              setSelectedDetailMaterial(mat);
+                            }}
+                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] font-medium text-[#52645d] hover:bg-[#f7faf8]"
+                          >
+                            <Eye className="h-3.5 w-3.5 text-[#8aa094]" />
+                            View Details
+                          </button>
+                          {!readOnly && (
+                            <>
+                              <button
+                                type="button"
+                                role="menuitem"
+                                onClick={() => {
+                                  setOpenActionMenuId(null);
+                                  handleStartEditing(mat);
+                                }}
+                                className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] font-medium text-[#52645d] hover:bg-[#f7faf8]"
+                              >
+                                <Edit2 className="h-3.5 w-3.5 text-[#8aa094]" />
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                role="menuitem"
+                                onClick={() => {
+                                  setOpenActionMenuId(null);
+                                  onDeleteMaterial(mat.id);
+                                }}
+                                className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] font-medium text-rose-700 hover:bg-rose-50"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                Remove
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+          </ul>
         ) : (
-          <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-[#d7e4dc] bg-[#f7faf8] py-8 text-center">
+          <div className="flex flex-col items-center gap-2 rounded-xl bg-[#f7faf8] px-4 py-10 text-center">
             <Boxes className="h-7 w-7 text-[#c5d4cb]" />
             <p className="text-xs font-bold text-[#52645d]">
-              {materials.length === 0 ? "Inventory is empty" : "No matches for this filter"}
+              {materials.length === 0 ? "No ingredients yet" : "No matching ingredients"}
             </p>
-            <p className="text-[11px] text-[#8aa094]">
+            <p className="max-w-xs text-[11px] text-[#8aa094]">
               {materials.length === 0
-                ? "Start with AI Suggest, or add one material manually."
-                : "Try another type filter or clear search."}
+                ? "Add suggested ingredients above, or register one manually."
+                : "Try another category filter or clear search."}
             </p>
-            {materials.length === 0 && (
-              <div className="flex flex-wrap items-center justify-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleFetchAiRecommendations}
-                  className="inline-flex items-center gap-1 rounded-lg bg-emerald-700 px-2.5 py-1 text-[11px] font-semibold text-white"
-                >
-                  <Wand2 className="h-3 w-3" />
-                  AI Suggest
-                </button>
-                <button
-                  type="button"
-                  onClick={handleOpenManualAddModal}
-                  className="inline-flex items-center gap-1 rounded-lg border border-[#d7e4dc] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#52645d] hover:border-emerald-400"
-                >
-                  <Plus className="h-3 w-3 text-emerald-700" />
-                  Manual Add
-                </button>
-              </div>
+            {materials.length === 0 && !readOnly && (
+              <button
+                type="button"
+                onClick={handleOpenManualAddModal}
+                className="mt-1 inline-flex items-center gap-1 rounded-lg bg-emerald-700 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-emerald-800"
+              >
+                <Plus className="h-3 w-3" />
+                Add Ingredient
+              </button>
             )}
           </div>
         )}
       </motion.section>
 
       {/* Add / Edit material modal */}
-      {(isManualFormOpen || editingMaterialId !== null) && (
+      {!readOnly && (isManualFormOpen || editingMaterialId !== null) && (
         <div
           className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 p-4 backdrop-blur-xs sm:items-center sm:p-6"
           onClick={handleCancelEditing}
@@ -1139,15 +1194,15 @@ export default function MaterialsStep4Section({
           <div
             id="material-input-form"
             onClick={(e) => e.stopPropagation()}
-            className="my-4 flex w-full max-w-2xl flex-col rounded-2xl border border-[#d7e4dc] bg-white shadow-2xl sm:my-0"
+            className="my-4 flex w-full max-w-md flex-col rounded-2xl border border-[#d7e4dc] bg-white shadow-2xl sm:my-0"
           >
             <div className="flex items-center justify-between border-b border-[#e8f0eb] px-5 py-3.5">
               <div className="min-w-0">
                 <h2 className="text-base font-bold text-[#0f2c20]">
-                  {editingMaterialId ? "Edit material" : "Add material"}
+                  {editingMaterialId ? "Edit Ingredient" : "Add Ingredient"}
                 </h2>
                 <p className="truncate text-[11px] text-[#8aa094]">
-                  {project.plantName} · {currentDosageForm}
+                  Type any name · catalog suggestions optional
                 </p>
               </div>
               <button
@@ -1160,313 +1215,211 @@ export default function MaterialsStep4Section({
             </div>
 
             <form onSubmit={handleSubmitForm} className="flex flex-col">
-              <div className="space-y-4 px-5 py-4 pb-8">
+              <div className="space-y-3.5 px-5 py-4">
                 {formError && (
                   <div className="flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-2 text-[11px] font-medium text-rose-700">
                     <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
                     {formError}
                   </div>
                 )}
-
-                {/* Type pills */}
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-[#8aa094]">
-                    Type
-                  </label>
-                  <div className="flex flex-wrap gap-1.5">
-                    {MATERIAL_TYPES.map((t) => {
-                      const isActive = formType === t.key;
-                      return (
-                        <button
-                          key={t.key}
-                          type="button"
-                          title={t.description}
-                          onClick={() => {
-                            setFormType(t.key);
-                            setIsDirty(true);
-                          }}
-                          className={`rounded-lg px-3 py-1.5 text-[11px] font-semibold transition ${
-                            isActive
-                              ? "bg-emerald-700 text-white"
-                              : "border border-[#d7e4dc] bg-[#f7faf8] text-[#52645d] hover:border-emerald-400"
-                          }`}
-                        >
-                          {t.label}
-                        </button>
-                      );
-                    })}
+                {formSuccess && (
+                  <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-2 text-[11px] font-medium text-emerald-800">
+                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                    {formSuccess}
                   </div>
-                </div>
+                )}
 
-                {/* Name — full width so preset menu doesn't cover Role */}
+                {/* Ingredient name + autocomplete */}
                 <div className="relative z-30 space-y-1.5" ref={nameDropdownRef}>
                   <label className="text-[10px] font-bold uppercase tracking-wider text-[#8aa094]">
-                    Material name <span className="text-rose-500">*</span>
+                    Ingredient name <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formName}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      setFormName(next);
+                      setFormSource("CUSTOM");
+                      setSelectedPresetId(null);
+                      setIsNameDropdownOpen(next.trim().length > 0);
+                      setIsDirty(true);
+                      setFormError(null);
+                    }}
+                    onFocus={() => {
+                      if (formName.trim()) setIsNameDropdownOpen(true);
+                      setIsUnitDropdownOpen(false);
+                    }}
+                    placeholder="e.g. Carbomer 940 or your custom extract"
+                    autoComplete="off"
+                    className="w-full rounded-xl border border-[#d5e3da] bg-[#fbfdfb] px-3 py-2.5 text-sm font-semibold text-[#0f2c20] outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15"
+                  />
+                  {isNameDropdownOpen && filteredCatalogPresets.length > 0 && (
+                    <div className="absolute left-0 right-0 top-full z-50 mt-1.5 overflow-hidden rounded-xl border border-[#d7e4dc] bg-white shadow-2xl">
+                      <p className="border-b border-[#e8f0eb] bg-[#f7faf8] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#8aa094]">
+                        Suggestions · optional
+                      </p>
+                      <div className="max-h-48 overflow-y-auto">
+                        {filteredCatalogPresets.map((preset) => (
+                          <button
+                            key={preset.id}
+                            type="button"
+                            onClick={() => handleSelectPreset(preset)}
+                            className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-xs hover:bg-emerald-50"
+                          >
+                            <span className="truncate font-semibold text-[#0f2c20]">
+                              {preset.name}
+                            </span>
+                            <span className="shrink-0 rounded-md bg-[#f7faf8] px-1.5 py-0.5 text-[10px] text-[#8aa094]">
+                              {preset.suggestedRole}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {duplicateMatches.length > 0 && (
+                    <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11px] text-amber-900">
+                      <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      <span>
+                        Possible match already in My Ingredients:{" "}
+                        <strong>{duplicateMatches[0].materialName}</strong>. You can still save a
+                        custom entry if this is intentional.
+                      </span>
+                    </div>
+                  )}
+                  {duplicateMatches.length === 0 && nearDuplicateMatches.length > 0 && (
+                    <p className="text-[11px] text-[#8aa094]">
+                      Similar: {nearDuplicateMatches.map((m) => m.materialName).join(", ")}
+                    </p>
+                  )}
+                  {formSource === "CUSTOM" && formName.trim() && filteredCatalogPresets.length === 0 && (
+                    <p className="text-[11px] text-emerald-800">
+                      Will save as a custom ingredient for this project.
+                    </p>
+                  )}
+                </div>
+
+                {/* Role dropdown */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-[#8aa094]">
+                    Role <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={formRoleKey}
+                    onChange={(e) => {
+                      const key = e.target.value as SimpleIngredientRoleKey;
+                      setFormRoleKey(key);
+                      const opt = SIMPLE_INGREDIENT_ROLES.find((r) => r.key === key);
+                      if (opt && key !== "OTHER") {
+                        setFormType(opt.materialType);
+                        setFormCustomRole("");
+                      }
+                      setIsDirty(true);
+                    }}
+                    className="w-full rounded-xl border border-[#d5e3da] bg-[#fbfdfb] px-3 py-2.5 text-sm font-semibold text-[#0f2c20] outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15"
+                  >
+                    {SIMPLE_INGREDIENT_ROLES.map((role) => (
+                      <option key={role.key} value={role.key}>
+                        {role.label}
+                      </option>
+                    ))}
+                  </select>
+                  {formRoleKey === "OTHER" && (
+                    <input
+                      type="text"
+                      value={formCustomRole}
+                      onChange={(e) => {
+                        setFormCustomRole(e.target.value);
+                        setIsDirty(true);
+                      }}
+                      placeholder="Describe the custom role"
+                      className="w-full rounded-xl border border-[#d5e3da] bg-[#fbfdfb] px-3 py-2 text-sm text-[#0f2c20] outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15"
+                    />
+                  )}
+                </div>
+
+                {/* Optional stock */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-[#8aa094]">
+                    Stock quantity{" "}
+                    <span className="font-medium normal-case tracking-normal text-[#a3b5ac]">
+                      optional
+                    </span>
                   </label>
                   <div className="flex gap-1.5">
                     <input
                       type="text"
-                      value={formName}
+                      inputMode="decimal"
+                      value={formQuantity}
                       onChange={(e) => {
-                        setFormName(e.target.value);
-                        setNameSearchQuery(e.target.value);
+                        setFormQuantity(e.target.value);
                         setIsDirty(true);
                       }}
-                      onFocus={() => {
-                        setIsNameDropdownOpen(true);
-                        setIsGradeDropdownOpen(false);
-                        setIsUnitDropdownOpen(false);
-                      }}
-                      placeholder="Type or pick a preset"
-                      className="w-full rounded-xl border border-[#d5e3da] bg-[#fbfdfb] px-3 py-2 text-sm font-semibold text-[#0f2c20] outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15"
+                      placeholder="e.g. 500"
+                      className="w-full rounded-xl border border-[#d5e3da] bg-[#fbfdfb] px-3 py-2.5 font-mono text-sm font-bold text-[#0f2c20] outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15"
                     />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsGradeDropdownOpen(false);
-                        setIsUnitDropdownOpen(false);
-                        setIsNameDropdownOpen(!isNameDropdownOpen);
-                      }}
-                      className={`shrink-0 rounded-xl border px-3 transition ${
-                        isNameDropdownOpen
-                          ? "border-emerald-500 bg-emerald-50 text-emerald-800"
-                          : "border-[#d5e3da] bg-white text-[#8aa094] hover:bg-[#f7faf8]"
-                      }`}
-                      title="Browse presets"
-                    >
-                      <ChevronDown className="h-4 w-4" />
-                    </button>
-                  </div>
-                  {isNameDropdownOpen && (
-                    <div className="absolute left-0 right-0 top-full z-50 mt-1.5 overflow-hidden rounded-xl border border-[#d7e4dc] bg-white shadow-2xl">
-                      <div className="border-b border-[#e8f0eb] bg-[#f7faf8] p-2">
-                        <div className="relative">
-                          <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-[#8aa094]" />
-                          <input
-                            type="text"
-                            value={nameSearchQuery}
-                            onChange={(e) => setNameSearchQuery(e.target.value)}
-                            placeholder="Search presets..."
-                            className="w-full rounded-lg border border-[#d5e3da] bg-white py-1.5 pl-8 pr-3 text-xs outline-none focus:border-emerald-600"
-                          />
-                        </div>
-                      </div>
-                      <div className="max-h-52 overflow-y-auto">
-                        {filteredCatalogPresets.length > 0 ? (
-                          filteredCatalogPresets.map((preset) => (
-                            <button
-                              key={preset.id}
-                              type="button"
-                              onClick={() => handleSelectPreset(preset)}
-                              className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-xs hover:bg-emerald-50"
-                            >
-                              <span className="truncate font-semibold text-[#0f2c20]">
-                                {preset.name}
-                              </span>
-                              <span className="shrink-0 rounded-md bg-[#f7faf8] px-1.5 py-0.5 text-[10px] text-[#8aa094]">
-                                {preset.suggestedRole}
-                              </span>
-                            </button>
-                          ))
-                        ) : (
-                          <p className="px-3 py-4 text-center text-xs text-[#8aa094]">
-                            No presets — keep typing a custom name
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Role — below name so dropdown never covers it */}
-                <div className="space-y-1.5" ref={roleDropdownRef}>
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-[#8aa094]">
-                    Role
-                  </label>
-                  <input
-                    type="text"
-                    value={formRole}
-                    onChange={(e) => {
-                      setFormRole(e.target.value);
-                      setIsDirty(true);
-                    }}
-                    placeholder="e.g. Gelling Agent"
-                    className="w-full rounded-xl border border-[#d5e3da] bg-[#fbfdfb] px-3 py-2 text-sm text-[#0f2c20] outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15"
-                  />
-                </div>
-
-                {/* Grade + stock */}
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div className="relative z-20 space-y-1.5" ref={gradeDropdownRef}>
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-[#8aa094]">
-                      Grade
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsNameDropdownOpen(false);
-                        setIsUnitDropdownOpen(false);
-                        setIsGradeDropdownOpen(!isGradeDropdownOpen);
-                      }}
-                      className="flex w-full items-center justify-between rounded-xl border border-[#d5e3da] bg-[#fbfdfb] px-3 py-2 text-left text-sm font-semibold text-[#0f2c20]"
-                    >
-                      <span className="truncate">{formGrade}</span>
-                      <ChevronDown className="h-4 w-4 shrink-0 text-[#8aa094]" />
-                    </button>
-                    {isGradeDropdownOpen && (
-                      <div className="absolute left-0 right-0 top-full z-50 mt-1.5 max-h-48 overflow-y-auto rounded-xl border border-[#d7e4dc] bg-white p-1.5 shadow-2xl">
-                        {COMMON_GRADES.map((gradeStr) => (
-                          <button
-                            key={gradeStr}
-                            type="button"
-                            onClick={() => {
-                              setFormGrade(gradeStr);
-                              setIsGradeDropdownOpen(false);
-                              setIsDirty(true);
-                            }}
-                            className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-xs ${
-                              formGrade === gradeStr
-                                ? "bg-emerald-50 font-bold text-emerald-900"
-                                : "text-[#52645d] hover:bg-[#f7faf8]"
-                            }`}
-                          >
-                            {gradeStr}
-                            {formGrade === gradeStr && (
-                              <Check className="h-3.5 w-3.5 text-emerald-600" />
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-[#8aa094]">
-                      Stock{" "}
-                      <span className="font-medium normal-case tracking-normal">
-                        (blank = Planned)
-                      </span>
-                    </label>
-                    <div className="flex gap-1.5">
-                      <input
-                        type="text"
-                        value={formQuantity}
-                        onChange={(e) => {
-                          setFormQuantity(e.target.value);
-                          setIsDirty(true);
+                    <div className="relative w-24 shrink-0" ref={unitDropdownRef}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                      setIsNameDropdownOpen(false);
+                      setIsUnitDropdownOpen(!isUnitDropdownOpen);
                         }}
-                        placeholder="e.g. 500"
-                        className="w-full rounded-xl border border-[#d5e3da] bg-[#fbfdfb] px-3 py-2 font-mono text-sm font-bold text-[#0f2c20] outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15"
-                      />
-                      <div className="relative w-24 shrink-0" ref={unitDropdownRef}>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsNameDropdownOpen(false);
-                            setIsGradeDropdownOpen(false);
-                            setIsUnitDropdownOpen(!isUnitDropdownOpen);
-                          }}
-                          className="flex w-full items-center justify-between rounded-xl border border-[#d5e3da] bg-[#f7faf8] px-2.5 py-2 font-mono text-sm font-bold text-[#0f2c20]"
-                        >
-                          {formUnit}
-                          <ChevronDown className="h-3.5 w-3.5 text-[#8aa094]" />
-                        </button>
-                        {isUnitDropdownOpen && (
-                          <div className="absolute left-0 right-0 top-full z-50 mt-1.5 max-h-44 w-28 overflow-y-auto rounded-xl border border-[#d7e4dc] bg-white p-1 shadow-2xl">
-                            {COMMON_UNITS.map((unitStr) => (
-                              <button
-                                key={unitStr}
-                                type="button"
-                                onClick={() => {
-                                  setFormUnit(unitStr);
-                                  setIsUnitDropdownOpen(false);
-                                  setIsDirty(true);
-                                }}
-                                className={`w-full rounded-lg px-2.5 py-1.5 text-left font-mono text-xs ${
-                                  formUnit === unitStr
-                                    ? "bg-emerald-50 font-bold text-emerald-900"
-                                    : "hover:bg-[#f7faf8]"
-                                }`}
-                              >
-                                {unitStr}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+                        className="flex w-full items-center justify-between rounded-xl border border-[#d5e3da] bg-[#f7faf8] px-2.5 py-2.5 font-mono text-sm font-bold text-[#0f2c20]"
+                      >
+                        {formUnit}
+                        <ChevronDown className="h-3.5 w-3.5 text-[#8aa094]" />
+                      </button>
+                      {isUnitDropdownOpen && (
+                        <div className="absolute left-0 right-0 top-full z-50 mt-1.5 max-h-44 w-28 overflow-y-auto rounded-xl border border-[#d7e4dc] bg-white p-1 shadow-2xl">
+                          {COMMON_UNITS.map((unitStr) => (
+                            <button
+                              key={unitStr}
+                              type="button"
+                              onClick={() => {
+                                setFormUnit(unitStr);
+                                setIsUnitDropdownOpen(false);
+                                setIsDirty(true);
+                              }}
+                              className={`w-full rounded-lg px-2.5 py-1.5 text-left font-mono text-xs ${
+                                formUnit === unitStr
+                                  ? "bg-emerald-50 font-bold text-emerald-900"
+                                  : "hover:bg-[#f7faf8]"
+                              }`}
+                            >
+                              {unitStr}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
-                </div>
-
-                {/* Traceability */}
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                  <div className="space-y-1.5" ref={supplierDropdownRef}>
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-[#8aa094]">
-                      Supplier
-                    </label>
-                    <input
-                      type="text"
-                      value={formSupplier}
-                      onChange={(e) => {
-                        setFormSupplier(e.target.value);
-                        setIsDirty(true);
-                      }}
-                      placeholder="Optional"
-                      className="w-full rounded-xl border border-[#d5e3da] bg-[#fbfdfb] px-3 py-2 text-sm text-[#0f2c20] outline-none focus:border-emerald-600"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-[#8aa094]">
-                      Lot #
-                    </label>
-                    <input
-                      type="text"
-                      value={formLot}
-                      onChange={(e) => {
-                        setFormLot(e.target.value);
-                        setIsDirty(true);
-                      }}
-                      placeholder="Optional"
-                      className="w-full rounded-xl border border-[#d5e3da] bg-[#fbfdfb] px-3 py-2 font-mono text-sm text-[#0f2c20] outline-none focus:border-emerald-600"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-[#8aa094]">
-                      Storage
-                    </label>
-                    <input
-                      type="text"
-                      value={formStorage}
-                      onChange={(e) => {
-                        setFormStorage(e.target.value);
-                        setIsDirty(true);
-                      }}
-                      placeholder="15–25°C dry"
-                      className="w-full rounded-xl border border-[#d5e3da] bg-[#fbfdfb] px-3 py-2 text-sm text-[#0f2c20] outline-none focus:border-emerald-600"
-                    />
-                  </div>
+                  <p className="text-[11px] text-[#8aa094]">
+                    Leave blank to register without stock (status: Added).
+                  </p>
                 </div>
               </div>
 
               <div className="flex items-center justify-between gap-2 border-t border-[#e8f0eb] bg-[#f7faf8] px-5 py-3">
                 <span className="text-[11px] text-[#8aa094]">
                   {formQuantity.trim()
-                    ? `In stock · ${formQuantity} ${formUnit}`
-                    : "Status: Planned"}
+                    ? `Available · ${formQuantity} ${formUnit}`
+                    : "No stock · Added"}
                 </span>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={handleCancelEditing}
                     disabled={isSaving}
-                    className="rounded-xl border border-[#d7e4dc] bg-white px-4 py-2 text-xs font-semibold text-[#52645d] hover:bg-white"
+                    className="rounded-xl border border-[#d7e4dc] bg-white px-4 py-2 text-xs font-semibold text-[#52645d] hover:bg-white disabled:opacity-50"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    disabled={isSaving}
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-700 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-800 disabled:opacity-50"
+                    disabled={isSaving || !isFormValid}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-700 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {isSaving ? (
                       <>
@@ -1476,7 +1429,7 @@ export default function MaterialsStep4Section({
                     ) : (
                       <>
                         <Check className="h-3.5 w-3.5" />
-                        {editingMaterialId ? "Save" : "Add"}
+                        {editingMaterialId ? "Save changes" : "Add Ingredient"}
                       </>
                     )}
                   </button>
@@ -1496,7 +1449,7 @@ export default function MaterialsStep4Section({
             <div className="flex items-start justify-between border-b border-slate-100 pb-3">
               <div>
                 <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block">
-                  Material Specification Dossier
+                  Ingredient Details
                 </span>
                 <h3 className="text-base font-bold text-slate-900">
                   {selectedDetailMaterial.materialName}
@@ -1514,25 +1467,30 @@ export default function MaterialsStep4Section({
             <div className="space-y-3 text-xs">
               <div className="grid grid-cols-2 gap-2">
                 <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase block">Material Type</span>
-                  <span className="font-semibold text-slate-800">{selectedDetailMaterial.materialType}</span>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block">Category</span>
+                  <span className="font-semibold text-slate-800">
+                    {simplifyCategoryLabel(selectedDetailMaterial.materialType)}
+                  </span>
                 </div>
                 <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase block">Stock on Hand</span>
-                  {selectedDetailMaterial.inventoryStatus === "PLANNED" || !selectedDetailMaterial.quantityAvailable ? (
-                    <span className="font-semibold text-amber-800">Planned / Pending Receipt</span>
-                  ) : (
-                    <span className="font-mono font-bold text-emerald-800">
-                      {selectedDetailMaterial.quantityAvailable} {selectedDetailMaterial.unit}
-                    </span>
-                  )}
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block">Status</span>
+                  <span className="font-semibold text-slate-800">
+                    {simplifyInventoryStatus(selectedDetailMaterial)}
+                  </span>
+                  {selectedDetailMaterial.quantityAvailable != null &&
+                    String(selectedDetailMaterial.quantityAvailable).trim() !== "" && (
+                      <span className="mt-0.5 block font-mono text-[10px] text-slate-500">
+                        {selectedDetailMaterial.quantityAvailable}{" "}
+                        {selectedDetailMaterial.unit || "g"}
+                      </span>
+                    )}
                 </div>
               </div>
 
               {selectedDetailMaterial.extractFractionId && (
                 <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 space-y-0.5">
                   <span className="text-[10px] font-bold text-emerald-800 uppercase block">
-                    Linked Extract Fraction
+                    Extraction Reference
                   </span>
                   <span className="font-mono font-bold text-emerald-900 text-xs">
                     {selectedDetailMaterial.extractFractionId}
@@ -1541,8 +1499,15 @@ export default function MaterialsStep4Section({
               )}
 
               <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 space-y-1">
-                <span className="text-[10px] font-bold text-slate-400 uppercase block">Functional Role</span>
-                <p className="font-semibold text-slate-800">{selectedDetailMaterial.functionDescription || "N/A"}</p>
+                <span className="text-[10px] font-bold text-slate-400 uppercase block">Purpose</span>
+                <p className="font-semibold text-slate-800">
+                  {simplifyRoleLabel(selectedDetailMaterial.functionDescription)}
+                </p>
+                {selectedDetailMaterial.functionDescription && (
+                  <p className="text-[10px] text-slate-500">
+                    {selectedDetailMaterial.functionDescription}
+                  </p>
+                )}
               </div>
 
               {selectedDetailMaterial.scientificJustification && (
@@ -1559,26 +1524,6 @@ export default function MaterialsStep4Section({
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-2">
-                <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase block">Grade / Specification</span>
-                  <span className="font-medium text-slate-800">{selectedDetailMaterial.gradeOrPurity || "USP / NF"}</span>
-                </div>
-                <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase block">Lot / Accession</span>
-                  <span className="font-mono text-slate-800">{selectedDetailMaterial.lotOrBatchNumber || "Pending"}</span>
-                </div>
-              </div>
-
-              <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 space-y-1">
-                <span className="text-[10px] font-bold text-slate-400 uppercase block">Supplier / Source</span>
-                <p className="font-medium text-slate-800">{selectedDetailMaterial.supplierOrSource || "Unassigned"}</p>
-              </div>
-
-              <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 space-y-1">
-                <span className="text-[10px] font-bold text-slate-400 uppercase block">Storage &amp; Handling</span>
-                <p className="text-slate-700">{selectedDetailMaterial.storageConditions || "Cool, dry place (15-25°C)"}</p>
-              </div>
             </div>
 
             <div className="pt-2 flex justify-end">

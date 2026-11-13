@@ -2,9 +2,9 @@
 
 import React, { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Layers,
   Sprout,
   Package,
   Beaker,
@@ -14,6 +14,7 @@ import {
   ArrowRight,
   ArrowLeft,
   X,
+  Check,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import BotanicalStep1Section, {
@@ -324,10 +325,13 @@ export default function FormulationRdWorkspaceClient({
   // STEP 5: FORMULATION DEVELOPMENT & COMPOSITION MATRIX
   // ---------------------------------------------------------------------------
   const [formulationName, setFormulationName] = useState(
-    initialFormulation?.formulationName || `${project.plantName} 5% Topical Comfort Gel`
+    initialFormulation?.formulationName ||
+      `${project.plantName} ${initialProductSelection?.deliveryFormat || "Topical Hydrogel"}`
   );
   const [dosageFormType, setDosageFormType] = useState(
-    initialFormulation?.dosageFormType || "Topical Hydrogel"
+    initialFormulation?.dosageFormType ||
+      initialProductSelection?.deliveryFormat ||
+      "Topical Hydrogel"
   );
   const [formulationCode, setFormulationCode] = useState(
     initialFormulation?.formulationCode || "FRM-TOP-001"
@@ -466,7 +470,7 @@ export default function FormulationRdWorkspaceClient({
     { number: 1, title: "Plant Information", icon: Sprout },
     { number: 2, title: "Product Selection", icon: Package },
     { number: 3, title: "Extraction", icon: Beaker },
-    { number: 4, title: "Materials", icon: Boxes },
+    { number: 4, title: "Ingredients", icon: Boxes },
     { number: 5, title: "Formulation Development", icon: FlaskConical },
     { number: 6, title: "Batch Analysis", icon: Activity },
   ];
@@ -545,7 +549,10 @@ export default function FormulationRdWorkspaceClient({
           extractionDuration: extraction.extractionDuration,
           extractYieldPercent: extraction.extractYieldPercent,
           extractFractionName: extraction.extractFractionName,
+          // Preserve historical references without requiring UI entry on this step.
           extractionReferences: extraction.extractionReferences,
+          // Client measurement used for yield; persisted via extractYieldPercent.
+          recoveredDryMass: extraction.recoveredDryMass || "",
         }),
       });
       if (!res.ok) throw new Error("Failed to save extraction parameters");
@@ -580,10 +587,13 @@ export default function FormulationRdWorkspaceClient({
       } else {
         setMaterials([...materials, { ...materialPayload, id: data.id }]);
       }
-      setMessage({ text: "Material inventory record saved successfully!", type: "success" });
+      setMessage({
+        text: editingId ? "Ingredient updated." : "Ingredient added to My Ingredients.",
+        type: "success",
+      });
       return true;
     } catch (e: any) {
-      setMessage({ text: e.message || "Failed to save material", type: "error" });
+      setMessage({ text: e.message || "Failed to save ingredient", type: "error" });
       return false;
     } finally {
       setIsSaving(false);
@@ -591,18 +601,21 @@ export default function FormulationRdWorkspaceClient({
   };
 
   const handleDeleteMaterial = async (matId: number): Promise<boolean> => {
-    if (!confirm("Are you sure you want to remove this material from inventory?")) return false;
+    if (!confirm("Remove this ingredient from My Ingredients?")) return false;
     setIsSaving(true);
     try {
       const res = await fetch(`/api/researcher/projects/${project.id}/materials?materialId=${matId}`, {
         method: "DELETE",
       });
-      if (!res.ok) throw new Error("Failed to delete material");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to remove ingredient");
+      }
       setMaterials(materials.filter((m) => m.id !== matId));
-      setMessage({ text: "Material removed from inventory.", type: "success" });
+      setMessage({ text: "Ingredient removed from My Ingredients.", type: "success" });
       return true;
     } catch (e: any) {
-      setMessage({ text: e.message || "Failed to delete material.", type: "error" });
+      setMessage({ text: e.message || "Failed to remove ingredient.", type: "error" });
       return false;
     } finally {
       setIsSaving(false);
@@ -644,7 +657,7 @@ export default function FormulationRdWorkspaceClient({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to save formulation");
-      setMessage({ text: "Formulation composition matrix saved!", type: "success" });
+      setMessage({ text: "Formulation recipe saved!", type: "success" });
       return true;
     } catch (e: any) {
       setMessage({ text: e.message || "Failed to save formulation", type: "error" });
@@ -707,7 +720,7 @@ export default function FormulationRdWorkspaceClient({
       case 3:
         return await handleSaveStep3();
       case 4:
-        setMessage({ text: "Materials inventory verified for formulation compounding.", type: "success" });
+        setMessage({ text: "Ingredients saved for formulation.", type: "success" });
         return true;
       case 5:
         return await handleSaveStep5();
@@ -718,40 +731,64 @@ export default function FormulationRdWorkspaceClient({
     }
   };
 
-  const ActiveIcon = STEPS[activeStep - 1]?.icon || Layers;
-
   return (
-    <div className="w-full max-w-none space-y-5 pb-32 text-slate-800">
-      {/* Compact workspace header */}
+    <div className="w-full max-w-none space-y-4 pb-32 text-slate-800">
+      {/* Brand + compact step header */}
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
-        className="relative w-full overflow-hidden rounded-2xl border border-[#0f2c20]/15 bg-[linear-gradient(120deg,#0f2c20_0%,#134032_48%,#0b271b_100%)] px-4 py-3.5 text-white shadow-[0_12px_28px_-18px_rgba(15,44,32,0.55)] sm:px-5"
+        className="space-y-3"
       >
-        <div className="pointer-events-none absolute -right-10 -top-12 h-36 w-36 rounded-full bg-emerald-400/15 blur-3xl" />
-        <div className="relative space-y-3">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center justify-between gap-3">
+          <Link
+            href={`/researcher/projects/${project.id}`}
+            className="flex min-w-0 items-center gap-2.5 group"
+            title="NaturAide Research Platform"
+          >
+            <div className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-[#d7e4dc] bg-white shadow-sm ring-1 ring-emerald-500/10">
+              <Image
+                src="/images/nature-logo.png"
+                alt="NaturAide"
+                width={28}
+                height={28}
+                className="object-contain"
+                priority
+              />
+            </div>
+            <div className="min-w-0 leading-tight">
+              <p className="font-heading text-base font-bold tracking-tight text-[#0f2c20] group-hover:text-emerald-900 sm:text-lg">
+                NaturAide
+              </p>
+              <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-emerald-700/80">
+                Research Platform
+              </p>
+            </div>
+          </Link>
+
+          <Link
+            href={`/researcher/projects/${project.id}`}
+            className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-[#d7e4dc] bg-white px-2 py-1 text-[11px] font-semibold text-[#52645d] transition hover:border-emerald-300 hover:text-[#0f2c20]"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Project</span>
+          </Link>
+        </div>
+
+        <div className="relative overflow-hidden rounded-2xl border border-[#0f2c20]/12 bg-[linear-gradient(135deg,#0b2419_0%,#0f2c20_50%,#134032_100%)] px-4 py-3.5 text-white shadow-[0_12px_28px_-20px_rgba(15,44,32,0.55)] sm:px-5">
+          <div className="pointer-events-none absolute -right-10 -top-12 h-32 w-32 rounded-full bg-emerald-400/12 blur-3xl" />
+
+          <div className="relative flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium text-emerald-200/80">
-                <Link
-                  href={`/researcher/projects/${project.id}`}
-                  className="inline-flex items-center gap-1.5 transition hover:text-white"
-                >
-                  <ArrowLeft className="h-3.5 w-3.5" />
-                  Workspace Hub
-                </Link>
-                <span className="text-emerald-700">/</span>
-                <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-emerald-200">
-                  Section 1 · Step {String(activeStep).padStart(2, "0")} / 06
-                </span>
+              <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-emerald-200/75">
+                <span>Step {activeStep} of 6 · Formulation R&D</span>
                 <span
-                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                  className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 font-semibold ${
                     isSaving
                       ? "border-amber-400/40 bg-amber-500/15 text-amber-100"
                       : message?.type === "success"
                         ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-100"
-                        : "border-white/15 bg-white/5 text-emerald-100/80"
+                        : "border-white/15 bg-white/5 text-emerald-100/85"
                   }`}
                 >
                   <span
@@ -766,62 +803,66 @@ export default function FormulationRdWorkspaceClient({
                   {isSaving ? "Saving..." : message?.type === "success" ? "Saved" : "Draft"}
                 </span>
               </div>
-              <div className="mt-1.5 flex items-center gap-2">
-                <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-200">
-                  <ActiveIcon className="h-4 w-4" />
-                </span>
-                <h1 className="text-lg font-semibold tracking-tight text-white sm:text-xl">
-                  {STEPS[activeStep - 1].title}
-                </h1>
-              </div>
-              <div className="mt-2 flex max-w-md items-center gap-1">
-                {STEPS.map((step) => (
-                  <button
-                    key={step.number}
-                    type="button"
-                    onClick={() => setActiveStep(step.number)}
-                    title={`Step ${step.number}: ${step.title}`}
-                    className={`h-1.5 flex-1 rounded-full transition ${
-                      step.number <= activeStep ? "bg-emerald-400" : "bg-white/15 hover:bg-white/25"
-                    }`}
-                  />
-                ))}
-              </div>
+              <h1 className="mt-1 text-xl font-bold tracking-tight text-white sm:text-2xl">
+                {STEPS[activeStep - 1].title}
+              </h1>
             </div>
 
-            <Link
-              href={`/researcher/projects/${project.id}/in-silico`}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-emerald-400 px-3.5 py-2 text-xs font-semibold text-[#091a13] shadow-sm transition hover:bg-emerald-300"
-            >
-              Proceed to Section 2
-              <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
+            {activeStep === 6 && (
+              <Link
+                href={`/researcher/projects/${project.id}/in-silico`}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-emerald-400 px-3 py-1.5 text-xs font-bold text-[#091a13] shadow-sm transition hover:bg-emerald-300"
+              >
+                Proceed to Section 2
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            )}
           </div>
 
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
-            {STEPS.map((step) => {
-              const Icon = step.icon;
-              const isCurrent = activeStep === step.number;
-              const isDone = step.number < activeStep;
-              return (
-                <button
-                  key={step.number}
-                  type="button"
-                  onClick={() => setActiveStep(step.number)}
-                  className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-[11px] font-semibold transition ${
-                    isCurrent
-                      ? "bg-emerald-400 text-[#091a13] shadow-sm"
-                      : isDone
-                        ? "border border-emerald-400/30 bg-emerald-500/15 text-emerald-100 hover:bg-emerald-500/25"
-                        : "border border-white/10 bg-white/5 text-emerald-100/70 hover:bg-white/10 hover:text-white"
-                  }`}
-                >
-                  <Icon className="h-3.5 w-3.5" />
-                  <span className="font-mono text-[10px] opacity-80">{step.number}</span>
-                  <span className="hidden sm:inline">{step.title}</span>
-                </button>
-              );
-            })}
+          {/* Horizontal numbered stepper */}
+          <div className="relative mt-4 overflow-x-auto pb-0.5 scrollbar-none">
+            <div className="flex min-w-[28rem] items-center justify-between gap-0 sm:min-w-0">
+              {STEPS.map((step, idx) => {
+                const isCurrent = activeStep === step.number;
+                const isDone = step.number < activeStep;
+                return (
+                  <React.Fragment key={step.number}>
+                    <button
+                      type="button"
+                      onClick={() => setActiveStep(step.number)}
+                      title={step.title}
+                      className="group relative z-[1] flex shrink-0 flex-col items-center gap-1"
+                    >
+                      <span
+                        className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold transition ${
+                          isCurrent
+                            ? "bg-emerald-400 text-[#091a13] shadow-sm ring-2 ring-emerald-300/40"
+                            : isDone
+                              ? "bg-emerald-500/90 text-white"
+                              : "border border-white/20 bg-white/10 text-emerald-100/70 group-hover:bg-white/15"
+                        }`}
+                      >
+                        {isDone ? <Check className="h-3.5 w-3.5" strokeWidth={2.5} /> : step.number}
+                      </span>
+                      <span
+                        className={`hidden max-w-[4.5rem] truncate text-center text-[9px] font-semibold sm:block ${
+                          isCurrent ? "text-white" : isDone ? "text-emerald-200/90" : "text-emerald-100/55"
+                        }`}
+                      >
+                        {step.title.split(" ")[0]}
+                      </span>
+                    </button>
+                    {idx < STEPS.length - 1 && (
+                      <div
+                        className={`mx-1 h-0.5 min-w-[0.75rem] flex-1 rounded-full ${
+                          step.number < activeStep ? "bg-emerald-400/80" : "bg-white/15"
+                        }`}
+                      />
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </div>
           </div>
         </div>
       </motion.div>

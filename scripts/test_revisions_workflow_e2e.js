@@ -14,8 +14,8 @@ async function testRevisionsFlow() {
   });
 
   const projectId = 1;
-  const researcherId = 2; // Dr. Aris Dela Cruz
-  const reviewerId = 3;   // Dr. Elena Rostova (VERIFIED Pharmacist)
+  const researcherId = 2; // researcher@natureaide.test
+  const reviewerId = 3;   // reviewer@natureaide.test
 
   // 1. Verify Project 1 initial state
   const [pRows] = await pool.query("SELECT id, title, researcherId, currentStage, status FROM research_projects WHERE id = ?", [projectId]);
@@ -77,7 +77,7 @@ async function testRevisionsFlow() {
     INSERT INTO review_feedback (
       projectId, submissionId, reviewerId, reviewRound, sectionName,
       commentType, severity, reviewerName, comment, recommendation, status
-    ) VALUES (?, ?, ?, ?, 'safety', 'SAFETY_CONCERN', 'MAJOR', 'Dr. Elena Rostova',
+    ) VALUES (?, ?, ?, ?, 'safety', 'SAFETY_CONCERN', 'MAJOR', 'Lead Reviewer',
       'Potential hypokalemic risk when combined with loop diuretics. Need pharmacokinetic clearance data.',
       'Document explicit contraindications for patients on potassium-wasting diuretics.', 'OPEN')
   `, [projectId, submissionId, reviewerId, initialRound]);
@@ -87,7 +87,7 @@ async function testRevisionsFlow() {
     INSERT INTO review_feedback (
       projectId, submissionId, reviewerId, reviewRound, sectionName,
       commentType, severity, reviewerName, comment, recommendation, status
-    ) VALUES (?, ?, ?, ?, 'formulation', 'CLARIFICATION_NEEDED', 'MINOR', 'Dr. Elena Rostova',
+    ) VALUES (?, ?, ?, ?, 'formulation', 'CLARIFICATION_NEEDED', 'MINOR', 'Lead Reviewer',
       'Clarify extraction solvent ratio and drying temperature.',
       'Specify aqueous ethanol percentage in processing conditions.', 'OPEN')
   `, [projectId, submissionId, reviewerId, initialRound]);
