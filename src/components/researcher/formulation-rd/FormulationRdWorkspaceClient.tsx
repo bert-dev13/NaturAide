@@ -81,6 +81,10 @@ export default function FormulationRdWorkspaceClient({
   const [activeStep, setActiveStep] = useState<number>(initialStep || 1);
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
+  const [pendingDeleteMaterial, setPendingDeleteMaterial] = useState<{
+    id: number;
+    name: string;
+  } | null>(null);
 
   useEffect(() => {
     if (initialStep && initialStep >= 1 && initialStep <= 6) {
@@ -354,6 +358,8 @@ export default function FormulationRdWorkspaceClient({
     initialFormulation?.currentVersionNumber || "v1.0"
   );
 
+  // No hardcoded recipe seed — composition comes from saved rows, templates, AI Assist,
+  // or explicit "Add from My Ingredients" (never auto-inserts testing references).
   const [components, setComponents] = useState<any[]>(
     initialComponents.length > 0
       ? initialComponents.map((c: any) => ({
@@ -361,65 +367,7 @@ export default function FormulationRdWorkspaceClient({
           ingredientName: c.ingredientName || c.componentName || "Component",
           roleOrFunction: c.roleOrFunction || c.roleInFormulation || "Compounding Agent",
         }))
-      : [
-          {
-            id: 1,
-            componentType: "ACTIVE_EXTRACT",
-            ingredientName: `${project.plantName} Hydroethanolic Extract`,
-            concentrationValue: 5.0,
-            concentrationUnit: "% w/w",
-            minConcentration: 3.0,
-            maxConcentration: 10.0,
-            roleOrFunction: "Botanical Active Constituent",
-            notes: "Standardized active crude extract",
-          },
-          {
-            id: 2,
-            componentType: "EXCIPIENT",
-            ingredientName: "Carbomer 940",
-            concentrationValue: 1.0,
-            concentrationUnit: "% w/w",
-            minConcentration: 0.5,
-            maxConcentration: 2.0,
-            roleOrFunction: "Gelling Agent & Aqueous Matrix Builder",
-            notes: "USP Grade synthetic polyacrylic polymer",
-          },
-          {
-            id: 3,
-            componentType: "EXCIPIENT",
-            ingredientName: "Triethanolamine (TEA)",
-            concentrationValue: 1.0,
-            concentrationUnit: "% w/w",
-            minConcentration: 0.5,
-            maxConcentration: 1.5,
-            roleOrFunction: "Neutralizing Agent & pH Adjuster",
-            notes: "Neutralizes polymer carbomers to pH 5.5-6.5",
-            isPhAdjuster: true,
-          },
-          {
-            id: 4,
-            componentType: "EXCIPIENT",
-            ingredientName: "Glycerin",
-            concentrationValue: 5.0,
-            concentrationUnit: "% w/w",
-            minConcentration: 2.0,
-            maxConcentration: 10.0,
-            roleOrFunction: "Humectant & Emollient",
-            notes: "Prevents gel drying out and provides smooth spreadability",
-          },
-          {
-            id: 5,
-            componentType: "VEHICLE",
-            ingredientName: "Purified Water (USP)",
-            concentrationValue: 88.0,
-            concentrationUnit: "% w/w",
-            minConcentration: 75.0,
-            maxConcentration: 95.0,
-            roleOrFunction: "Aqueous continuous vehicle qs to 100%",
-            notes: "Freshly deionized, microbial-tested",
-            isVehicle: true,
-          },
-        ]
+      : []
   );
 
   // Formulation total concentration sum
@@ -601,7 +549,18 @@ export default function FormulationRdWorkspaceClient({
   };
 
   const handleDeleteMaterial = async (matId: number): Promise<boolean> => {
-    if (!confirm("Remove this ingredient from My Ingredients?")) return false;
+    const mat = materials.find((m) => m.id === matId);
+    setPendingDeleteMaterial({
+      id: matId,
+      name: mat?.materialName || "this ingredient",
+    });
+    return false;
+  };
+
+  const confirmDeleteMaterial = async () => {
+    if (!pendingDeleteMaterial) return;
+    const matId = pendingDeleteMaterial.id;
+    setPendingDeleteMaterial(null);
     setIsSaving(true);
     try {
       const res = await fetch(`/api/researcher/projects/${project.id}/materials?materialId=${matId}`, {
@@ -613,10 +572,8 @@ export default function FormulationRdWorkspaceClient({
       }
       setMaterials(materials.filter((m) => m.id !== matId));
       setMessage({ text: "Ingredient removed from My Ingredients.", type: "success" });
-      return true;
     } catch (e: any) {
       setMessage({ text: e.message || "Failed to remove ingredient.", type: "error" });
-      return false;
     } finally {
       setIsSaving(false);
     }
@@ -888,6 +845,76 @@ export default function FormulationRdWorkspaceClient({
             >
               <X className="h-3.5 w-3.5" />
             </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {pendingDeleteMaterial && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[80] flex items-center justify-center bg-[#0f2c20]/45 p-4 backdrop-blur-[2px]"
+            onClick={() => !isSaving && setPendingDeleteMaterial(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 10, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 8, scale: 0.98 }}
+              transition={{ duration: 0.2 }}
+              className="w-full max-w-md rounded-2xl border border-[#d7e4dc] bg-white p-5 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="delete-ingredient-title"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3
+                    id="delete-ingredient-title"
+                    className="text-base font-bold tracking-tight text-[#0f2c20]"
+                  >
+                    Remove ingredient?
+                  </h3>
+                  <p className="mt-1.5 text-sm leading-relaxed text-[#52645d]">
+                    Remove{" "}
+                    <span className="font-semibold text-[#0f2c20]">
+                      {pendingDeleteMaterial.name}
+                    </span>{" "}
+                    from My Ingredients? This cannot be undone.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={isSaving}
+                  onClick={() => setPendingDeleteMaterial(null)}
+                  className="rounded-lg p-1 text-[#8aa094] transition hover:bg-[#f4f8f5] hover:text-[#52645d]"
+                  aria-label="Close"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="mt-5 flex justify-end gap-2">
+                <button
+                  type="button"
+                  disabled={isSaving}
+                  onClick={() => setPendingDeleteMaterial(null)}
+                  className="rounded-xl border border-[#d7e4dc] bg-white px-3.5 py-2 text-sm font-semibold text-[#52645d] transition hover:bg-[#f7faf8]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={isSaving}
+                  onClick={confirmDeleteMaterial}
+                  className="rounded-xl bg-rose-600 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:opacity-60"
+                >
+                  {isSaving ? "Removing…" : "Remove"}
+                </button>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

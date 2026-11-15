@@ -141,21 +141,45 @@ export function findInventoryMatch(
   const targetNorm = normalizeMaterialName(ingredientName);
   const plantNorm = normalizeMaterialName(plantName);
 
-  // 1. If active botanical, match against active botanical type or plant name
+  // Prefer non-analytical matches for actives/excipients, but keep full list available
+  const formulationMaterials = materials;
+
+  // 1. Active botanical / extract — prefer name match, then plant-named ACTIVE_BOTANICAL
   if (componentType === "ACTIVE_EXTRACT" || componentType === "ACTIVE_BOTANICAL") {
-    const botanical = materials.find((m) => {
-      const mType = m.materialType || "";
-      const mNorm = normalizeMaterialName(m.materialName);
-      if (mType === "ACTIVE_BOTANICAL" || mType === "ACTIVE_EXTRACT") return true;
-      if (plantNorm && mNorm.includes(plantNorm)) return true;
-      if (mNorm.includes("extract")) return true;
-      return false;
+    const botanicals = formulationMaterials.filter((m) => {
+      const mType = String(m.materialType || "").toUpperCase();
+      return mType === "ACTIVE_BOTANICAL" || mType === "ACTIVE_EXTRACT";
     });
-    if (botanical) return botanical;
+
+    const byName = botanicals.find((m) => {
+      const mNorm = normalizeMaterialName(m.materialName);
+      return (
+        mNorm &&
+        targetNorm &&
+        (mNorm === targetNorm || mNorm.includes(targetNorm) || targetNorm.includes(mNorm))
+      );
+    });
+    if (byName) return byName;
+
+    const byPlant = botanicals.find((m) => {
+      const mNorm = normalizeMaterialName(m.materialName);
+      return Boolean(plantNorm && mNorm.includes(plantNorm));
+    });
+    if (byPlant) return byPlant;
+
+    const byExtract = formulationMaterials.find((m) => {
+      const mNorm = normalizeMaterialName(m.materialName);
+      return Boolean(
+        plantNorm &&
+          mNorm.includes(plantNorm) &&
+          (mNorm.includes("extract") || mNorm.includes("leaves"))
+      );
+    });
+    if (byExtract) return byExtract;
   }
 
   // 2. Exact or normalized substring match
-  for (const m of materials) {
+  for (const m of formulationMaterials) {
     const matNorm = normalizeMaterialName(m.materialName);
     if (!matNorm) continue;
     if (matNorm === targetNorm || matNorm.includes(targetNorm) || targetNorm.includes(matNorm)) {
@@ -166,7 +190,7 @@ export function findInventoryMatch(
   // 3. Common pharmaceutical synonyms & trade names
   // Carbomer / Carbopol
   if (targetNorm.includes("carbomer") || targetNorm.includes("carbopol")) {
-    const match = materials.find((m) => {
+    const match = formulationMaterials.find((m) => {
       const n = normalizeMaterialName(m.materialName);
       return n.includes("carbomer") || n.includes("carbopol") || n.includes("carboxypolymethylene");
     });
@@ -175,7 +199,7 @@ export function findInventoryMatch(
 
   // Purified Water / Aqua / Water USP
   if (targetNorm.includes("water") || targetNorm.includes("aqua")) {
-    const match = materials.find((m) => {
+    const match = formulationMaterials.find((m) => {
       const n = normalizeMaterialName(m.materialName);
       return n.includes("water") || n.includes("aqua");
     });
@@ -184,7 +208,7 @@ export function findInventoryMatch(
 
   // Triethanolamine / TEA / Trolamine
   if (targetNorm.includes("triethanolamine") || targetNorm.includes("tea") || targetNorm.includes("trolamine")) {
-    const match = materials.find((m) => {
+    const match = formulationMaterials.find((m) => {
       const n = normalizeMaterialName(m.materialName);
       return n.includes("triethanolamine") || n === "tea" || n.includes("trolamine");
     });
@@ -193,7 +217,7 @@ export function findInventoryMatch(
 
   // Glycerin / Glycerol
   if (targetNorm.includes("glycerin") || targetNorm.includes("glycerol")) {
-    const match = materials.find((m) => {
+    const match = formulationMaterials.find((m) => {
       const n = normalizeMaterialName(m.materialName);
       return n.includes("glycerin") || n.includes("glycerol");
     });
@@ -202,31 +226,31 @@ export function findInventoryMatch(
 
   // Phenoxyethanol
   if (targetNorm.includes("phenoxyethanol")) {
-    const match = materials.find((m) => normalizeMaterialName(m.materialName).includes("phenoxyethanol"));
+    const match = formulationMaterials.find((m) => normalizeMaterialName(m.materialName).includes("phenoxyethanol"));
     if (match) return match;
   }
 
   // Propylene glycol
   if (targetNorm.includes("propyleneglycol")) {
-    const match = materials.find((m) => normalizeMaterialName(m.materialName).includes("propyleneglycol"));
+    const match = formulationMaterials.find((m) => normalizeMaterialName(m.materialName).includes("propyleneglycol"));
     if (match) return match;
   }
 
   // Simple Syrup
   if (targetNorm.includes("syrup")) {
-    const match = materials.find((m) => normalizeMaterialName(m.materialName).includes("syrup"));
+    const match = formulationMaterials.find((m) => normalizeMaterialName(m.materialName).includes("syrup"));
     if (match) return match;
   }
 
   // Sodium Benzoate
   if (targetNorm.includes("benzoate")) {
-    const match = materials.find((m) => normalizeMaterialName(m.materialName).includes("benzoate"));
+    const match = formulationMaterials.find((m) => normalizeMaterialName(m.materialName).includes("benzoate"));
     if (match) return match;
   }
 
   // Microcrystalline cellulose / MCC / Avicel
   if (targetNorm.includes("microcrystalline") || targetNorm.includes("mcc") || targetNorm.includes("avicel")) {
-    const match = materials.find((m) => {
+    const match = formulationMaterials.find((m) => {
       const n = normalizeMaterialName(m.materialName);
       return n.includes("microcrystalline") || n.includes("mcc") || n.includes("avicel");
     });
@@ -235,7 +259,7 @@ export function findInventoryMatch(
 
   // Magnesium Stearate
   if (targetNorm.includes("magnesiumstearate") || targetNorm.includes("mgstearate")) {
-    const match = materials.find((m) => {
+    const match = formulationMaterials.find((m) => {
       const n = normalizeMaterialName(m.materialName);
       return n.includes("magnesiumstearate") || n.includes("mgstearate");
     });
@@ -244,7 +268,7 @@ export function findInventoryMatch(
 
   // Silicon Dioxide / Aerosil
   if (targetNorm.includes("silicondioxide") || targetNorm.includes("aerosil")) {
-    const match = materials.find((m) => {
+    const match = formulationMaterials.find((m) => {
       const n = normalizeMaterialName(m.materialName);
       return n.includes("silicondioxide") || n.includes("aerosil");
     });

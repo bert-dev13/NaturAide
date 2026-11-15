@@ -459,6 +459,52 @@ export function resolveSimpleIngredientRole(
   return { key: "OTHER", customLabel: roleText };
 }
 
+/** Testing / analytical standards stay in My Ingredients but are not formulation recipe rows. */
+export function isTestingReferenceMaterial(mat: {
+  materialType?: string | null;
+  functionDescription?: string | null;
+}): boolean {
+  const role = resolveSimpleIngredientRole(mat.materialType, mat.functionDescription);
+  return (
+    role.key === "TESTING" ||
+    String(mat.materialType || "").toUpperCase() === "ANALYTICAL_STANDARD"
+  );
+}
+
+/**
+ * Every My Ingredients row can appear in Formulation Development.
+ * Testing references are included for documentation parity with inventory;
+ * researchers can remove them from the composition without deleting inventory.
+ */
+export function isFormulationEligibleMaterial(_mat: {
+  materialType?: string | null;
+  functionDescription?: string | null;
+}): boolean {
+  return true;
+}
+
+/** Map My Ingredients type/role → formulation componentType. */
+export function mapMaterialToComponentType(
+  materialType?: string | null,
+  functionDescription?: string | null
+): string {
+  const role = resolveSimpleIngredientRole(materialType, functionDescription);
+  switch (role.key) {
+    case "MAIN":
+      return "ACTIVE_EXTRACT";
+    case "PRESERVATIVE":
+      return "PRESERVATIVE";
+    case "BASE":
+      return "VEHICLE";
+    case "SOLVENT":
+      return "SOLVENT";
+    case "TESTING":
+      return "ANALYTICAL_STANDARD";
+    default:
+      return "EXCIPIENT";
+  }
+}
+
 /** Flat catalog search across all preset families (for autocomplete). */
 export function getAllMaterialPresets(options?: {
   plantName?: string;

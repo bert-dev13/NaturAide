@@ -5,6 +5,8 @@ import {
   getAllBotanicalPlants,
 } from "@/lib/botanical-registry";
 import { resolvePlantImage } from "@/lib/record-images";
+import { findInventoryMatch } from "@/lib/formulation-ai-service";
+import { isFormulationEligibleMaterial } from "@/lib/materials-catalog";
 
 /**
  * Shared Section 1 Formulation R&D workspace payload.
@@ -215,19 +217,41 @@ export async function loadFormulationRdWorkspaceData(projectId: number) {
     "SELECT * FROM formulation_components WHERE projectId = ? ORDER BY id ASC",
     [projectId]
   );
-  const components = (componentsRaw || []).map((c: any) => ({
-    ...c,
-    ingredientName: c.ingredientName || c.componentName || "Component",
-    roleOrFunction: c.roleOrFunction || c.roleInFormulation || "Compounding Agent",
-    isVehicle: Boolean(
-      c.isVehicle ||
-        (c.roleOrFunction || c.roleInFormulation || "").toLowerCase().includes("vehicle")
-    ),
-    isPhAdjuster: Boolean(
-      c.isPhAdjuster ||
-        (c.roleOrFunction || c.roleInFormulation || "").toLowerCase().includes("ph")
-    ),
-  }));
+
+  // Prefer live My Ingredients names when a materialId (or synonym match) exists.
+  const eligibleMaterials = (materials || []).filter((m: any) =>
+    isFormulationEligibleMaterial(m)
+  );
+
+  const components = (componentsRaw || []).map((c: any) => {
+    const baseName = c.ingredientName || c.componentName || "Component";
+    const baseRole = c.roleOrFunction || c.roleInFormulation || "Compounding Agent";
+    const byId = c.materialId
+      ? eligibleMaterials.find((m: any) => Number(m.id) === Number(c.materialId))
+      : null;
+    const byMatch =
+      byId ||
+      findInventoryMatch(
+        baseName,
+        c.componentType || "EXCIPIENT",
+        eligibleMaterials,
+        project.plantName
+      );
+    return {
+      ...c,
+      ingredientName: byMatch?.materialName || baseName,
+      roleOrFunction: baseRole,
+      materialId: byMatch?.id || c.materialId || null,
+      isVehicle: Boolean(
+        c.isVehicle ||
+          (baseRole || "").toLowerCase().includes("vehicle") ||
+          (baseRole || "").toLowerCase().includes("base ingredient")
+      ),
+      isPhAdjuster: Boolean(
+        c.isPhAdjuster || (baseRole || "").toLowerCase().includes("ph")
+      ),
+    };
+  });
 
   const [batches]: any = await pool.query(
     "SELECT * FROM research_batch_analyses WHERE projectId = ? ORDER BY id DESC",

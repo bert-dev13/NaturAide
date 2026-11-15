@@ -1,4 +1,10 @@
 import pool from "@/lib/db";
+import {
+  EXPANDED_PLANT_PHYTOCHEMICALS,
+  PHYTOCHEMICAL_LIBRARY_PAGE_SIZE,
+} from "@/lib/phytochemical-catalog-expanded";
+
+export { PHYTOCHEMICAL_LIBRARY_PAGE_SIZE };
 
 export interface PhytochemicalEvidenceItem {
   title: string;
@@ -135,10 +141,10 @@ export function resolveCanonicalPlantId(rawNameOrId?: string | null): string | n
 }
 
 /**
- * Curated, evidence-backed phytochemical library for supported medicinal plants
- * Each constituent contains real, verifiable scientific literature references with DOI/PMID where available.
+ * Base curated, evidence-backed phytochemical library for supported medicinal plants.
+ * Expanded plant-specific entries are merged below (deduped by plantId + compound name).
  */
-export const CURATED_PLANT_PHYTOCHEMICALS: CuratedPhytochemical[] = [
+const BASE_CURATED_PLANT_PHYTOCHEMICALS: CuratedPhytochemical[] = [
   // =========================================================================
   // TSAANG GUBAT (Carmona retusa syn. Ehretia microphylla Lam.)
   // =========================================================================
@@ -864,8 +870,8 @@ export const CURATED_PLANT_PHYTOCHEMICALS: CuratedPhytochemical[] = [
     molecularFormula: "C6H11NO2S",
     molecularWeight: 161.22,
     compoundClass: "Sulfur-containing Amino Acid",
-    pubchemId: "98144",
-    smiles: "C=CCSC[C@@H](C(=O)O)N",
+    pubchemId: "9793905",
+    smiles: "C=CCSCC(C(=O)O)N",
     plantPartReported: "Cloves and Bulbs",
     verificationStatus: "VERIFIED_DATABASE",
     references: [
@@ -1064,7 +1070,7 @@ export const CURATED_PLANT_PHYTOCHEMICALS: CuratedPhytochemical[] = [
     molecularFormula: "C10H16O",
     molecularWeight: 152.23,
     compoundClass: "Monoterpenoid Ketone",
-    pubchemId: "442601",
+    pubchemId: "442495",
     smiles: "CC1CCC(=C(C)C)C(=O)C1",
     plantPartReported: "Leaves",
     verificationStatus: "VERIFIED_DATABASE",
@@ -1090,9 +1096,9 @@ export const CURATED_PLANT_PHYTOCHEMICALS: CuratedPhytochemical[] = [
     synonyms: ["Eriodictyol 7-O-rutinoside"],
     iupacName: "(2S)-2-(3,4-dihydroxyphenyl)-5-hydroxy-7-[(2S,3R,4S,5S,6R)-3,4,5-trihydroxy-6-[[(2R,3R,4R,5R,6S)-3,4,5-trihydroxy-6-methyloxan-2-yl]oxymethyll]oxan-2-yl]oxy-2,3-dihydrochromen-4-one",
     molecularFormula: "C27H32O15",
-    molecularWeight: 596.53,
+    molecularWeight: 596.5,
     compoundClass: "Flavanone Glycoside",
-    pubchemId: "10228",
+    pubchemId: "83489",
     smiles: "CC1C(C(C(C(O1)OCC2C(C(C(C(O2)OC3=CC(=C4C(=O)CC(OC4=C3)C5=CC(=C(C=C5)O)O)O)O)O)O)O)O)O",
     plantPartReported: "Leaves",
     verificationStatus: "VERIFIED_DATABASE",
@@ -1113,6 +1119,36 @@ export const CURATED_PLANT_PHYTOCHEMICALS: CuratedPhytochemical[] = [
     ],
   },
 ];
+
+function compoundKey(plantId: string, compoundName: string) {
+  return `${plantId.trim().toLowerCase()}::${compoundName.trim().toLowerCase()}`;
+}
+
+/** Full curated library: base + expanded, deduped by plantId + compound name (base wins). */
+export const CURATED_PLANT_PHYTOCHEMICALS: CuratedPhytochemical[] = (() => {
+  const map = new Map<string, CuratedPhytochemical>();
+  for (const item of BASE_CURATED_PLANT_PHYTOCHEMICALS) {
+    map.set(compoundKey(item.plantId, item.compoundName), item);
+  }
+  for (const item of EXPANDED_PLANT_PHYTOCHEMICALS as unknown as CuratedPhytochemical[]) {
+    const key = compoundKey(item.plantId, item.compoundName);
+    if (!map.has(key)) map.set(key, item);
+  }
+  return Array.from(map.values());
+})();
+
+/** True when a compound has a chemical structure usable for docking ligand prep. */
+export function hasDockableChemicalStructure(compound: {
+  smiles?: string | null;
+  pubchemId?: string | number | null;
+}): boolean {
+  return Boolean(String(compound.smiles || "").trim() || String(compound.pubchemId || "").trim());
+}
+
+export function getCuratedCompoundsForPlant(plantId: string): CuratedPhytochemical[] {
+  const id = resolveCanonicalPlantId(plantId) || plantId;
+  return CURATED_PLANT_PHYTOCHEMICALS.filter((c) => c.plantId === id);
+}
 
 /**
  * Synchronize the central plant_compounds table with the curated evidence catalog.
@@ -1152,7 +1188,7 @@ export async function syncPhytochemicalCatalog(): Promise<{
             smiles = COALESCE(?, smiles),
             plantPartReported = COALESCE(?, plantPartReported),
             referencesData = ?,
-            verificationStatus = 'VERIFIED_DATABASE'
+            verificationStatus = ?
         WHERE id = ?
         `,
         [
@@ -1165,6 +1201,7 @@ export async function syncPhytochemicalCatalog(): Promise<{
           c.smiles || null,
           c.plantPartReported || "Leaves",
           referencesJson,
+          c.verificationStatus || "VERIFIED_DATABASE",
           existing[0].id,
         ]
       );
@@ -1177,7 +1214,7 @@ export async function syncPhytochemicalCatalog(): Promise<{
           iupacName, molecularFormula, molecularWeight, compoundClass,
           pubchemId, smiles, plantPartReported, referencesData,
           verificationStatus, createdAt
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'VERIFIED_DATABASE', NOW())
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
         `,
         [
           c.plantId,
@@ -1192,6 +1229,7 @@ export async function syncPhytochemicalCatalog(): Promise<{
           c.smiles || null,
           c.plantPartReported || "Leaves",
           referencesJson,
+          c.verificationStatus || "VERIFIED_DATABASE",
         ]
       );
       synced++;
@@ -1253,28 +1291,48 @@ function curatedAsRows(plantId: string) {
   }));
 }
 
+export function getPlantPhytochemicalCatalogCount(plantId?: string | null): number {
+  if (!plantId) return CURATED_PLANT_PHYTOCHEMICALS.length;
+  const id = resolveCanonicalPlantId(plantId) || plantId;
+  return CURATED_PLANT_PHYTOCHEMICALS.filter((c) => c.plantId === id).length;
+}
+
 async function queryPlantCompounds(
   plantId: string | null,
   scientificName?: string | null,
   commonName?: string | null
 ): Promise<any[]> {
+  // Prefer exact plantId so compounds from unrelated plants never leak into the UI.
+  if (plantId) {
+    const [byId]: any = await pool.query(
+      `
+      SELECT id, plantId, plantScientificName, plantCommonName, compoundName,
+             iupacName, molecularFormula, molecularWeight, compoundClass,
+             pubchemId, smiles, plantPartReported, referencesData, verificationStatus
+      FROM plant_compounds
+      WHERE plantId = ?
+      ORDER BY compoundName ASC
+      `,
+      [plantId]
+    );
+    if (byId?.length) return byId;
+  }
+
   const clauses: string[] = [];
   const params: unknown[] = [];
 
-  if (plantId) {
-    clauses.push("plantId = ?");
-    params.push(plantId);
-  }
   if (scientificName && scientificName.trim().length > 2) {
     clauses.push("LOWER(TRIM(plantScientificName)) = LOWER(TRIM(?))");
     params.push(scientificName.trim());
-    clauses.push("plantScientificName LIKE ?");
-    params.push(`%${scientificName.trim()}%`);
   }
   if (commonName && commonName.trim().length > 1) {
     const first = commonName.split(/[\s(/]/)[0].replace(/[^a-zA-Z-]/g, "");
-    clauses.push("plantCommonName LIKE ?");
-    params.push(`%${first || commonName.trim()}%`);
+    clauses.push("LOWER(TRIM(plantCommonName)) = LOWER(TRIM(?))");
+    params.push(commonName.trim());
+    if (first && first.toLowerCase() !== commonName.trim().toLowerCase()) {
+      clauses.push("plantCommonName LIKE ?");
+      params.push(`${first}%`);
+    }
   }
 
   if (clauses.length === 0) return [];
@@ -1310,21 +1368,39 @@ export async function loadVerifiedPhytochemicals(options: {
     (options.plantId && String(options.plantId).trim()) ||
     null;
 
+  const curatedForPlant = canonicalId
+    ? CURATED_PLANT_PHYTOCHEMICALS.filter((item) => item.plantId === canonicalId)
+    : [];
+
   try {
     await ensurePlantCompoundsTable();
 
     let rows = await queryPlantCompounds(canonicalId, options.scientificName, options.commonName);
 
-    if (rows.length === 0) {
-      const [countRows]: any = await pool.query("SELECT COUNT(*) AS total FROM plant_compounds");
-      const total = Number(countRows[0]?.total || 0);
-      if (total === 0 || (canonicalId && CURATED_PLANT_PHYTOCHEMICALS.some((item) => item.plantId === canonicalId))) {
-        await syncPhytochemicalCatalog();
-        rows = await queryPlantCompounds(canonicalId, options.scientificName, options.commonName);
-      }
+    // Sync when this plant is missing any curated compound (catalog growth / fresh DB).
+    const existingKeys = new Set(
+      rows.map((row: any) => compoundKey(String(row.plantId || canonicalId || ""), String(row.compoundName || "")))
+    );
+    const missingCurated = curatedForPlant.some(
+      (item) => !existingKeys.has(compoundKey(item.plantId, item.compoundName))
+    );
+
+    if (missingCurated) {
+      await syncPhytochemicalCatalog();
+      rows = await queryPlantCompounds(canonicalId, options.scientificName, options.commonName);
     }
 
-    if (rows.length > 0) return rows;
+    if (rows.length > 0) {
+      // Keep plant-scoped: if we resolved a canonical ID, drop any accidental cross-plant rows.
+      if (canonicalId) {
+        return rows.filter(
+          (row: any) =>
+            !row.plantId ||
+            String(row.plantId).toLowerCase() === String(canonicalId).toLowerCase()
+        );
+      }
+      return rows;
+    }
   } catch (error) {
     console.warn("loadVerifiedPhytochemicals database warning:", error);
   }

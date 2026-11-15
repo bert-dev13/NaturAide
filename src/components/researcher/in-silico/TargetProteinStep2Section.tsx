@@ -1,7 +1,7 @@
 // src/components/researcher/in-silico/TargetProteinStep2Section.tsx
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import {
   CURATED_TARGET_PROTEINS,
+  TARGET_LIBRARY_PAGE_SIZE,
   CuratedTargetProtein,
   suggestTargetsForProject,
   TargetSuggestionResult,
@@ -77,6 +78,7 @@ export default function TargetProteinStep2Section({
 }: Step2Props) {
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("ALL");
+  const [visibleCount, setVisibleCount] = useState(TARGET_LIBRARY_PAGE_SIZE);
   const [isSuggestingWithAi, setIsSuggestingWithAi] = useState(false);
   const [aiSuggestions, setAiSuggestions] = useState<TargetSuggestionResult[] | null>(null);
   const [expandedPdb, setExpandedPdb] = useState<string | null>(null);
@@ -189,7 +191,9 @@ export default function TargetProteinStep2Section({
           p.targetName.toLowerCase().includes(q) ||
           p.pdbId.toLowerCase().includes(q) ||
           p.geneOrProtein.toLowerCase().includes(q) ||
-          p.therapeuticCategory.toLowerCase().includes(q)
+          p.therapeuticCategory.toLowerCase().includes(q) ||
+          p.organism.toLowerCase().includes(q) ||
+          p.biologicalFunction.toLowerCase().includes(q)
       );
     }
 
@@ -207,6 +211,17 @@ export default function TargetProteinStep2Section({
 
     return list;
   }, [allLibraryProteins, searchQuery, categoryFilter, aiSuggestions, aiSuggestionMap]);
+
+  useEffect(() => {
+    setVisibleCount(TARGET_LIBRARY_PAGE_SIZE);
+  }, [searchQuery, categoryFilter, aiSuggestions]);
+
+  const visibleProteins = useMemo(
+    () => filteredProteins.slice(0, visibleCount),
+    [filteredProteins, visibleCount]
+  );
+  const hasMoreProteins = visibleCount < filteredProteins.length;
+  const curatedTotal = CURATED_TARGET_PROTEINS.length;
 
   const handleToggleTarget = async (pdbId: string) => {
     const cleanId = pdbId.toUpperCase();
@@ -378,7 +393,9 @@ export default function TargetProteinStep2Section({
               Target Protein Library
             </h3>
             <p className="text-[11px] text-[#8aa094]">
-              {filteredProteins.length} of {allLibraryProteins.length} shown
+              Showing {visibleProteins.length} of {filteredProteins.length} matching
+              {" · "}
+              {curatedTotal} curated structures available
               {aiSuggestions ? " · AI-ranked for review" : ""}
             </p>
           </div>
@@ -440,8 +457,9 @@ export default function TargetProteinStep2Section({
         </div>
 
         {filteredProteins.length > 0 ? (
+          <>
           <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
-            {filteredProteins.map((protein) => {
+            {visibleProteins.map((protein) => {
               const cleanPdb = protein.pdbId.toUpperCase();
               const isSelected = selectedMap.has(cleanPdb);
               const selectedTarget = selectedMap.get(cleanPdb);
@@ -501,9 +519,19 @@ export default function TargetProteinStep2Section({
                         </span>
                       </p>
                       <p>
+                        <span className="text-[#8aa094]">Organism · </span>
+                        <span className="font-medium">{protein.organism}</span>
+                      </p>
+                      <p>
                         <span className="text-[#8aa094]">Resolution · </span>
                         <span className="font-mono font-medium">
                           {protein.resolution || "—"}
+                        </span>
+                        <span className="text-[#8aa094]"> · </span>
+                        <span className="font-medium text-emerald-800">
+                          {protein.targetType === "EXPERIMENTALLY_ESTABLISHED"
+                            ? "Structure available"
+                            : "Predicted"}
                         </span>
                       </p>
                     </div>
@@ -608,6 +636,30 @@ export default function TargetProteinStep2Section({
               );
             })}
           </div>
+          {hasMoreProteins && (
+            <div className="flex flex-col items-center gap-1.5 pt-1">
+              <button
+                type="button"
+                onClick={() =>
+                  setVisibleCount((n) =>
+                    Math.min(n + TARGET_LIBRARY_PAGE_SIZE, filteredProteins.length)
+                  )
+                }
+                className="inline-flex items-center justify-center rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-[12px] font-semibold text-emerald-900 hover:bg-emerald-100"
+              >
+                Load more ({filteredProteins.length - visibleProteins.length} remaining)
+              </button>
+              <p className="text-[10px] text-[#8aa094]">
+                {curatedTotal} total proteins in the curated library
+              </p>
+            </div>
+          )}
+          {!hasMoreProteins && filteredProteins.length > TARGET_LIBRARY_PAGE_SIZE && (
+            <p className="text-center text-[10px] text-[#8aa094]">
+              All {filteredProteins.length} matching proteins shown · {curatedTotal} in library
+            </p>
+          )}
+          </>
         ) : (
           <div className="rounded-xl border border-dashed border-[#d7e4dc] bg-[#f7faf8] px-4 py-8 text-center">
             <Target className="mx-auto h-7 w-7 text-[#8aa094]" />

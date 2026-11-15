@@ -18,6 +18,14 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { STANDARD_PLANT_PARTS } from "@/lib/botanical-registry";
+import { PHYTOCHEMICAL_LIBRARY_PAGE_SIZE } from "@/lib/phytochemical-catalog-expanded";
+
+function hasDockableChemicalStructure(compound: {
+  smiles?: string | null;
+  pubchemId?: string | number | null;
+}): boolean {
+  return Boolean(String(compound.smiles || "").trim() || String(compound.pubchemId || "").trim());
+}
 
 export interface PlantRecord {
   id: string;
@@ -41,8 +49,10 @@ export interface PlantRecord {
 }
 
 export interface PhytochemicalItem {
-  id: number;
-  plantId: string;
+  id: number | string;
+  plantId?: string;
+  plantCommonName?: string;
+  plantScientificName?: string;
   compoundName: string;
   iupacName?: string | null;
   molecularFormula: string;
@@ -197,6 +207,7 @@ export default function BotanicalStep1Section({
 
   const [phytoSearch, setPhytoSearch] = useState("");
   const [phytoClassFilter, setPhytoClassFilter] = useState("ALL");
+  const [phytoVisibleCount, setPhytoVisibleCount] = useState(PHYTOCHEMICAL_LIBRARY_PAGE_SIZE);
   const [selectedPhytoModal, setSelectedPhytoModal] = useState<PhytochemicalItem | null>(null);
   const [copiedSmiles, setCopiedSmiles] = useState<string | null>(null);
 
@@ -210,16 +221,27 @@ export default function BotanicalStep1Section({
 
   const filteredPhytochemicals = useMemo(() => {
     return verifiedPhytochemicals.filter((comp) => {
+      const q = phytoSearch.toLowerCase().trim();
       const matchesSearch =
-        !phytoSearch.trim() ||
-        comp.compoundName.toLowerCase().includes(phytoSearch.toLowerCase()) ||
-        comp.molecularFormula.toLowerCase().includes(phytoSearch.toLowerCase()) ||
-        (comp.compoundClass &&
-          comp.compoundClass.toLowerCase().includes(phytoSearch.toLowerCase()));
+        !q ||
+        comp.compoundName.toLowerCase().includes(q) ||
+        (comp.molecularFormula || "").toLowerCase().includes(q) ||
+        (comp.compoundClass && comp.compoundClass.toLowerCase().includes(q)) ||
+        String(comp.pubchemId || "").includes(q);
       const matchesClass = phytoClassFilter === "ALL" || comp.compoundClass === phytoClassFilter;
       return matchesSearch && matchesClass;
     });
   }, [verifiedPhytochemicals, phytoSearch, phytoClassFilter]);
+
+  useEffect(() => {
+    setPhytoVisibleCount(PHYTOCHEMICAL_LIBRARY_PAGE_SIZE);
+  }, [phytoSearch, phytoClassFilter, verifiedPhytochemicals]);
+
+  const visiblePhytochemicals = useMemo(
+    () => filteredPhytochemicals.slice(0, phytoVisibleCount),
+    [filteredPhytochemicals, phytoVisibleCount]
+  );
+  const hasMorePhytos = phytoVisibleCount < filteredPhytochemicals.length;
 
   const handleCopySmiles = (smiles: string) => {
     navigator.clipboard.writeText(smiles);
@@ -493,58 +515,78 @@ export default function BotanicalStep1Section({
         </AnimatePresence>
       </motion.section>
 
-      {/* Experimental plant parts — compact chips */}
+      {/* Plant parts — larger selectable tiles (aligned with phytochemicals section) */}
       <motion.section
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.28, delay: 0.08, ease: easeOut }}
         className="rounded-2xl border border-[#d7e4dc]/90 bg-white p-4 shadow-[0_1px_2px_rgba(15,44,32,0.04)] sm:p-5"
       >
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <h3 className="inline-flex items-center gap-1.5 text-sm font-bold tracking-tight text-[#0f2c20]">
-            <Leaf className="h-4 w-4 text-emerald-700" />
-            Experimental Plant Parts
-          </h3>
-          <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-mono text-[11px] font-bold text-emerald-900">
+        <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="inline-flex items-center gap-1.5 text-sm font-bold tracking-tight text-[#0f2c20]">
+              <Leaf className="h-4 w-4 text-emerald-700" />
+              Plant Parts Studied
+            </h3>
+            <p className="mt-0.5 text-[11px] text-[#8aa094]">
+              Select anatomical parts used in this research
+            </p>
+          </div>
+          <span className="inline-flex w-fit rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 font-mono text-xs font-bold text-emerald-900">
             {selectedPartsList.length} selected
           </span>
         </div>
 
-        <div className="flex flex-wrap gap-1.5">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
           {STANDARD_PLANT_PARTS.map((part) => {
             if (part === "Other") return null;
             const isSelected = selectedPartsList.includes(part);
             const isDocumented = verifiedPlant?.documentedParts?.includes(part);
-            const chipClass = `inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${
+            const tileClass = `flex min-h-[3.25rem] items-center justify-between gap-2 rounded-xl border px-3 py-3 text-left text-sm font-semibold transition ${
               isSelected
                 ? "border-emerald-600 bg-emerald-600 text-white shadow-sm"
-                : "border-[#d7e4dc] bg-white text-[#52645d]" +
-                  (readOnly ? "" : " hover:border-emerald-300 hover:bg-emerald-50")
+                : "border-[#d7e4dc] bg-white text-[#33443c]" +
+                  (readOnly ? "" : " hover:border-emerald-300 hover:bg-emerald-50/80")
             }`;
-            return readOnly ? (
-              <span key={part} className={chipClass}>
-                {isSelected && <Check className="h-3 w-3" />}
-                {part}
-                {isDocumented && !isSelected && (
-                  <span className="rounded bg-emerald-50 px-1 text-[8px] font-bold text-emerald-700">
+            const content = (
+              <>
+                <span className="inline-flex items-center gap-2">
+                  <span
+                    className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border ${
+                      isSelected
+                        ? "border-white/40 bg-white/20 text-white"
+                        : "border-[#c5d4cb] bg-[#f7faf8] text-transparent"
+                    }`}
+                  >
+                    {isSelected ? <Check className="h-3.5 w-3.5" /> : null}
+                  </span>
+                  {part}
+                </span>
+                {isDocumented && (
+                  <span
+                    className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${
+                      isSelected
+                        ? "bg-white/20 text-white"
+                        : "bg-emerald-50 text-emerald-700"
+                    }`}
+                  >
                     Lit
                   </span>
                 )}
+              </>
+            );
+            return readOnly ? (
+              <span key={part} className={tileClass}>
+                {content}
               </span>
             ) : (
               <button
                 key={part}
                 type="button"
                 onClick={() => togglePart(part)}
-                className={chipClass}
+                className={tileClass}
               >
-                {isSelected && <Check className="h-3 w-3" />}
-                {part}
-                {isDocumented && !isSelected && (
-                  <span className="rounded bg-emerald-50 px-1 text-[8px] font-bold text-emerald-700">
-                    Lit
-                  </span>
-                )}
+                {content}
               </button>
             );
           })}
@@ -555,9 +597,9 @@ export default function BotanicalStep1Section({
               readOnly ? (
                 <span
                   key={customPart}
-                  className="inline-flex items-center gap-1 rounded-full border border-emerald-600 bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white"
+                  className="flex min-h-[3.25rem] items-center gap-2 rounded-xl border border-emerald-600 bg-emerald-600 px-3 py-3 text-sm font-semibold text-white"
                 >
-                  <Check className="h-3 w-3" />
+                  <Check className="h-3.5 w-3.5" />
                   {customPart}
                 </span>
               ) : (
@@ -565,11 +607,13 @@ export default function BotanicalStep1Section({
                   key={customPart}
                   type="button"
                   onClick={() => togglePart(customPart)}
-                  className="inline-flex items-center gap-1 rounded-full border border-emerald-600 bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white"
+                  className="flex min-h-[3.25rem] items-center justify-between gap-2 rounded-xl border border-emerald-600 bg-emerald-600 px-3 py-3 text-left text-sm font-semibold text-white"
                 >
-                  <Check className="h-3 w-3" />
-                  {customPart}
-                  <X className="h-3 w-3 opacity-80" />
+                  <span className="inline-flex items-center gap-2">
+                    <Check className="h-3.5 w-3.5" />
+                    {customPart}
+                  </span>
+                  <X className="h-3.5 w-3.5 opacity-80" />
                 </button>
               )
             )}
@@ -578,44 +622,46 @@ export default function BotanicalStep1Section({
             <button
               type="button"
               onClick={() => setShowCustomPartField(true)}
-              className="inline-flex items-center gap-1 rounded-full border border-dashed border-[#c5d4cb] px-2.5 py-1 text-[11px] font-semibold text-[#6d7f76] hover:border-emerald-400 hover:text-emerald-800"
+              className="flex min-h-[3.25rem] items-center justify-center gap-2 rounded-xl border border-dashed border-[#c5d4cb] px-3 py-3 text-sm font-semibold text-[#6d7f76] hover:border-emerald-400 hover:bg-emerald-50/50 hover:text-emerald-800"
             >
-              <Plus className="h-3 w-3" />
+              <Plus className="h-4 w-4" />
               Other
             </button>
-          ) : !readOnly ? (
-            <div className="flex w-full flex-wrap items-center gap-2 pt-1">
-              <input
-                type="text"
-                value={customPartInput}
-                onChange={(e) => setCustomPartInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    addCustomPart();
-                  }
-                }}
-                placeholder="Custom plant part..."
-                className="h-8 w-48 rounded-lg border border-[#d5e3da] bg-[#fbfdfb] px-2.5 text-xs outline-none focus:border-emerald-600"
-                autoFocus
-              />
-              <button
-                type="button"
-                onClick={addCustomPart}
-                className="rounded-lg bg-[#0f2c20] px-2.5 py-1.5 text-[11px] font-semibold text-white"
-              >
-                Add
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowCustomPartField(false)}
-                className="text-[11px] font-medium text-[#8aa094]"
-              >
-                Cancel
-              </button>
-            </div>
           ) : null}
         </div>
+
+        {!readOnly && showCustomPartField ? (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <input
+              type="text"
+              value={customPartInput}
+              onChange={(e) => setCustomPartInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addCustomPart();
+                }
+              }}
+              placeholder="Custom plant part..."
+              className="h-10 w-56 rounded-xl border border-[#d5e3da] bg-[#fbfdfb] px-3 text-sm outline-none focus:border-emerald-600"
+              autoFocus
+            />
+            <button
+              type="button"
+              onClick={addCustomPart}
+              className="h-10 rounded-xl bg-[#0f2c20] px-3.5 text-sm font-semibold text-white"
+            >
+              Add
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowCustomPartField(false)}
+              className="text-sm font-medium text-[#8aa094]"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : null}
       </motion.section>
 
       {/* Phytochemicals — compact list */}
@@ -629,10 +675,13 @@ export default function BotanicalStep1Section({
           <div>
             <h3 className="inline-flex items-center gap-1.5 text-sm font-bold tracking-tight text-[#0f2c20]">
               <Dna className="h-4 w-4 text-teal-700" />
-              Phytochemical Constituents
+              Phytochemical Compounds
             </h3>
             <p className="mt-0.5 text-[11px] text-[#8aa094]">
-              {verifiedPhytochemicals.length} cataloged ·{" "}
+              Showing {visiblePhytochemicals.length} of {filteredPhytochemicals.length} matching
+              {" · "}
+              {verifiedPhytochemicals.length} documented for this plant
+              {" · "}
               <span className="font-semibold text-teal-800">{studyCompoundNames.length} selected</span>
             </p>
           </div>
@@ -641,19 +690,20 @@ export default function BotanicalStep1Section({
               <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#8aa094]" />
               <input
                 type="text"
-                placeholder="Search..."
+                placeholder="Search name, formula, CID…"
                 value={phytoSearch}
                 onChange={(e) => setPhytoSearch(e.target.value)}
-                className="h-8 w-36 rounded-lg border border-[#d5e3da] bg-[#fbfdfb] pl-8 pr-2 text-xs outline-none focus:border-emerald-600 sm:w-44"
+                className="h-8 w-44 rounded-lg border border-[#d5e3da] bg-[#fbfdfb] pl-8 pr-2 text-xs outline-none focus:border-emerald-600 sm:w-52"
               />
             </div>
             {phytoClasses.length > 0 && (
               <select
                 value={phytoClassFilter}
                 onChange={(e) => setPhytoClassFilter(e.target.value)}
-                className="h-8 rounded-lg border border-[#d5e3da] bg-white px-2 text-xs text-[#52645d] outline-none"
+                className="h-8 max-w-[11rem] rounded-lg border border-[#d5e3da] bg-white px-2 text-xs text-[#52645d] outline-none"
+                aria-label="Filter by phytochemical class"
               >
-                <option value="ALL">All Classes</option>
+                <option value="ALL">All classes</option>
                 {phytoClasses.map((cls) => (
                   <option key={cls} value={cls}>
                     {cls}
@@ -665,13 +715,21 @@ export default function BotanicalStep1Section({
         </div>
 
         {filteredPhytochemicals.length > 0 ? (
+          <>
           <div className="max-h-[28rem] divide-y divide-[#eef4f0] overflow-y-auto rounded-xl border border-[#eef4f0]">
-            {filteredPhytochemicals.map((comp) => {
+            {visiblePhytochemicals.map((comp) => {
               const isSelected = studyCompoundNames.includes(comp.compoundName);
+              const structureReady = hasDockableChemicalStructure(comp);
               const mw =
                 typeof comp.molecularWeight === "number"
                   ? comp.molecularWeight.toFixed(1)
                   : comp.molecularWeight || "—";
+              const evidenceLabel =
+                comp.verificationStatus === "LITERATURE_VERIFIED"
+                  ? "Literature"
+                  : comp.verificationStatus === "PENDING_VERIFICATION"
+                    ? "Pending"
+                    : "Database";
               return (
                 <div
                   key={comp.id}
@@ -694,8 +752,14 @@ export default function BotanicalStep1Section({
                     <button
                       type="button"
                       onClick={() => onToggleStudyCompound(comp)}
+                      disabled={!isSelected && !structureReady}
+                      title={
+                        !isSelected && !structureReady
+                          ? "No verified chemical structure for docking"
+                          : undefined
+                      }
                       aria-pressed={isSelected}
-                      className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border transition ${
+                      className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border transition disabled:cursor-not-allowed disabled:opacity-40 ${
                         isSelected
                           ? "border-teal-600 bg-teal-600 text-white"
                           : "border-[#c5d4cb] bg-white text-transparent hover:border-teal-400"
@@ -715,9 +779,23 @@ export default function BotanicalStep1Section({
                       </span>
                       <span className="text-[10px] text-[#8aa094]">MW {mw}</span>
                     </div>
-                    <p className="truncate text-[10px] text-teal-800/80">
-                      {comp.compoundClass || "Metabolite"}
-                    </p>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px]">
+                      <span className="truncate text-teal-800/80">
+                        {comp.compoundClass || "Metabolite"}
+                      </span>
+                      <span
+                        className={`rounded px-1 py-0.5 font-semibold ${
+                          structureReady
+                            ? "bg-emerald-50 text-emerald-800"
+                            : "bg-amber-50 text-amber-900"
+                        }`}
+                      >
+                        {structureReady ? "Structure ready" : "No structure"}
+                      </span>
+                      <span className="rounded bg-[#edf5f0] px-1 py-0.5 font-medium text-[#52645d]">
+                        {evidenceLabel}
+                      </span>
+                    </div>
                   </div>
 
                   <button
@@ -731,9 +809,34 @@ export default function BotanicalStep1Section({
               );
             })}
           </div>
+          {hasMorePhytos && (
+            <div className="mt-2 flex flex-col items-center gap-1">
+              <button
+                type="button"
+                onClick={() =>
+                  setPhytoVisibleCount((n) =>
+                    Math.min(n + PHYTOCHEMICAL_LIBRARY_PAGE_SIZE, filteredPhytochemicals.length)
+                  )
+                }
+                className="inline-flex items-center justify-center rounded-xl border border-teal-200 bg-teal-50 px-4 py-2 text-[12px] font-semibold text-teal-900 hover:bg-teal-100"
+              >
+                Load more ({filteredPhytochemicals.length - visiblePhytochemicals.length} remaining)
+              </button>
+              <p className="text-[10px] text-[#8aa094]">
+                {verifiedPhytochemicals.length} total compounds documented for this plant
+              </p>
+            </div>
+          )}
+          {!hasMorePhytos && filteredPhytochemicals.length > PHYTOCHEMICAL_LIBRARY_PAGE_SIZE && (
+            <p className="mt-2 text-center text-[10px] text-[#8aa094]">
+              All {filteredPhytochemicals.length} matching compounds shown ·{" "}
+              {verifiedPhytochemicals.length} in plant catalog
+            </p>
+          )}
+          </>
         ) : (
           <div className="rounded-xl border border-dashed border-[#d7e4dc] bg-[#f7faf8] p-6 text-center text-xs text-[#8aa094]">
-            No phytochemicals match filter criteria.
+            No phytochemicals match filter criteria for this plant.
           </div>
         )}
       </motion.section>
@@ -1034,6 +1137,37 @@ export default function BotanicalStep1Section({
                     g/mol
                   </p>
                 </div>
+                <div className="rounded-xl border border-[#e8f0eb] bg-[#f7faf8] p-2.5">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#8aa094]">
+                    Plant source
+                  </p>
+                  <p className="mt-0.5 font-semibold text-[#0f2c20]">
+                    {selectedPhytoModal.plantCommonName ||
+                      verifiedPlant?.commonName ||
+                      project.plantName}
+                  </p>
+                  <p className="text-[10px] italic text-[#8aa094]">
+                    {selectedPhytoModal.plantScientificName ||
+                      verifiedPlant?.scientificName ||
+                      project.plantScientificName ||
+                      ""}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-[#e8f0eb] bg-[#f7faf8] p-2.5">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#8aa094]">
+                    Evidence
+                  </p>
+                  <p className="mt-0.5 font-semibold text-[#0f2c20]">
+                    {selectedPhytoModal.verificationStatus === "LITERATURE_VERIFIED"
+                      ? "Literature-verified"
+                      : selectedPhytoModal.verificationStatus === "PENDING_VERIFICATION"
+                        ? "Pending verification"
+                        : "Database-verified"}
+                  </p>
+                  <p className="text-[10px] text-[#8aa094]">
+                    {selectedPhytoModal.plantPartReported || "Plant part not specified"}
+                  </p>
+                </div>
               </div>
               {selectedPhytoModal.smiles && (
                 <div className="rounded-xl border border-[#e8f0eb] bg-[#f7faf8] p-2.5 text-xs">
@@ -1055,6 +1189,11 @@ export default function BotanicalStep1Section({
                   </p>
                 </div>
               )}
+              {!hasDockableChemicalStructure(selectedPhytoModal) && (
+                <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-950">
+                  No verified SMILES or PubChem CID — cannot proceed as a docking ligand.
+                </p>
+              )}
               {selectedPhytoModal.pubchemId && (
                 <a
                   href={`https://pubchem.ncbi.nlm.nih.gov/compound/${selectedPhytoModal.pubchemId}`}
@@ -1066,12 +1205,55 @@ export default function BotanicalStep1Section({
                   <ExternalLink className="h-3 w-3" />
                 </a>
               )}
+              {(() => {
+                const refs = Array.isArray(selectedPhytoModal.referencesData)
+                  ? selectedPhytoModal.referencesData
+                  : typeof selectedPhytoModal.referencesData === "string"
+                    ? (() => {
+                        try {
+                          return JSON.parse(selectedPhytoModal.referencesData);
+                        } catch {
+                          return [];
+                        }
+                      })()
+                    : [];
+                if (!refs.length) return null;
+                const first = refs[0];
+                return (
+                  <div className="rounded-xl border border-[#e8f0eb] bg-[#f7faf8] p-2.5 text-[11px] text-[#52645d]">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#8aa094]">
+                      Scientific reference
+                    </p>
+                    <p className="mt-1 font-semibold text-[#0f2c20]">{first.title}</p>
+                    <p className="mt-0.5">
+                      {first.authors}
+                      {first.journal ? ` · ${first.journal}` : ""}
+                      {first.year ? ` (${first.year})` : ""}
+                    </p>
+                    {first.doi && (
+                      <a
+                        href={`https://doi.org/${first.doi}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-1 inline-flex items-center gap-1 font-semibold text-teal-800 hover:underline"
+                      >
+                        DOI: {first.doi}
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    )}
+                  </div>
+                );
+              })()}
               <div className="flex justify-between gap-2">
                 {!readOnly && (
                   <button
                     type="button"
                     onClick={() => onToggleStudyCompound(selectedPhytoModal)}
-                    className={`rounded-xl px-3 py-2 text-xs font-semibold ${
+                    disabled={
+                      !studyCompoundNames.includes(selectedPhytoModal.compoundName) &&
+                      !hasDockableChemicalStructure(selectedPhytoModal)
+                    }
+                    className={`rounded-xl px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${
                       studyCompoundNames.includes(selectedPhytoModal.compoundName)
                         ? "bg-teal-700 text-white"
                         : "bg-[#0f2c20] text-white"

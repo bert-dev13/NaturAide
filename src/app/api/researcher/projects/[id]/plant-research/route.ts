@@ -244,24 +244,41 @@ export async function POST(
         );
         isAdded = false;
       } else {
-        // Insert into research compounds
+        const smiles = String(compound.smiles || "").trim() || null;
+        const pubchemId = compound.pubchemId ? String(compound.pubchemId).trim() : null;
+        const hasStructure = Boolean(smiles || pubchemId);
+        if (!hasStructure) {
+          return NextResponse.json(
+            {
+              error:
+                "This compound has no verified SMILES or PubChem CID and cannot be selected as a docking ligand.",
+            },
+            { status: 422 }
+          );
+        }
+
+        // Insert into research compounds — only structure-ready ligands are docking-eligible
         await pool.query(
           `INSERT INTO research_compounds (
              projectId, compoundName, iupacName, smiles, molecularFormula,
              molecularWeight, pubchemId, sourceProvenance, plantSource,
              sourceReference, selectedForDocking, preparationStatus
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'READY_FOR_DOCKING')`,
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             projectId,
             compound.compoundName,
             compound.iupacName || null,
-            compound.smiles || null,
+            smiles,
             compound.molecularFormula || null,
             compound.molecularWeight || null,
-            compound.pubchemId ? String(compound.pubchemId) : null,
-            "VERIFIED_PLANT_DATABASE",
+            pubchemId,
+            compound.verificationStatus === "LITERATURE_VERIFIED"
+              ? "LITERATURE_VERIFIED"
+              : "VERIFIED_PLANT_DATABASE",
             compound.plantCommonName || body.plantName || "Botanical Specimen",
             compound.sourceReference || "Documented botanical constituent",
+            1,
+            "READY_FOR_DOCKING",
           ]
         );
         isAdded = true;

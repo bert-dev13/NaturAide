@@ -55,7 +55,10 @@ interface Props {
 const easeOut = [0.22, 1, 0.36, 1] as const;
 
 const fieldClass =
-  "h-9 w-full rounded-lg border border-[#d5e3da] bg-[#fbfdfb] px-3 text-xs font-medium text-[#0f2c20] outline-none transition focus:border-emerald-600 focus:bg-white focus:ring-2 focus:ring-emerald-600/15";
+  "h-11 w-full rounded-xl border border-[#d5e3da] bg-[#fbfdfb] px-3.5 text-sm font-medium text-[#0f2c20] outline-none transition focus:border-emerald-600 focus:bg-white focus:ring-2 focus:ring-emerald-600/15";
+
+const labelClass =
+  "mb-2 flex items-center gap-1.5 text-sm font-semibold tracking-tight text-[#0f2c20]";
 
 /** Simplified UI labels → stored productType values (existing catalog / DB strings). */
 const SIMPLE_CATEGORIES = [
@@ -583,13 +586,13 @@ export default function ProductSelectionStep2Section({
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.28, delay: 0.03, ease: easeOut }}
-        className="rounded-2xl border border-[#d7e4dc]/90 bg-white p-4 shadow-[0_1px_2px_rgba(15,44,32,0.04)]"
+        className="rounded-2xl border border-[#d7e4dc]/90 bg-white p-4 shadow-[0_1px_2px_rgba(15,44,32,0.04)] sm:p-5"
       >
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           {/* Product Format dropdown */}
           <div>
-            <label className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold text-[#52645d]">
-              <Package className="h-3.5 w-3.5 text-emerald-700" />
+            <label className={labelClass}>
+              <Package className="h-4 w-4 text-emerald-700" />
               Product Format
             </label>
             <select
@@ -618,7 +621,7 @@ export default function ProductSelectionStep2Section({
               })}
             </select>
             {!formatSelectValue && productSelection.deliveryFormat ? (
-              <p className="mt-1 text-[10px] text-[#8aa094]">
+              <p className="mt-1.5 text-xs text-[#8aa094]">
                 Current: {productSelection.deliveryFormat}
               </p>
             ) : null}
@@ -626,7 +629,7 @@ export default function ProductSelectionStep2Section({
 
           {/* Target Applications dropdown */}
           <div ref={appsDropdownRef} className="relative">
-            <label className="mb-1.5 block text-[11px] font-semibold text-[#52645d]">
+            <label className={labelClass}>
               Target Applications
             </label>
             <button
@@ -643,7 +646,7 @@ export default function ProductSelectionStep2Section({
                   : "Select applications…"}
               </span>
               <ChevronDown
-                className={`h-3.5 w-3.5 shrink-0 text-[#8aa094] transition ${
+                className={`h-4 w-4 shrink-0 text-[#8aa094] transition ${
                   appsDropdownOpen ? "rotate-180" : ""
                 }`}
               />
@@ -655,7 +658,7 @@ export default function ProductSelectionStep2Section({
                   initial={{ opacity: 0, y: -4 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -4 }}
-                  className="absolute left-0 right-0 z-40 mt-1.5 max-h-64 space-y-1 overflow-y-auto rounded-xl border border-[#d7e4dc] bg-white p-2 shadow-xl"
+                  className="absolute left-0 right-0 z-40 mt-1.5 max-h-72 space-y-1 overflow-y-auto rounded-xl border border-[#d7e4dc] bg-white p-2.5 shadow-xl"
                 >
                   {SIMPLE_APPLICATIONS.map((app) => {
                     const selected = selectedApplicationList.includes(app.value);
@@ -664,14 +667,14 @@ export default function ProductSelectionStep2Section({
                         key={app.value}
                         type="button"
                         onClick={() => toggleApplicationTag(app.value)}
-                        className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-xs transition ${
+                        className={`flex min-h-[2.75rem] w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm transition ${
                           selected
                             ? "bg-emerald-50 font-semibold text-emerald-950"
-                            : "text-[#52645d] hover:bg-[#f4f8f5]"
+                            : "text-[#33443c] hover:bg-[#f4f8f5]"
                         }`}
                       >
                         <span>{app.short}</span>
-                        {selected && <Check className="h-3.5 w-3.5 text-emerald-600" />}
+                        {selected && <Check className="h-4 w-4 text-emerald-600" />}
                       </button>
                     );
                   })}
@@ -681,10 +684,10 @@ export default function ProductSelectionStep2Section({
                       key={tag}
                       type="button"
                       onClick={() => toggleApplicationTag(tag)}
-                      className="flex w-full items-center justify-between rounded-lg bg-emerald-50 px-2.5 py-2 text-left text-xs font-semibold text-emerald-950"
+                      className="flex min-h-[2.75rem] w-full items-center justify-between rounded-xl bg-emerald-50 px-3 py-2.5 text-left text-sm font-semibold text-emerald-950"
                     >
                       <span>{tag}</span>
-                      <X className="h-3.5 w-3.5 text-emerald-700" />
+                      <X className="h-4 w-4 text-emerald-700" />
                     </button>
                   ))}
 
@@ -692,12 +695,12 @@ export default function ProductSelectionStep2Section({
                     <button
                       type="button"
                       onClick={() => setShowCustomApp(true)}
-                      className="w-full rounded-lg border border-dashed border-[#c5d4cb] px-2.5 py-2 text-left text-xs font-semibold text-[#6d7f76] hover:border-emerald-400"
+                      className="flex min-h-[2.75rem] w-full items-center rounded-xl border border-dashed border-[#c5d4cb] px-3 py-2.5 text-left text-sm font-semibold text-[#6d7f76] hover:border-emerald-400"
                     >
                       Other / Custom…
                     </button>
                   ) : (
-                    <div className="space-y-1.5 rounded-lg border border-[#e8f0eb] p-2">
+                    <div className="space-y-2 rounded-xl border border-[#e8f0eb] p-2.5">
                       <input
                         type="text"
                         value={customAppInput}
@@ -709,14 +712,14 @@ export default function ProductSelectionStep2Section({
                           }
                         }}
                         placeholder="Custom application…"
-                        className="h-8 w-full rounded-lg border border-[#d5e3da] px-2.5 text-xs outline-none focus:border-emerald-600"
+                        className="h-10 w-full rounded-xl border border-[#d5e3da] px-3 text-sm outline-none focus:border-emerald-600"
                         autoFocus
                       />
-                      <div className="flex gap-1.5">
+                      <div className="flex gap-2">
                         <button
                           type="button"
                           onClick={addCustomApplication}
-                          className="rounded-lg bg-[#0f2c20] px-2.5 py-1 text-[11px] font-semibold text-white"
+                          className="h-9 rounded-xl bg-[#0f2c20] px-3.5 text-sm font-semibold text-white"
                         >
                           Add
                         </button>
@@ -726,7 +729,7 @@ export default function ProductSelectionStep2Section({
                             setShowCustomApp(false);
                             setCustomAppInput("");
                           }}
-                          className="text-[11px] font-semibold text-[#8aa094]"
+                          className="text-sm font-semibold text-[#8aa094]"
                         >
                           Cancel
                         </button>
@@ -738,11 +741,11 @@ export default function ProductSelectionStep2Section({
             </AnimatePresence>
 
             {selectedApplicationLabels.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1">
+              <div className="mt-3 flex flex-wrap gap-1.5">
                 {selectedApplicationLabels.map((label) => (
                   <span
                     key={label}
-                    className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-900"
+                    className="inline-flex items-center rounded-xl border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-900"
                   >
                     {label}
                   </span>
@@ -752,7 +755,7 @@ export default function ProductSelectionStep2Section({
           </div>
         </div>
 
-        <p className="mt-3 text-[10px] text-[#8aa094]">
+        <p className="mt-4 text-xs text-[#8aa094]">
           Intended research applications — not established therapeutic claims.
         </p>
       </motion.section>
@@ -801,16 +804,19 @@ export default function ProductSelectionStep2Section({
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.28, delay: 0.06, ease: easeOut }}
-        className="rounded-2xl border border-[#d7e4dc]/90 bg-white p-4 shadow-[0_1px_2px_rgba(15,44,32,0.04)]"
+        className="rounded-2xl border border-[#d7e4dc]/90 bg-white p-4 shadow-[0_1px_2px_rgba(15,44,32,0.04)] sm:p-5"
       >
-        <h3 className="mb-3 text-sm font-bold tracking-tight text-[#0f2c20]">Product Details</h3>
+        <div className="mb-4">
+          <h3 className="text-sm font-bold tracking-tight text-[#0f2c20]">Product Details</h3>
+          <p className="mt-0.5 text-[11px] text-[#8aa094]">
+            Category, dosage form, population, and packaging
+          </p>
+        </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {/* 1. Category */}
           <div>
-            <label className="mb-1 block text-[11px] font-semibold text-[#52645d]">
-              Product Category
-            </label>
+            <label className={labelClass}>Product Category</label>
             <select
               value={categorySelectValue}
               onChange={(e) => handleCategoryChange(e.target.value)}
@@ -832,16 +838,14 @@ export default function ProductSelectionStep2Section({
                   setCustomCategory(e.target.value);
                   handleFieldChange("productType", e.target.value || "Other / Custom");
                 }}
-                className={`mt-1.5 ${fieldClass}`}
+                className={`mt-2 ${fieldClass}`}
               />
             )}
           </div>
 
           {/* 2. Dosage Form */}
           <div>
-            <label className="mb-1 block text-[11px] font-semibold text-[#52645d]">
-              Dosage Form
-            </label>
+            <label className={labelClass}>Dosage Form</label>
             <select
               value={dosageFormSelectValue}
               onChange={(e) => handleDosageFormChange(e.target.value)}
@@ -866,16 +870,14 @@ export default function ProductSelectionStep2Section({
                     e.target.value || "Custom Formulation"
                   )
                 }
-                className={`mt-1.5 ${fieldClass}`}
+                className={`mt-2 ${fieldClass}`}
               />
             )}
           </div>
 
           {/* 3. Population */}
           <div>
-            <label className="mb-1 block text-[11px] font-semibold text-[#52645d]">
-              Target Population
-            </label>
+            <label className={labelClass}>Target Population</label>
             <select
               value={populationSelectValue}
               onChange={(e) => handlePopulationChange(e.target.value)}
@@ -900,7 +902,7 @@ export default function ProductSelectionStep2Section({
                     e.target.value || "Other / Custom Population Specification"
                   );
                 }}
-                className={`mt-1.5 ${fieldClass}`}
+                className={`mt-2 ${fieldClass}`}
               />
             )}
             <AnimatePresence>
@@ -909,10 +911,10 @@ export default function ProductSelectionStep2Section({
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: "auto" }}
                   exit={{ opacity: 0, height: 0 }}
-                  className="mt-1.5 overflow-hidden"
+                  className="mt-2 overflow-hidden"
                 >
-                  <div className="flex items-start gap-1.5 rounded-lg border border-rose-200 bg-rose-50 p-2 text-[10px] text-rose-900">
-                    <ShieldAlert className="mt-0.5 h-3 w-3 shrink-0" />
+                  <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-2.5 text-xs text-rose-900">
+                    <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                     Pediatric cohorts require extra safety review.
                   </div>
                 </motion.div>
@@ -922,9 +924,7 @@ export default function ProductSelectionStep2Section({
 
           {/* 4. Packaging */}
           <div>
-            <label className="mb-1 block text-[11px] font-semibold text-[#52645d]">
-              Packaging &amp; Container
-            </label>
+            <label className={labelClass}>Packaging &amp; Container</label>
             <select
               value={packagingKey}
               onChange={(e) => handlePackagingKeyChange(e.target.value)}
@@ -949,7 +949,7 @@ export default function ProductSelectionStep2Section({
                     e.target.value || defaultCustomPackaging
                   );
                 }}
-                className={`mt-1.5 ${fieldClass}`}
+                className={`mt-2 ${fieldClass}`}
               />
             )}
           </div>

@@ -4,7 +4,6 @@ import React, { useState, useMemo, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FlaskConical,
-  Search,
   Check,
   ChevronDown,
   AlertTriangle,
@@ -36,8 +35,6 @@ import {
   Beaker,
 } from "lucide-react";
 import {
-  FORMULATION_TEMPLATES,
-  FormulationTemplate,
   matchFormulationTemplate,
   generateFormulationCode,
 } from "@/lib/formulation-templates";
@@ -49,6 +46,11 @@ import {
   findInventoryMatch,
   normalizeMaterialName,
 } from "@/lib/formulation-ai-service";
+import {
+  isFormulationEligibleMaterial,
+  mapMaterialToComponentType,
+  resolveSimpleIngredientRole,
+} from "@/lib/materials-catalog";
 
 export interface FormulationComponentItem {
   id: string | number;
@@ -128,16 +130,10 @@ export default function FormulationStep5Section({
   isSaving,
   readOnly = false,
 }: Props) {
-  // Template Selection & Dropdown State
-  const [isTemplateDropdownOpen, setIsTemplateDropdownOpen] = useState(false);
-  const [templateSearch, setTemplateSearch] = useState("");
-  const templateDropdownRef = useRef<HTMLDivElement>(null);
-  const [pendingTemplate, setPendingTemplate] = useState<FormulationTemplate | null>(null);
-
   // Per-Ingredient Details Modal State
   const [selectedComponentModalIdx, setSelectedComponentModalIdx] = useState<number | null>(null);
 
-  // Select-from-inventory control (no ingredient creation on this page)
+  // Add-from-My-Ingredients control (eligible formulation materials only)
   const inventorySelectRef = useRef<HTMLSelectElement>(null);
 
   // AI Formulation Proposal Panel State
@@ -165,52 +161,48 @@ export default function FormulationStep5Section({
     nonVehicleSum: number;
   } | null>(null);
   const [balanceError, setBalanceError] = useState<string | null>(null);
+  const [pendingRemoveIdx, setPendingRemoveIdx] = useState<number | null>(null);
   const didSyncDefaults = useRef(false);
 
   const BATCH_PRESETS = ["100 g", "250 g", "500 g", "1,000 g"] as const;
 
-  // Close dropdowns on outside click
+  // Lock dosage format to Product Selection (Step 2) — never editable on this step.
   useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (templateDropdownRef.current && !templateDropdownRef.current.contains(event.target as Node)) {
-        setIsTemplateDropdownOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  // Inherit dosage format from Product Selection; suggest name/code without forcing researcher entry.
-  useEffect(() => {
-    if (didSyncDefaults.current) return;
-    didSyncDefaults.current = true;
     const format =
       productSelection?.deliveryFormat || formulation.dosageFormType || "Topical Hydrogel";
-    const suggestedName = `${project.plantName} ${format}`.trim();
     const next: FormulationState = { ...formulation };
     let changed = false;
 
-    if (productSelection?.deliveryFormat && formulation.dosageFormType !== productSelection.deliveryFormat) {
+    if (
+      productSelection?.deliveryFormat &&
+      formulation.dosageFormType !== productSelection.deliveryFormat
+    ) {
       next.dosageFormType = productSelection.deliveryFormat;
       changed = true;
     }
-    if (
-      !formulation.formulationName ||
-      /5%\s+Topical Comfort Gel/i.test(formulation.formulationName)
-    ) {
-      next.formulationName = suggestedName;
-      changed = true;
-    }
-    if (!formulation.formulationCode || formulation.formulationCode === "FRM-TOP-001") {
-      const generated = generateFormulationCode(format, formulation.formulationCode);
-      if (generated !== formulation.formulationCode) {
-        next.formulationCode = generated;
+
+    if (!didSyncDefaults.current) {
+      didSyncDefaults.current = true;
+      const suggestedName = `${project.plantName} ${format}`.trim();
+      if (
+        !formulation.formulationName ||
+        /5%\s+Topical Comfort Gel/i.test(formulation.formulationName)
+      ) {
+        next.formulationName = suggestedName;
         changed = true;
       }
+      if (!formulation.formulationCode || formulation.formulationCode === "FRM-TOP-001") {
+        const generated = generateFormulationCode(format, formulation.formulationCode);
+        if (generated !== formulation.formulationCode) {
+          next.formulationCode = generated;
+          changed = true;
+        }
+      }
     }
+
     if (changed) onChange(next);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [productSelection?.deliveryFormat]);
 
   const batchSelectValue = useMemo(() => {
     const raw = (formulation.targetBatchSize || "").trim();
@@ -225,6 +217,14 @@ export default function FormulationStep5Section({
 
   function simplifyPurpose(role?: string | null, componentType?: string): string {
     const r = (role || "").toLowerCase();
+    if (
+      componentType === "ANALYTICAL_STANDARD" ||
+      r.includes("analytical") ||
+      r.includes("testing reference") ||
+      r.includes("reference standard")
+    ) {
+      return "Testing Reference";
+    }
     if (componentType === "ACTIVE_EXTRACT" || componentType === "ACTIVE_BOTANICAL") {
       return "Main Ingredient";
     }
@@ -240,21 +240,13 @@ export default function FormulationStep5Section({
     return role || "Ingredient";
   }
 
-  // Current matched template
-  const currentTemplate = useMemo(() => {
-    return matchFormulationTemplate(formulation.dosageFormType || productSelection?.deliveryFormat || "");
-  }, [formulation.dosageFormType, productSelection?.deliveryFormat]);
-
-  const filteredTemplates = useMemo(() => {
-    if (!templateSearch.trim()) return FORMULATION_TEMPLATES;
-    const q = templateSearch.toLowerCase();
-    return FORMULATION_TEMPLATES.filter(
-      (t) =>
-        t.name.toLowerCase().includes(q) ||
-        t.dosageFormat.toLowerCase().includes(q) ||
-        t.description.toLowerCase().includes(q)
-    );
-  }, [templateSearch]);
+  // Locked to Product Selection delivery format
+  const lockedFormat =
+    productSelection?.deliveryFormat || formulation.dosageFormType || "Topical Hydrogel";
+  const currentTemplate = useMemo(
+    () => matchFormulationTemplate(lockedFormat),
+    [lockedFormat]
+  );
 
   // Numeric Target Batch Size in grams
   const numericBatchSizeGrams = useMemo(() => {
@@ -344,8 +336,13 @@ export default function FormulationStep5Section({
 
   const handleRemoveComponent = (index: number) => {
     if (readOnly) return;
-    const name = formulation.components[index]?.ingredientName || "this ingredient";
-    if (!confirm(`Remove “${name}” from the composition?`)) return;
+    setPendingRemoveIdx(index);
+  };
+
+  const confirmRemoveComponent = () => {
+    if (pendingRemoveIdx === null || readOnly) return;
+    const index = pendingRemoveIdx;
+    setPendingRemoveIdx(null);
     setIsDirty(true);
     const updated = formulation.components.filter((_, idx) => idx !== index);
     onChange({
@@ -355,18 +352,62 @@ export default function FormulationStep5Section({
     if (expandedIngredientIdx === index) setExpandedIngredientIdx(null);
   };
 
-  /** Add a row from My Ingredients only (never registers a new inventory ingredient). */
-  const handleSelectInventoryIngredient = (materialId: number) => {
-    if (readOnly) return;
-    const mat = materials.find((m) => m.id === materialId);
-    if (!mat) return;
+  const availableInventoryIngredients = useMemo(() => {
+    return materials.filter((mat) => {
+      if (!isFormulationEligibleMaterial(mat)) return false;
+      const nameNorm = (mat.materialName || "").trim().toLowerCase();
+      return !formulation.components.some((c) => {
+        if (c.materialId != null && Number(c.materialId) === Number(mat.id)) return true;
+        return (c.ingredientName || "").trim().toLowerCase() === nameNorm;
+      });
+    });
+  }, [materials, formulation.components]);
 
+  const buildComponentFromMaterial = (mat: MaterialItem): FormulationComponentItem => {
+    const role = resolveSimpleIngredientRole(mat.materialType, mat.functionDescription);
+    const componentType = mapMaterialToComponentType(mat.materialType, mat.functionDescription);
+    const roleLabel =
+      role.key === "OTHER" && role.customLabel
+        ? role.customLabel
+        : mat.functionDescription || role.key;
+    return {
+      id: `comp-${Date.now()}-${mat.id}-${Math.random().toString(36).substr(2, 4)}`,
+      ingredientName: mat.materialName,
+      componentType,
+      concentrationValue: 0,
+      concentrationUnit: "% w/w",
+      minConcentration: 0.1,
+      maxConcentration: 100,
+      roleOrFunction: roleLabel,
+      gradeOrPurity: mat.gradeOrPurity || "",
+      supplierOrSource: mat.supplierOrSource || "",
+      lotOrBatchNumber: mat.lotOrBatchNumber || "",
+      notes: "",
+      isVehicle: role.key === "BASE" || componentType === "VEHICLE",
+      isPhAdjuster: role.key === "PH_ADJUSTER",
+      materialId: mat.id,
+      inventoryStatus: mat.inventoryStatus,
+    };
+  };
+
+  const isMaterialInComposition = (
+    mat: MaterialItem,
+    list: FormulationComponentItem[]
+  ) => {
     const nameNorm = (mat.materialName || "").trim().toLowerCase();
-    const alreadyExists = formulation.components.some((c) => {
-      if (c.materialId != null && c.materialId === mat.id) return true;
+    return list.some((c) => {
+      if (c.materialId != null && Number(c.materialId) === Number(mat.id)) return true;
       return (c.ingredientName || "").trim().toLowerCase() === nameNorm;
     });
-    if (alreadyExists) {
+  };
+
+  /** Add a composition row from My Ingredients — keeps inventory intact; concentration starts at 0. */
+  const handleSelectInventoryIngredient = (materialId: number) => {
+    if (readOnly) return;
+    const mat = materials.find((m) => Number(m.id) === Number(materialId));
+    if (!mat || !isFormulationEligibleMaterial(mat)) return;
+
+    if (isMaterialInComposition(mat, formulation.components)) {
       setBuildFeedback({
         type: "info",
         message: `“${mat.materialName}” is already in the composition. Edit its percentage instead.`,
@@ -376,49 +417,71 @@ export default function FormulationStep5Section({
     }
 
     setIsDirty(true);
-    const suggested =
-      mat.materialType === "ACTIVE_BOTANICAL" ? 5.0 : 1.0;
-    const newComponent: FormulationComponentItem = {
-      id: `comp-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-      ingredientName: mat.materialName,
-      componentType:
-        mat.materialType === "ACTIVE_BOTANICAL" ? "ACTIVE_EXTRACT" : mat.materialType,
-      concentrationValue: suggested,
-      concentrationUnit: "% w/w",
-      minConcentration: Math.max(0.1, Number((suggested * 0.5).toFixed(1))),
-      maxConcentration: Number((suggested * 2.0).toFixed(1)),
-      roleOrFunction: mat.functionDescription || "Compounding Agent",
-      gradeOrPurity: mat.gradeOrPurity || "",
-      supplierOrSource: mat.supplierOrSource || "",
-      lotOrBatchNumber: mat.lotOrBatchNumber || "",
-      notes: mat.lotOrBatchNumber
-        ? `Inventory Lot: ${mat.lotOrBatchNumber} (${mat.supplierOrSource || "Internal Depot"})`
-        : "",
-      isVehicle: Boolean(
-        (mat.functionDescription || "").toLowerCase().includes("vehicle") ||
-          ((mat.materialName || "").toLowerCase().includes("water") &&
-            (mat.materialType === "SOLVENT" || mat.materialType === "EXCIPIENT"))
-      ),
-      materialId: mat.id,
-      inventoryStatus: mat.inventoryStatus,
-    };
-
     onChange({
       ...formulation,
-      components: [...formulation.components, newComponent],
+      components: [...formulation.components, buildComponentFromMaterial(mat)],
     });
     if (inventorySelectRef.current) inventorySelectRef.current.value = "";
   };
 
-  const availableInventoryIngredients = useMemo(() => {
-    return materials.filter((mat) => {
-      const nameNorm = (mat.materialName || "").trim().toLowerCase();
-      return !formulation.components.some((c) => {
-        if (c.materialId != null && c.materialId === mat.id) return true;
-        return (c.ingredientName || "").trim().toLowerCase() === nameNorm;
-      });
+  // On Step 5: mirror all My Ingredients into the composition (1:1 with Step 4 inventory).
+  // Sync display names; never drop researcher proportions for rows already present.
+  const materialsSyncKey = useMemo(
+    () =>
+      materials
+        .map((m) => `${m.id}:${m.materialName}:${m.materialType}`)
+        .join("|"),
+    [materials]
+  );
+  useEffect(() => {
+    if (readOnly || !materials.length) return;
+    const eligible = materials.filter((m) => isFormulationEligibleMaterial(m));
+    if (eligible.length === 0) return;
+
+    let changed = false;
+    const next = formulation.components.map((c) => {
+      const byId =
+        c.materialId != null
+          ? eligible.find((m) => Number(m.id) === Number(c.materialId))
+          : null;
+      const match =
+        byId ||
+        findInventoryMatch(
+          c.ingredientName,
+          c.componentType,
+          eligible,
+          project.plantName
+        );
+      if (!match) return c;
+      const nextName = match.materialName || c.ingredientName;
+      const nextId = match.id ?? c.materialId;
+      if (
+        nextName === c.ingredientName &&
+        Number(nextId || 0) === Number(c.materialId || 0)
+      ) {
+        return c;
+      }
+      changed = true;
+      return {
+        ...c,
+        ingredientName: nextName,
+        materialId: nextId,
+      };
     });
-  }, [materials, formulation.components]);
+
+    const missing = eligible.filter((mat) => !isMaterialInComposition(mat, next));
+    if (missing.length > 0) {
+      changed = true;
+      for (const mat of missing) {
+        next.push(buildComponentFromMaterial(mat));
+      }
+    }
+
+    if (changed) {
+      onChange({ ...formulation, components: next });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- inventory identity only
+  }, [materialsSyncKey]);
 
   /** Preview q.s. balance — never apply until researcher confirms. */
   const handleRequestBalanceTo100 = () => {
@@ -511,47 +574,6 @@ export default function FormulationStep5Section({
       });
     }
     setPendingBalance(null);
-  };
-
-  // Apply Template with Confirmation
-  const handleSelectTemplate = (template: FormulationTemplate) => {
-    if (readOnly) return;
-    if (formulation.components.length > 0) {
-      setPendingTemplate(template);
-      setIsTemplateDropdownOpen(false);
-      return;
-    }
-    applyTemplate(template);
-  };
-
-  const applyTemplate = (template: FormulationTemplate) => {
-    if (readOnly) return;
-    setPendingTemplate(null);
-    setIsTemplateDropdownOpen(false);
-    setIsDirty(true);
-
-    const templateItems = template.components(project.plantName, extraction?.extractFractionName);
-    const newComponents: FormulationComponentItem[] = templateItems.map((item, idx) => ({
-      id: `tmpl-${Date.now()}-${idx}`,
-      ingredientName: item.ingredientName,
-      componentType: item.componentType,
-      concentrationValue: item.suggestedConcentration,
-      concentrationUnit: item.concentrationUnit,
-      minConcentration: item.minConcentration,
-      maxConcentration: item.maxConcentration,
-      roleOrFunction: item.roleOrFunction,
-      notes: item.notes,
-      isVehicle: item.isVehicle,
-    }));
-
-    onChange({
-      ...formulation,
-      formulationName: `${project.plantName} ${template.name}`,
-      dosageFormType: template.dosageFormat || productSelection?.deliveryFormat || formulation.dosageFormType,
-      formulationCode: generateFormulationCode(template.dosageFormat, formulation.formulationCode),
-      targetBatchSize: template.typicalBatchSize,
-      components: newComponents,
-    });
   };
 
   // ---------------------------------------------------------------------------
@@ -764,8 +786,9 @@ export default function FormulationStep5Section({
       onChange({
         ...formulation,
         formulationName: aiProposal.formulationName || formulation.formulationName,
-        dosageFormType: aiProposal.dosageFormType || formulation.dosageFormType,
-        formulationCode: generateFormulationCode(aiProposal.dosageFormType, formulation.formulationCode),
+        // Keep Product Selection format locked — AI must not change template/type
+        dosageFormType: lockedFormat,
+        formulationCode: generateFormulationCode(lockedFormat, formulation.formulationCode),
         formulationReferences: Array.isArray(aiProposal.supportingReferences)
           ? aiProposal.supportingReferences.join("; ")
           : (formulation.formulationReferences || ""),
@@ -869,8 +892,8 @@ export default function FormulationStep5Section({
       onChange({
         ...formulation,
         formulationName: aiProposal.formulationName || formulation.formulationName,
-        dosageFormType: aiProposal.dosageFormType || formulation.dosageFormType,
-        formulationCode: generateFormulationCode(aiProposal.dosageFormType, formulation.formulationCode),
+        dosageFormType: lockedFormat,
+        formulationCode: generateFormulationCode(lockedFormat, formulation.formulationCode),
         formulationReferences: Array.isArray(aiProposal.supportingReferences)
           ? aiProposal.supportingReferences.join("; ")
           : (formulation.formulationReferences || ""),
@@ -913,8 +936,7 @@ export default function FormulationStep5Section({
     ? `${fieldClass} cursor-default bg-[#f8fbf9]`
     : fieldClass;
 
-  const inheritedFormat =
-    productSelection?.deliveryFormat || formulation.dosageFormType || "Topical Hydrogel";
+  const inheritedFormat = lockedFormat;
 
   return (
     <div className="space-y-4">
@@ -965,69 +987,17 @@ export default function FormulationStep5Section({
             <label className="mb-1 block text-[11px] font-semibold text-[#52645d]">
               Formulation Template
             </label>
-            {readOnly ? (
-              <div className={`${readOnlyFieldClass} flex items-center`}>
-                <span className="truncate">{currentTemplate.name}</span>
-              </div>
-            ) : (
-            <div className="relative" ref={templateDropdownRef}>
-              <button
-                type="button"
-                onClick={() => setIsTemplateDropdownOpen(!isTemplateDropdownOpen)}
-                className={`${fieldClass} flex items-center justify-between gap-2 text-left`}
-              >
-                <span className="truncate">{currentTemplate.name}</span>
-                <ChevronDown
-                  className={`h-3.5 w-3.5 shrink-0 text-[#8aa094] transition ${
-                    isTemplateDropdownOpen ? "rotate-180" : ""
-                  }`}
-                />
-              </button>
-              <AnimatePresence>
-                {isTemplateDropdownOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -6 }}
-                    className="absolute left-0 right-0 top-full z-30 mt-1.5 max-h-64 overflow-y-auto rounded-xl border border-[#d7e4dc] bg-white shadow-xl"
-                  >
-                    <div className="sticky top-0 border-b border-[#eef4f0] bg-[#f7faf8] p-2">
-                      <div className="relative">
-                        <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-[#8aa094]" />
-                        <input
-                          type="text"
-                          value={templateSearch}
-                          onChange={(e) => setTemplateSearch(e.target.value)}
-                          placeholder="Search templates..."
-                          className="h-8 w-full rounded-lg border border-[#d5e3da] bg-white pl-8 pr-2 text-xs outline-none focus:border-emerald-600"
-                          autoFocus
-                        />
-                      </div>
-                    </div>
-                    {filteredTemplates.map((tmpl, idx) => (
-                      <button
-                        key={`tmpl-${tmpl.id}-${idx}`}
-                        type="button"
-                        onClick={() => handleSelectTemplate(tmpl)}
-                        className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs ${
-                          currentTemplate.id === tmpl.id
-                            ? "bg-emerald-50 font-semibold text-emerald-950"
-                            : "text-[#52645d] hover:bg-[#f4f8f5]"
-                        }`}
-                      >
-                        <span className="truncate">{tmpl.name}</span>
-                        {currentTemplate.id === tmpl.id && (
-                          <Check className="h-3.5 w-3.5 text-emerald-600" />
-                        )}
-                      </button>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
+            <div
+              className={`${fieldClass} flex cursor-default items-center justify-between gap-2 bg-[#f8fbf9] text-[#0f2c20]`}
+              title="Locked to Product Format from Product Selection (Step 2)"
+            >
+              <span className="truncate font-semibold">{currentTemplate.name}</span>
+              <span className="shrink-0 rounded-md border border-[#d7e4dc] bg-white px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#8aa094]">
+                Locked
+              </span>
             </div>
-            )}
             <p className="mt-1 truncate text-[10px] text-[#8aa094]">
-              Format from Product Selection: {inheritedFormat}
+              From Product Selection: {inheritedFormat}. Change it in Step 2 (Product Format) only.
             </p>
           </div>
         </div>
@@ -1371,9 +1341,9 @@ export default function FormulationStep5Section({
                   Balance to 100%
                 </button>
 
-                <div className="min-w-[11rem]">
+                <div className="min-w-[12rem]">
                   <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-[#8aa094]">
-                    My Ingredients
+                    Add from My Ingredients
                   </label>
                   <select
                     ref={inventorySelectRef}
@@ -1383,13 +1353,13 @@ export default function FormulationStep5Section({
                       const id = parseInt(e.target.value, 10);
                       if (!Number.isNaN(id)) handleSelectInventoryIngredient(id);
                     }}
-                    className="h-9 w-full max-w-[14rem] rounded-lg border border-[#d5e3da] bg-[#fbfdfb] px-2.5 text-xs font-semibold text-[#0f2c20] outline-none focus:border-emerald-600 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="h-9 w-full max-w-[16rem] rounded-lg border border-[#d5e3da] bg-[#fbfdfb] px-2.5 text-xs font-semibold text-[#0f2c20] outline-none focus:border-emerald-600 disabled:cursor-not-allowed disabled:opacity-60"
                     title={
                       materials.length === 0
                         ? "Register ingredients in Ingredients & Materials first"
                         : availableInventoryIngredients.length === 0
                           ? "All My Ingredients are already in this composition"
-                          : "Select an existing inventory ingredient"
+                          : "Add an ingredient from My Ingredients"
                     }
                   >
                     <option value="" disabled>
@@ -1422,11 +1392,9 @@ export default function FormulationStep5Section({
             <Layers className="h-7 w-7 text-[#c5d4cb]" />
             <p className="text-xs font-bold text-[#52645d]">No ingredients in this formulation</p>
             <p className="max-w-sm text-[11px] text-[#8aa094]">
-              Select ingredients from My Ingredients above
               {materials.length === 0
-                ? ", or register them first in Ingredients & Materials (Step 4)"
-                : ""}
-              . Templates and AI Assist can also build the recipe.
+                ? "Register ingredients in Ingredients & Materials (Step 4), then return here — they will appear automatically."
+                : "All My Ingredients from Step 4 appear here automatically."}
             </p>
           </div>
         ) : (
@@ -1810,40 +1778,39 @@ export default function FormulationStep5Section({
         </div>
       )}
 
-      {/* ===================================================================== */}
-      {/* 7. TEMPLATE OVERWRITE CONFIRMATION MODAL                              */}
-      {/* ===================================================================== */}
-      {pendingTemplate && !readOnly && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-md p-5 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+      {/* Remove composition ingredient confirmation */}
+      {pendingRemoveIdx !== null && formulation.components[pendingRemoveIdx] && !readOnly && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-start gap-3">
-              <div className="w-9 h-9 rounded-xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center shrink-0">
-                <AlertTriangle className="w-5 h-5" />
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-rose-200 bg-rose-50 text-rose-600">
+                <Trash2 className="h-4 w-4" />
               </div>
               <div className="space-y-1">
-                <h3 className="text-sm font-bold text-slate-900">
-                  Switch to {pendingTemplate.name} Template?
-                </h3>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  Your composition matrix currently contains {formulation.components.length} ingredients. Loading the {pendingTemplate.name} template will replace existing components with the standardized template matrix.
+                <h3 className="text-sm font-bold text-slate-900">Remove from composition?</h3>
+                <p className="text-xs leading-relaxed text-slate-500">
+                  Remove{" "}
+                  <span className="font-semibold text-slate-800">
+                    {formulation.components[pendingRemoveIdx].ingredientName || "this ingredient"}
+                  </span>{" "}
+                  from the formulation matrix?
                 </p>
               </div>
             </div>
-
-            <div className="flex items-center justify-end gap-2 pt-2">
+            <div className="flex items-center justify-end gap-2 pt-1">
               <button
                 type="button"
-                onClick={() => setPendingTemplate(null)}
-                className="px-3.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
+                onClick={() => setPendingRemoveIdx(null)}
+                className="cursor-pointer rounded-lg border border-slate-200 px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100"
               >
-                Keep Current Matrix
+                Cancel
               </button>
               <button
                 type="button"
-                onClick={() => applyTemplate(pendingTemplate)}
-                className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs cursor-pointer"
+                onClick={confirmRemoveComponent}
+                className="cursor-pointer rounded-lg bg-rose-600 px-4 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-rose-700"
               >
-                Apply New Template
+                Remove
               </button>
             </div>
           </div>
