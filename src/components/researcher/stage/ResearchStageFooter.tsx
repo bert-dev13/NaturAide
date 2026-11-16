@@ -14,7 +14,7 @@ import {
 
 export interface ResearchStageFooterProps {
   projectId: number;
-  stageNumber: number; // 1 to 6
+  stageNumber: number; // 1 to 5
   stageTitle?: string;
 
   // Left action: Back (Pure navigation only)
@@ -76,26 +76,23 @@ const DEFAULT_TITLES: Record<number, string> = {
   2: "In-Silico Analysis",
   3: "Molecular Docking",
   4: "Formulation Development",
-  5: "Safety / Clinical",
-  6: "Knowledge Integration",
+  5: "Knowledge Integration",
 };
 
 const DEFAULT_CONTINUE_LABELS: Record<number, string> = {
   1: "Continue to In-Silico Analysis",
   2: "Continue to Molecular Docking",
   3: "Continue to Formulation",
-  4: "Continue to Safety / Clinical",
-  5: "Continue to Knowledge Integration",
-  6: "Complete Research",
+  4: "Continue to Knowledge Integration",
+  5: "Complete Research",
 };
 
 const DEFAULT_CONTINUING_LABELS: Record<number, string> = {
   1: "Advancing to In-Silico...",
   2: "Advancing to Molecular Docking...",
   3: "Advancing to Formulation...",
-  4: "Advancing to Safety / Clinical...",
-  5: "Advancing to Knowledge Integration...",
-  6: "Completing Research...",
+  4: "Advancing to Knowledge Integration...",
+  5: "Completing Research...",
 };
 
 const PREV_STAGE_ROUTES: Record<number, string> = {
@@ -104,7 +101,6 @@ const PREV_STAGE_ROUTES: Record<number, string> = {
   3: "in-silico",
   4: "docking",
   5: "formulation-safety",
-  6: "safety",
 };
 
 const PREV_STAGE_LABELS: Record<number, string> = {
@@ -113,7 +109,6 @@ const PREV_STAGE_LABELS: Record<number, string> = {
   3: "Back to In-Silico Analysis",
   4: "Back to Molecular Docking",
   5: "Back to Formulation Development",
-  6: "Back to Safety / Clinical",
 };
 
 export function ResearchStageFooter({

@@ -116,8 +116,9 @@ const STAGE_CONFIGS: Record<
     ],
   },
   clinical_safety: {
+    // Researcher Safety / Clinical page removed — specialty reviews Knowledge Integration context
     stageNumber: 5,
-    stageTitle: "Safety / Clinical",
+    stageTitle: "Knowledge Integration",
     discipline: "Clinical Safety",
     professionTitle: "Physician / Clinical Pharmacist",
     icon: Stethoscope,

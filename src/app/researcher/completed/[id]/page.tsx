@@ -1,4 +1,4 @@
-import React from "react";
+import React, { Suspense } from "react";
 import { notFound, redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import {
@@ -6,6 +6,15 @@ import {
   type CompletedResearchDetail,
 } from "@/lib/research-approval-completion-service";
 import CompletedResearchDetailClient from "@/components/researcher/completed/CompletedResearchDetailClient";
+
+function DossierLoading() {
+  return (
+    <div className="w-full min-w-0 space-y-4 pb-16">
+      <div className="h-36 animate-pulse rounded-2xl border border-[#d7e4dc] bg-white" />
+      <div className="h-64 animate-pulse rounded-2xl border border-[#d7e4dc] bg-white" />
+    </div>
+  );
+}
 
 export default async function CompletedResearchDetailPage({
   params,
@@ -44,5 +53,9 @@ export default async function CompletedResearchDetailPage({
     notFound();
   }
 
-  return <CompletedResearchDetailClient detail={detail} />;
+  return (
+    <Suspense fallback={<DossierLoading />}>
+      <CompletedResearchDetailClient detail={detail} />
+    </Suspense>
+  );
 }

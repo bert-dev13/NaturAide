@@ -63,16 +63,6 @@ export const STAGE_REVIEW_DEFINITIONS: Record<number, ProfessionalReviewStageCon
   5: {
     number: "05",
     stageNumber: 5,
-    stageKey: "safety",
-    stageName: "Safety / Clinical",
-    discipline: "Clinical Safety",
-    areaKey: "clinical_safety",
-    profession: "Physician / Clinical Pharmacist",
-    description: "Clinical safety and risk assessment.",
-  },
-  6: {
-    number: "06",
-    stageNumber: 6,
     stageKey: "knowledge-integration",
     stageName: "Knowledge Integration",
     discipline: "Knowledge Integration",
@@ -211,18 +201,12 @@ export function isResearcherStageSubmitted(
       return false;
     }
     case 5: {
-      if (isStageRecordComplete(["safety", "expert-review"])) return true;
-      if (["knowledge-integration", "completion-integration"].includes(currentStage)) {
+      if (isStageRecordComplete(["knowledge-integration", "completion-integration", "safety"])) {
         return true;
       }
-      if (dataFlags?.hasSafety) return true;
-      return false;
-    }
-    case 6: {
-      if (isStageRecordComplete(["knowledge-integration", "completion-integration"])) return true;
       if (project.status === "COMPLETED") return true;
       if (
-        ["knowledge-integration", "completion-integration"].includes(currentStage) &&
+        ["knowledge-integration", "completion-integration", "safety"].includes(currentStage) &&
         (project.status === "UNDER_REVIEW" || project.status === "READY_FOR_REVIEW")
       ) {
         return true;
@@ -295,8 +279,8 @@ export function resolveSingleStageStatus(
 
   const assignmentId = matchedAss ? matchedAss.id : null;
   const actionUrl =
-    stageNumber === 6
-      ? `/reviewer/checking/pharmacognosy?projectId=${projectId}&stage=6`
+    stageNumber === 5
+      ? `/reviewer/checking/pharmacognosy?projectId=${projectId}&stage=5`
       : `/reviewer/checking/${config.areaKey}?projectId=${projectId}${
           assignmentId ? `&assignmentId=${assignmentId}` : ""
         }`;
@@ -425,7 +409,7 @@ export function resolveSingleStageStatus(
 }
 
 /**
- * Loads and resolves canonical review status for all 6 stages of a project.
+ * Loads and resolves canonical review status for all 5 stages of a project.
  */
 export async function getAllProfessionalReviewStages(projectId: number): Promise<{
   project: any;
@@ -546,7 +530,7 @@ export async function getAllProfessionalReviewStages(projectId: number): Promise
   }
 
   // Resolve all 6 stages
-  const resolvedStages: ResolvedStageStatus[] = [1, 2, 3, 4, 5, 6].map((num) =>
+  const resolvedStages: ResolvedStageStatus[] = [1, 2, 3, 4, 5].map((num) =>
     resolveSingleStageStatus(
       num,
       projectId,

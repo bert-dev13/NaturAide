@@ -1,6 +1,4 @@
 import assert from "node:assert";
-import React from "react";
-import { renderToStaticMarkup } from "react-dom/server";
 
 // Mock next/navigation
 let pushedRoute: string | null = null;
@@ -26,7 +24,7 @@ function describe_test() {
 }
 
 function testStageRouteMappings() {
-  console.log("1. Testing deterministic stage route and label mappings across all 6 stages...");
+  console.log("1. Testing deterministic stage route and label mappings across all 5 stages...");
 
   const EXPECTED_MAPPINGS = [
     { stage: 1, label: "Back to Project", path: "/researcher/projects/42" },
@@ -34,7 +32,6 @@ function testStageRouteMappings() {
     { stage: 3, label: "Back to In-Silico Analysis", path: "/researcher/projects/42/in-silico" },
     { stage: 4, label: "Back to Molecular Docking", path: "/researcher/projects/42/docking" },
     { stage: 5, label: "Back to Formulation Development", path: "/researcher/projects/42/formulation-safety" },
-    { stage: 6, label: "Back to Safety / Clinical", path: "/researcher/projects/42/safety" },
   ];
 
   const PREV_STAGE_ROUTES: Record<number, string> = {
@@ -43,7 +40,6 @@ function testStageRouteMappings() {
     3: "in-silico",
     4: "docking",
     5: "formulation-safety",
-    6: "safety",
   };
 
   const PREV_STAGE_LABELS: Record<number, string> = {
@@ -52,7 +48,6 @@ function testStageRouteMappings() {
     3: "Back to In-Silico Analysis",
     4: "Back to Molecular Docking",
     5: "Back to Formulation Development",
-    6: "Back to Safety / Clinical",
   };
 
   for (const m of EXPECTED_MAPPINGS) {
@@ -65,18 +60,15 @@ function testStageRouteMappings() {
     assert.strictEqual(label, m.label, `Stage ${m.stage} label must be "${m.label}"`);
   }
 
-  console.log("  ✓ All 6 stage routes and labels verified.");
+  console.log("  ✓ All 5 stage routes and labels verified.");
 }
 
 function testButtonTypesAndHandlers() {
   console.log("2. Testing button types: Back, Save, and Continue must strictly be type='button'...");
 
-  // Mock React element rendering to check HTML attributes
-  // In ResearchStageFooter, all buttons render with type="button"
   const fs = require("fs");
   const code = fs.readFileSync("src/components/researcher/stage/ResearchStageFooter.tsx", "utf-8");
 
-  // Verify type="button" on all buttons
   const buttonMatches = code.match(/<button[^>]*>/g) || [];
   assert.ok(buttonMatches.length >= 3, "Must have at least 3 buttons (Back, Save, Continue)");
 
@@ -104,7 +96,6 @@ function testBackActionSeparation() {
 
   const handleBack = () => {
     backInvoked = true;
-    // PURE NAVIGATION: Must NOT set isContinuing, must NOT invoke continue
     mockRouter.push("/researcher/projects/25/plant-literature");
   };
 
@@ -117,7 +108,6 @@ function testBackActionSeparation() {
     saveInvoked = true;
   };
 
-  // Simulate clicking Back
   handleBack();
 
   assert.strictEqual(backInvoked, true, "Back handler must be called");
@@ -148,7 +138,6 @@ function testSaveActionSeparation() {
     isContinuing = true;
   };
 
-  // Simulate clicking Save Draft
   handleSave();
 
   assert.strictEqual(saveInvoked, true, "Save handler must be called");
@@ -170,10 +159,8 @@ function testContinueActionSeparation() {
     continueCalls++;
     isContinuing = true;
     try {
-      // Simulate async stage completion
       await new Promise((r) => setTimeout(r, 10));
     } finally {
-      // Must clean up advancement state
       isContinuing = false;
     }
   };
@@ -184,4 +171,3 @@ function testContinueActionSeparation() {
     console.log("  ✓ Continue advancement validated: called exactly once, isContinuing cleanly reset.");
   });
 }
-

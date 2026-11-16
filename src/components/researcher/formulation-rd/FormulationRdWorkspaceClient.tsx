@@ -2,7 +2,6 @@
 
 import React, { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Sprout,
@@ -12,9 +11,7 @@ import {
   FlaskConical,
   Activity,
   ArrowRight,
-  ArrowLeft,
   X,
-  Check,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import BotanicalStep1Section, {
@@ -31,6 +28,7 @@ import FormulationStep5Section, {
 import BatchAnalysisStep6Section from "@/components/researcher/formulation-rd/BatchAnalysisStep6Section";
 import ResearchStepFooterNav from "@/components/researcher/ResearchStepFooterNav";
 import ResearcherStepRevisionBanner from "@/components/researcher/ResearcherStepRevisionBanner";
+import ResearchSectionWorkspaceHeader from "@/components/researcher/ResearchSectionWorkspaceHeader";
 
 interface Props {
   project: {
@@ -690,139 +688,26 @@ export default function FormulationRdWorkspaceClient({
 
   return (
     <div className="w-full max-w-none space-y-4 pb-32 text-slate-800">
-      {/* Brand + compact step header */}
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="space-y-3"
-      >
-        <div className="flex items-center justify-between gap-3">
-          <Link
-            href={`/researcher/projects/${project.id}`}
-            className="flex min-w-0 items-center gap-2.5 group"
-            title="NaturAide Research Platform"
-          >
-            <div className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-[#d7e4dc] bg-white shadow-sm ring-1 ring-emerald-500/10">
-              <Image
-                src="/images/nature-logo.png"
-                alt="NaturAide"
-                width={28}
-                height={28}
-                className="object-contain"
-                priority
-              />
-            </div>
-            <div className="min-w-0 leading-tight">
-              <p className="font-heading text-base font-bold tracking-tight text-[#0f2c20] group-hover:text-emerald-900 sm:text-lg">
-                NaturAide
-              </p>
-              <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-emerald-700/80">
-                Research Platform
-              </p>
-            </div>
-          </Link>
-
-          <Link
-            href={`/researcher/projects/${project.id}`}
-            className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-[#d7e4dc] bg-white px-2 py-1 text-[11px] font-semibold text-[#52645d] transition hover:border-emerald-300 hover:text-[#0f2c20]"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Project</span>
-          </Link>
-        </div>
-
-        <div className="relative overflow-hidden rounded-2xl border border-[#0f2c20]/12 bg-[linear-gradient(135deg,#0b2419_0%,#0f2c20_50%,#134032_100%)] px-4 py-3.5 text-white shadow-[0_12px_28px_-20px_rgba(15,44,32,0.55)] sm:px-5">
-          <div className="pointer-events-none absolute -right-10 -top-12 h-32 w-32 rounded-full bg-emerald-400/12 blur-3xl" />
-
-          <div className="relative flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-emerald-200/75">
-                <span>Step {activeStep} of 6 · Formulation R&D</span>
-                <span
-                  className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 font-semibold ${
-                    isSaving
-                      ? "border-amber-400/40 bg-amber-500/15 text-amber-100"
-                      : message?.type === "success"
-                        ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-100"
-                        : "border-white/15 bg-white/5 text-emerald-100/85"
-                  }`}
-                >
-                  <span
-                    className={`h-1.5 w-1.5 rounded-full ${
-                      isSaving
-                        ? "animate-pulse bg-amber-300"
-                        : message?.type === "success"
-                          ? "bg-emerald-300"
-                          : "bg-slate-300"
-                    }`}
-                  />
-                  {isSaving ? "Saving..." : message?.type === "success" ? "Saved" : "Draft"}
-                </span>
-              </div>
-              <h1 className="mt-1 text-xl font-bold tracking-tight text-white sm:text-2xl">
-                {STEPS[activeStep - 1].title}
-              </h1>
-            </div>
-
-            {activeStep === 6 && (
-              <Link
-                href={`/researcher/projects/${project.id}/in-silico`}
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-emerald-400 px-3 py-1.5 text-xs font-bold text-[#091a13] shadow-sm transition hover:bg-emerald-300"
-              >
-                Proceed to Section 2
-                <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
-            )}
-          </div>
-
-          {/* Horizontal numbered stepper */}
-          <div className="relative mt-4 overflow-x-auto pb-0.5 scrollbar-none">
-            <div className="flex min-w-[28rem] items-center justify-between gap-0 sm:min-w-0">
-              {STEPS.map((step, idx) => {
-                const isCurrent = activeStep === step.number;
-                const isDone = step.number < activeStep;
-                return (
-                  <React.Fragment key={step.number}>
-                    <button
-                      type="button"
-                      onClick={() => setActiveStep(step.number)}
-                      title={step.title}
-                      className="group relative z-[1] flex shrink-0 flex-col items-center gap-1"
-                    >
-                      <span
-                        className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold transition ${
-                          isCurrent
-                            ? "bg-emerald-400 text-[#091a13] shadow-sm ring-2 ring-emerald-300/40"
-                            : isDone
-                              ? "bg-emerald-500/90 text-white"
-                              : "border border-white/20 bg-white/10 text-emerald-100/70 group-hover:bg-white/15"
-                        }`}
-                      >
-                        {isDone ? <Check className="h-3.5 w-3.5" strokeWidth={2.5} /> : step.number}
-                      </span>
-                      <span
-                        className={`hidden max-w-[4.5rem] truncate text-center text-[9px] font-semibold sm:block ${
-                          isCurrent ? "text-white" : isDone ? "text-emerald-200/90" : "text-emerald-100/55"
-                        }`}
-                      >
-                        {step.title.split(" ")[0]}
-                      </span>
-                    </button>
-                    {idx < STEPS.length - 1 && (
-                      <div
-                        className={`mx-1 h-0.5 min-w-[0.75rem] flex-1 rounded-full ${
-                          step.number < activeStep ? "bg-emerald-400/80" : "bg-white/15"
-                        }`}
-                      />
-                    )}
-                  </React.Fragment>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      </motion.div>
+      <ResearchSectionWorkspaceHeader
+        projectId={project.id}
+        sectionLabel="Formulation R&D"
+        steps={STEPS}
+        activeStep={activeStep}
+        onStepChange={setActiveStep}
+        statusLabel={isSaving ? "Saving..." : message?.type === "success" ? "Saved" : "Draft"}
+        statusVariant={isSaving ? "saving" : message?.type === "success" ? "saved" : "draft"}
+        proceedSlot={
+          activeStep === 6 ? (
+            <Link
+              href={`/researcher/projects/${project.id}/in-silico`}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-emerald-400 px-3 py-1.5 text-xs font-bold text-[#091a13] shadow-sm transition hover:bg-emerald-300"
+            >
+              Proceed to Section 2
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          ) : null
+        }
+      />
 
       <AnimatePresence>
         {message && (

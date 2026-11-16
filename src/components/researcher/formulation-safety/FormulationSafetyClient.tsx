@@ -774,9 +774,9 @@ export default function FormulationSafetyClient({
 
       setStageStatus("COMPLETED");
       setReviewStatus("PENDING");
-      setSuccessNotice("Stage 4 completed! Formulation review queued. Moving to Stage 5...");
+      setSuccessNotice("Stage 4 completed! Formulation review queued. Moving to Knowledge Integration...");
 
-      const targetUrl = data.redirectUrl || `/researcher/projects/${projectId}/safety`;
+      const targetUrl = data.redirectUrl || `/researcher/projects/${projectId}/knowledge-integration`;
       setTimeout(() => {
         router.push(targetUrl);
       }, 500);
@@ -843,7 +843,7 @@ export default function FormulationSafetyClient({
 
           <div className="relative z-10 space-y-2">
             <span className="font-mono text-[10px] font-black tracking-widest text-emerald-300 uppercase block">
-              STAGE 04 / 06
+              STAGE 04 / 05
             </span>
             <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight drop-shadow-2xs">
               Formulation Development
@@ -1569,8 +1569,8 @@ export default function FormulationSafetyClient({
         reviewStatus={currentReviewStatus}
         onContinue={handleCompleteAndContinue}
         isContinuing={isContinuing}
-        continueLabel="Continue to Safety / Clinical"
-        continuingLabel="Advancing to Safety / Clinical..."
+        continueLabel="Continue to Knowledge Integration"
+        continuingLabel="Advancing to Knowledge Integration..."
         continueDisabled={isContinuing || isRevisionMode}
       />
 

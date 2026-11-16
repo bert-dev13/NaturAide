@@ -6,19 +6,18 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Cpu,
   Target,
   FlaskConical,
   Activity,
   Layers,
   ArrowRight,
-  ArrowLeft,
   Play,
   Atom,
   Info,
   X,
 } from "lucide-react";
 import ResearchStepFooterNav from "@/components/researcher/ResearchStepFooterNav";
+import ResearchSectionWorkspaceHeader from "@/components/researcher/ResearchSectionWorkspaceHeader";
 
 // 7 Modular Step Section Components (Section 1 compounds reused automatically)
 import TargetProteinStep2Section from "./TargetProteinStep2Section";
@@ -576,123 +575,43 @@ export default function InSilicoRdWorkspaceClient({
     ).length;
   }, [workspace]);
 
-  const ActiveIcon = STEPS[activeStep - 1]?.icon || Cpu;
+  const section2StatusLabel =
+    activeRunningCount > 0
+      ? `Running (${activeRunningCount})`
+      : isSaving
+        ? "Saving..."
+        : message?.type === "success"
+          ? "Saved"
+          : "Draft";
+  const section2StatusVariant =
+    activeRunningCount > 0
+      ? ("running" as const)
+      : isSaving
+        ? ("saving" as const)
+        : message?.type === "success"
+          ? ("saved" as const)
+          : ("draft" as const);
 
   return (
     <div className="w-full max-w-none space-y-5 pb-32 text-slate-800">
-      {/* Compact workspace header — matches Section 1 */}
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="relative w-full overflow-hidden rounded-2xl border border-[#0f2c20]/15 bg-[linear-gradient(120deg,#0f2c20_0%,#134032_48%,#0b271b_100%)] px-4 py-3.5 text-white shadow-[0_12px_28px_-18px_rgba(15,44,32,0.55)] sm:px-5"
-      >
-        <div className="pointer-events-none absolute -right-10 -top-12 h-36 w-36 rounded-full bg-emerald-400/15 blur-3xl" />
-        <div className="relative space-y-3">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium text-emerald-200/80">
-                <Link
-                  href={`/researcher/projects/${project.id}`}
-                  className="inline-flex items-center gap-1.5 transition hover:text-white"
-                >
-                  <ArrowLeft className="h-3.5 w-3.5" />
-                  Workspace Hub
-                </Link>
-                <span className="text-emerald-700">/</span>
-                <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-emerald-200">
-                  Section 2 · Step {String(activeStep).padStart(2, "0")} / 07
-                </span>
-                <span
-                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
-                    activeRunningCount > 0
-                      ? "border-sky-400/40 bg-sky-500/15 text-sky-100"
-                      : isSaving
-                        ? "border-amber-400/40 bg-amber-500/15 text-amber-100"
-                        : message?.type === "success"
-                          ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-100"
-                          : "border-white/15 bg-white/5 text-emerald-100/80"
-                  }`}
-                >
-                  <span
-                    className={`h-1.5 w-1.5 rounded-full ${
-                      activeRunningCount > 0
-                        ? "animate-pulse bg-sky-300"
-                        : isSaving
-                          ? "animate-pulse bg-amber-300"
-                          : message?.type === "success"
-                            ? "bg-emerald-300"
-                            : "bg-slate-300"
-                    }`}
-                  />
-                  {activeRunningCount > 0
-                    ? `Running (${activeRunningCount})`
-                    : isSaving
-                      ? "Saving..."
-                      : message?.type === "success"
-                        ? "Saved"
-                        : "Draft"}
-                </span>
-              </div>
-              <div className="mt-1.5 flex items-center gap-2">
-                <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-200">
-                  <ActiveIcon className="h-4 w-4" />
-                </span>
-                <h1 className="text-lg font-semibold tracking-tight text-white sm:text-xl">
-                  {STEPS[activeStep - 1].title}
-                </h1>
-              </div>
-              <div className="mt-2 flex max-w-lg items-center gap-1">
-                {STEPS.map((step) => (
-                  <button
-                    key={step.number}
-                    type="button"
-                    onClick={() => setActiveStep(step.number)}
-                    title={`Step ${step.number}: ${step.title}`}
-                    className={`h-1.5 flex-1 rounded-full transition ${
-                      step.number <= activeStep ? "bg-emerald-400" : "bg-white/15 hover:bg-white/25"
-                    }`}
-                  />
-                ))}
-              </div>
-            </div>
-
-            <Link
-              href={`/researcher/projects/${project.id}/submission`}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-emerald-400 px-3.5 py-2 text-xs font-semibold text-[#091a13] shadow-sm transition hover:bg-emerald-300"
-            >
-              Proceed to Section 3
-              <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
-          </div>
-
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
-            {STEPS.map((step) => {
-              const Icon = step.icon;
-              const isCurrent = activeStep === step.number;
-              const isDone = step.number < activeStep;
-              return (
-                <button
-                  key={step.number}
-                  type="button"
-                  onClick={() => setActiveStep(step.number)}
-                  className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-[11px] font-semibold transition ${
-                    isCurrent
-                      ? "bg-emerald-400 text-[#091a13] shadow-sm"
-                      : isDone
-                        ? "border border-emerald-400/30 bg-emerald-500/15 text-emerald-100 hover:bg-emerald-500/25"
-                        : "border border-white/10 bg-white/5 text-emerald-100/70 hover:bg-white/10 hover:text-white"
-                  }`}
-                >
-                  <Icon className="h-3.5 w-3.5" />
-                  <span className="font-mono text-[10px] opacity-80">{step.number}</span>
-                  <span className="hidden lg:inline">{step.title}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </motion.div>
+      <ResearchSectionWorkspaceHeader
+        projectId={project.id}
+        sectionLabel="In-Silico Analysis"
+        steps={STEPS}
+        activeStep={activeStep}
+        onStepChange={setActiveStep}
+        statusLabel={section2StatusLabel}
+        statusVariant={section2StatusVariant}
+        proceedSlot={
+          <Link
+            href={`/researcher/projects/${project.id}/submission`}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-emerald-400 px-3 py-1.5 text-xs font-bold text-[#091a13] shadow-sm transition hover:bg-emerald-300"
+          >
+            Proceed to Section 3
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        }
+      />
 
       <AnimatePresence>
         {message && (

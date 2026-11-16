@@ -21,8 +21,8 @@ async function dossierReadyForProfessionalReview(projectId: number) {
     (done("plant-literature") || done("evidence-review") || (done("plant-research") && done("literature"))) &&
     done("in-silico") &&
     done("docking") &&
-    (done("formulation-safety") || (done("formulation") && done("safety"))) &&
-    (done("completion-integration") || done("completion"))
+    (done("formulation-safety") || done("formulation")) &&
+    (done("knowledge-integration") || done("completion-integration") || done("completion") || done("safety"))
   );
 }
 
@@ -192,10 +192,12 @@ export async function GET(
     const isStage2Done = stageMap["in-silico"] === "COMPLETED";
     const isStage3Done = stageMap["docking"] === "COMPLETED";
     const isStage4Done =
-      stageMap["formulation-safety"] === "COMPLETED" ||
-      (stageMap["formulation"] === "COMPLETED" && stageMap["safety"] === "COMPLETED");
+      stageMap["formulation-safety"] === "COMPLETED" || stageMap["formulation"] === "COMPLETED";
     const isStage5Done =
-      stageMap["completion-integration"] === "COMPLETED" || stageMap["completion"] === "COMPLETED";
+      stageMap["knowledge-integration"] === "COMPLETED" ||
+      stageMap["completion-integration"] === "COMPLETED" ||
+      stageMap["completion"] === "COMPLETED" ||
+      stageMap["safety"] === "COMPLETED";
 
     const isReadyForReview =
       isStage1Done && isStage2Done && isStage3Done && isStage4Done && isStage5Done;

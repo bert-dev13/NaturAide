@@ -215,8 +215,8 @@ export default function KnowledgeIntegrationClient({ projectId }: Props) {
 
   // Pure Back navigation handler (NEVER triggers stage completion or advancement)
   const handleBack = useCallback(() => {
-    console.log("[KnowledgeIntegrationClient] BACK_CLICK - Pure navigation to Safety / Clinical");
-    router.push(`/researcher/projects/${projectId}/safety`);
+    console.log("[KnowledgeIntegrationClient] BACK_CLICK - Pure navigation to Formulation Development");
+    router.push(`/researcher/projects/${projectId}/formulation-safety`);
   }, [projectId, router]);
 
   // Active anchor for one-scroll tab bar matching Stages 4 & 5
@@ -377,7 +377,7 @@ export default function KnowledgeIntegrationClient({ projectId }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           roleKey: "pharmacognosy",
-          stageNumber: 6,
+          stageNumber: 5,
           changesSummary: "Updated multi-disciplinary synthesis and final research dossier.",
         }),
       });
@@ -398,7 +398,7 @@ export default function KnowledgeIntegrationClient({ projectId }: Props) {
 
       window.dispatchEvent(
         new CustomEvent("natureaide:revisions-updated", {
-          detail: { projectId, stageNumber: 6, status: "REVISION_RESUBMITTED" },
+          detail: { projectId, stageNumber: 5, status: "REVISION_RESUBMITTED" },
         })
       );
       window.dispatchEvent(new CustomEvent("natureaide:project-updated", { detail: { projectId } }));
@@ -658,11 +658,11 @@ export default function KnowledgeIntegrationClient({ projectId }: Props) {
       text: "text-amber-700",
     },
     5: {
-      icon: ShieldCheck,
-      gradient: "from-rose-500 to-pink-600",
-      badge: "bg-rose-100 text-rose-800 border-rose-200",
-      border: "hover:border-rose-400",
-      text: "text-rose-700",
+      icon: CheckCircle2,
+      gradient: "from-emerald-500 to-teal-600",
+      badge: "bg-emerald-100 text-emerald-800 border-emerald-200",
+      border: "hover:border-emerald-400",
+      text: "text-emerald-700",
     },
   };
 
@@ -689,11 +689,11 @@ export default function KnowledgeIntegrationClient({ projectId }: Props) {
       >
         <div className="flex items-center justify-between px-0.5">
           <Link
-            href={`/researcher/projects/${projectId}/safety`}
+            href={`/researcher/projects/${projectId}/formulation-safety`}
             className="group inline-flex items-center gap-1.5 text-xs font-bold text-[#52645d] hover:text-[#0f2c20] transition-colors"
           >
             <ArrowLeft className="w-3.5 h-3.5 text-emerald-600 transition-transform group-hover:-translate-x-1" />
-            <span>Back to Safety / Clinical</span>
+            <span>Back to Formulation Development</span>
           </Link>
         </div>
 
@@ -705,7 +705,7 @@ export default function KnowledgeIntegrationClient({ projectId }: Props) {
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <span className="font-mono text-[10px] font-black tracking-widest text-emerald-300 uppercase block">
-                  STAGE 06 / 06
+                  STAGE 05 / 05
                 </span>
                 <span className="text-emerald-500 text-xs">•</span>
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-[11px] font-bold">
@@ -761,7 +761,7 @@ export default function KnowledgeIntegrationClient({ projectId }: Props) {
       {/* REVIEW FEEDBACK / REVISION REQUIRED BANNER */}
       <ResearcherReviewFeedbackPanel
         projectId={projectId}
-        stageNumber={6}
+        stageNumber={5}
         stageName="Knowledge Integration"
         discipline="Knowledge Integration"
         overallAssessment={overallAssessment}
@@ -1381,7 +1381,7 @@ export default function KnowledgeIntegrationClient({ projectId }: Props) {
                 { title: "In-Silico Screening & ADMET", stage: "Stage 02", desc: `${fullDossier?.compounds?.length || 3} candidate compounds, Lipinski rule evaluation` },
                 { title: "Target Binding Energetics", stage: "Stage 03", desc: `${fullDossier?.dockingRuns?.length || 6} AutoDock Vina docked ligand-target poses` },
                 { title: "Standardized Formulation SOP", stage: "Stage 04", desc: `${fullDossier?.formulation?.formulationName || "Extract prototype"} hydroethanolic maceration` },
-                { title: "Multi-Domain Clinical Toxicology", stage: "Stage 05", desc: "Toxicity, contraindications, drug interactions, posology" },
+                { title: "Formulation Safety Context", stage: "Stage 04", desc: "Formulation composition, phytochemical context, and documented precautions" },
                 { title: "Integrated Synthesis & Findings", stage: "Stage 06", desc: `${keyFindings.length} verified multi-stage correlation findings` },
               ].map((chap, i) => (
                 <div
@@ -1508,20 +1508,10 @@ export default function KnowledgeIntegrationClient({ projectId }: Props) {
                 </p>
               </div>
 
-              {/* Clinical Safety Summary */}
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-1.5">
-                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 font-mono">
-                  STAGE 5 · SAFETY &amp; CLINICAL ASSESSMENT
-                </span>
-                <p className="text-slate-800 font-medium leading-relaxed">
-                  Five core domains (toxicity, contraindications, drug interactions, dose exposure, formulation safety) evaluated. Published literature supports preliminary safety margins within target therapeutic concentrations.
-                </p>
-              </div>
-
-              {/* Stage 6 Synthesis */}
+              {/* Stage 5 Synthesis */}
               <div className="p-5 rounded-2xl bg-emerald-50/70 border border-emerald-200 space-y-3">
                 <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800 font-mono">
-                  STAGE 6 · KNOWLEDGE INTEGRATION &amp; SYNTHESIS
+                  STAGE 5 · KNOWLEDGE INTEGRATION &amp; SYNTHESIS
                 </span>
 
                 <div className="space-y-1.5">
@@ -1785,11 +1775,11 @@ export default function KnowledgeIntegrationClient({ projectId }: Props) {
       {/* ============================================================== */}
       <ResearchStageFooter
         projectId={projectId}
-        stageNumber={6}
+        stageNumber={5}
         stageTitle="Knowledge Integration"
-        previousStageRoute={`/researcher/projects/${projectId}/safety`}
+        previousStageRoute={`/researcher/projects/${projectId}/formulation-safety`}
         onBack={handleBack}
-        backLabel="Back to Safety / Clinical"
+        backLabel="Back to Formulation Development"
         lastSaved={lastSaved}
         isSaving={saving}
         onSave={() => handleSave(false)}
@@ -1811,8 +1801,8 @@ export default function KnowledgeIntegrationClient({ projectId }: Props) {
         isOpen={showSuccessModal}
         onClose={() => setShowSuccessModal(false)}
         projectId={projectId}
-        stageNumber={6}
-        stageTitle="Stage 6 · Knowledge Integration"
+        stageNumber={5}
+        stageTitle="Stage 5 · Knowledge Integration"
         discipline={successModalData.discipline}
         profession={successModalData.profession}
         reviewCycle={successModalData.reviewCycle}

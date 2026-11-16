@@ -194,10 +194,11 @@ async function runTests() {
     // [2/6] Test V2 Progress Service
     console.log("\n[2/6] Testing V2 Progress Calculation (Section 3 Simplification)...");
     const v2Progress = await calculateV2ProjectProgress(projectId);
-    assert(v2Progress.section3.totalSteps === 2, "Section 3 totalSteps is exactly 2 (Step 1 Summary, Step 2 Manuscript)");
-    assert(v2Progress.section3.steps.length === 2, "Section 3 steps array length is exactly 2");
+    assert(v2Progress.section3.totalSteps === 3, "Section 3 totalSteps is 3 (Summary, Lab Results, Manuscript)");
+    assert(v2Progress.section3.steps.length === 3, "Section 3 steps array length is 3");
     assert(v2Progress.section3.steps[0].stepKey === "research-summary", "Section 3 Step 1 is 'research-summary'");
-    assert(v2Progress.section3.steps[1].stepKey === "upload-research-paper", "Section 3 Step 2 is 'upload-research-paper'");
+    assert(v2Progress.section3.steps[1].stepKey === "laboratory-results", "Section 3 Step 2 is 'laboratory-results'");
+    assert(v2Progress.section3.steps[2].stepKey === "upload-research-paper", "Section 3 Step 3 is 'upload-research-paper'");
     assert(Boolean(v2Progress.sectionApprovalPercent), "V2 progress includes sectionApprovalPercent object");
     assert(Boolean(v2Progress.approvedStepsBySection), "V2 progress includes approvedStepsBySection object");
 

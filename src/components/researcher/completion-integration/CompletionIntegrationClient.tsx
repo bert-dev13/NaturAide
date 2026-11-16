@@ -947,7 +947,7 @@ export default function CompletionIntegrationClient({ projectId }: Props) {
       <ResearchStageFooter
         projectId={projectId}
         stageNumber={5}
-        stageTitle="Safety / Clinical"
+        stageTitle="Knowledge Integration"
         previousStageRoute={`/researcher/projects/${projectId}/formulation-safety`}
         backLabel="Back to Formulation Development"
         onSave={() => handleSaveDraft()}

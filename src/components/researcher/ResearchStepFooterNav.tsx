@@ -244,7 +244,7 @@ export default function ResearchStepFooterNav({
                 ) : currentStatus === "error" ? (
                   <span className="inline-flex items-center gap-1 text-rose-600 font-medium">
                     <AlertCircle className="w-3 h-3" />
-                    <span>Save error</span>
+                    <span>Error</span>
                   </span>
                 ) : isStepComplete ? (
                   <span className="inline-flex items-center gap-1 text-emerald-700 font-medium">

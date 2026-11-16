@@ -38,15 +38,16 @@ const AREA_STAGE_INFO: Record<
     route: "formulation-safety",
   },
   clinical_safety: {
+    // Legacy specialty key — Safety / Clinical page removed; route to Knowledge Integration
     stageNumber: 5,
-    stageKey: "safety",
-    stageTitle: "Stage 5 · Safety / Clinical",
-    route: "safety",
+    stageKey: "knowledge-integration",
+    stageTitle: "Stage 5 · Knowledge Integration",
+    route: "knowledge-integration",
   },
   knowledge_integration: {
-    stageNumber: 6,
+    stageNumber: 5,
     stageKey: "knowledge-integration",
-    stageTitle: "Stage 6 · Knowledge Integration",
+    stageTitle: "Stage 5 · Knowledge Integration",
     route: "knowledge-integration",
   },
 };

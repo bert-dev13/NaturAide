@@ -98,7 +98,7 @@ export async function GET(
       }
     }
 
-    // 6. Stage 5 Data: Safety / Clinical Assessments
+    // 6. Historical safety assessment records (page removed; data preserved for dossier context)
     const [safetyRows]: any = await pool.query(
       "SELECT * FROM research_safety_assessments WHERE projectId = ? ORDER BY id DESC LIMIT 1",
       [projectId]
@@ -214,17 +214,18 @@ export async function GET(
       stageMap[s.stageKey] = s.status;
     }
 
-    // Calculate completed research stages (out of 6)
+    // Calculate completed research stages (out of 5 — Safety / Clinical stage removed)
     const completedStagesCount = [
       stageMap["plant-literature"] === "COMPLETED",
       stageMap["in-silico"] === "COMPLETED",
       stageMap["docking"] === "COMPLETED",
       stageMap["formulation-safety"] === "COMPLETED" || stageMap["formulation"] === "COMPLETED",
-      stageMap["safety"] === "COMPLETED" || stageMap["completion-integration"] === "COMPLETED",
-      stageMap["knowledge-integration"] === "COMPLETED" || project.status === "COMPLETED",
+      stageMap["knowledge-integration"] === "COMPLETED" ||
+        stageMap["completion-integration"] === "COMPLETED" ||
+        project.status === "COMPLETED",
     ].filter(Boolean).length;
 
-    const isResearchComplete = completedStagesCount >= 5 || project.status === "COMPLETED";
+    const isResearchComplete = completedStagesCount >= 4 || project.status === "COMPLETED";
 
     // 9. Review History & Active Feedback
     const [historyRows]: any = await pool.query(
@@ -307,11 +308,11 @@ export async function GET(
         },
         stage5: {
           number: 5,
-          label: "Safety / Clinical",
-          count: 5,
-          unit: "safety areas assessed",
-          summaryText: `Toxicity, contraindications, drug interactions, dose exposure, and formulation safety reviewed.`,
-          items: parsedSafetyNotes?.areas ? Object.values(parsedSafetyNotes.areas) : [],
+          label: "Knowledge Integration",
+          count: 1,
+          unit: "synthesis dossier",
+          summaryText: `Multi-stage findings synthesized into the research knowledge integration dossier.`,
+          items: [],
         },
       },
       professionalReviews,

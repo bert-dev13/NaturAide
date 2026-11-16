@@ -24,8 +24,8 @@ import {
 
 export interface ResearchStageHeaderProps {
   projectId: number;
-  stageNumber: number; // 1 to 6
-  totalStages?: number; // default: 6
+  stageNumber: number; // 1 to 5
+  totalStages?: number; // default: 5
   stageTitle?: string | null;
   title?: string | null;
   plantCommonName?: string | null;
@@ -45,8 +45,7 @@ const DEFAULT_TITLES: Record<number, string> = {
   2: "In-Silico Analysis",
   3: "Molecular Docking",
   4: "Formulation Development",
-  5: "Safety / Clinical",
-  6: "Knowledge Integration",
+  5: "Knowledge Integration",
 };
 
 const STAGE_ICONS: Record<number, LucideIcon> = {
@@ -54,8 +53,7 @@ const STAGE_ICONS: Record<number, LucideIcon> = {
   2: Dna,
   3: Microscope,
   4: FlaskConical,
-  5: ShieldCheck,
-  6: CheckCircle2,
+  5: CheckCircle2,
 };
 
 const STAGE_EXPERT_MAP: Record<number, { expert: string; expertise: string }> = {
@@ -63,14 +61,13 @@ const STAGE_EXPERT_MAP: Record<number, { expert: string; expertise: string }> = 
   2: { expert: "Bioinformatician / Computational Scientist", expertise: "Bioinformatics" },
   3: { expert: "Pharmacologist", expertise: "Pharmacology" },
   4: { expert: "Pharmacist / Pharmaceutical Scientist", expertise: "Formulation" },
-  5: { expert: "Physician / Clinical Pharmacist", expertise: "Clinical Safety" },
-  6: { expert: "Pharmacist / Pharmacognosist", expertise: "Pharmacognosy" },
+  5: { expert: "Pharmacist / Pharmacognosist", expertise: "Pharmacognosy" },
 };
 
 export function ResearchStageHeader({
   projectId,
   stageNumber,
-  totalStages = 6,
+  totalStages = 5,
   stageTitle,
   title,
   plantCommonName,

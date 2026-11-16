@@ -9,7 +9,6 @@ import {
   Upload,
   CheckCircle2,
   AlertCircle,
-  ArrowLeft,
   ArrowRight,
   Send,
   Loader2,
@@ -27,6 +26,7 @@ import {
 import type { ProfessionalApprovalState } from "@/lib/research-approval-completion-service";
 import ResearchStepFooterNav from "@/components/researcher/ResearchStepFooterNav";
 import ResearcherStepRevisionBanner from "@/components/researcher/ResearcherStepRevisionBanner";
+import ResearchSectionWorkspaceHeader from "@/components/researcher/ResearchSectionWorkspaceHeader";
 import ResearchSummaryStep1Section from "./ResearchSummaryStep1Section";
 import LaboratoryResultsStepSection from "./LaboratoryResultsStepSection";
 import UploadPaperStep2Section from "./UploadPaperStep2Section";
@@ -576,8 +576,6 @@ export default function ResearchPaperSubmissionClient({
     compiledOverview.interpretation.potentialLimitations
   );
 
-  const ActiveIcon = STEPS[activeStep - 1]?.icon || FileText;
-
   const statusLabel = isCompletedProject
     ? `Completed (${approvalState?.approvedCount ?? 5}/5)`
     : (approvalState?.revisionsRequiredSpecialties?.length || 0) > 0
@@ -594,144 +592,65 @@ export default function ResearchPaperSubmissionClient({
               ? "Saved"
               : "Draft";
 
+  const statusVariant = isCompletedProject
+    ? ("success" as const)
+    : (approvalState?.revisionsRequiredSpecialties?.length || 0) > 0
+      ? ("warning" as const)
+      : hasSubmittedDossier
+        ? ("running" as const)
+        : isSaving || isRecompiling
+          ? ("saving" as const)
+          : hasUnsavedSummaryEdits
+            ? ("warning" as const)
+            : message?.type === "success"
+              ? ("saved" as const)
+              : ("draft" as const);
+
+  const headerSteps = STEPS.map((step) => ({
+    number: step.number,
+    title: step.title,
+    done:
+      (step.number === 1 && isSummaryReady && !hasUnsavedSummaryEdits) ||
+      (step.number === 2 && labResultsCount > 0) ||
+      (step.number === 3 && isManuscriptReady),
+  }));
+
   return (
     <div className="w-full max-w-none space-y-5 pb-32 text-slate-800">
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="relative w-full overflow-hidden rounded-2xl border border-[#0f2c20]/15 bg-[linear-gradient(120deg,#0f2c20_0%,#134032_48%,#0b271b_100%)] px-4 py-3.5 text-white shadow-[0_12px_28px_-18px_rgba(15,44,32,0.55)] sm:px-5"
-      >
-        <div className="pointer-events-none absolute -right-10 -top-12 h-36 w-36 rounded-full bg-emerald-400/15 blur-3xl" />
-        <div className="relative space-y-3">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium text-emerald-200/80">
-                <Link
-                  href={`/researcher/projects/${project.id}`}
-                  className="inline-flex items-center gap-1.5 transition hover:text-white"
-                >
-                  <ArrowLeft className="h-3.5 w-3.5" />
-                  Workspace Hub
-                </Link>
-                <span className="text-emerald-700">/</span>
-                <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-emerald-200">
-                  Section 3 · Step {String(activeStep).padStart(2, "0")} / 03
-                </span>
-                <span
-                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
-                    isCompletedProject
-                      ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-100"
-                      : (approvalState?.revisionsRequiredSpecialties?.length || 0) > 0
-                        ? "border-rose-400/40 bg-rose-500/15 text-rose-100"
-                        : hasSubmittedDossier
-                          ? "border-sky-400/40 bg-sky-500/15 text-sky-100"
-                          : isSaving
-                            ? "border-amber-400/40 bg-amber-500/15 text-amber-100"
-                            : message?.type === "success"
-                              ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-100"
-                              : "border-white/15 bg-white/5 text-emerald-100/80"
-                  }`}
-                >
-                  <span
-                    className={`h-1.5 w-1.5 rounded-full ${
-                      isCompletedProject || message?.type === "success"
-                        ? "bg-emerald-300"
-                        : (approvalState?.revisionsRequiredSpecialties?.length || 0) > 0
-                          ? "bg-rose-300"
-                          : hasSubmittedDossier
-                            ? "bg-sky-300"
-                            : isSaving
-                              ? "animate-pulse bg-amber-300"
-                              : "bg-slate-300"
-                    }`}
-                  />
-                  {statusLabel}
-                </span>
-              </div>
-              <div className="mt-1.5 flex items-center gap-2">
-                <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-200">
-                  <ActiveIcon className="h-4 w-4" />
-                </span>
-                <div className="min-w-0">
-                  <h1 className="truncate text-lg font-semibold tracking-tight text-white sm:text-xl">
-                    {STEPS[activeStep - 1].title}
-                  </h1>
-                  <p className="truncate text-[11px] text-emerald-200/70">{project.title}</p>
-                </div>
-              </div>
-              <div className="mt-2 flex max-w-xs items-center gap-1">
-                {STEPS.map((step) => (
-                  <button
-                    key={step.number}
-                    type="button"
-                    onClick={() => handleStepNavigation(step.number)}
-                    title={`Step ${step.number}: ${step.title}`}
-                    className={`h-1.5 flex-1 rounded-full transition ${
-                      step.number <= activeStep ? "bg-emerald-400" : "bg-white/15 hover:bg-white/25"
-                    }`}
-                  />
-                ))}
-              </div>
-            </div>
-
-            {hasSubmittedDossier ? (
-              <Link
-                href={`/researcher/projects/${project.id}/completion`}
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-emerald-400 px-3.5 py-2 text-xs font-semibold text-[#091a13] shadow-sm transition hover:bg-emerald-300"
-              >
-                Approval status
-                <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
-            ) : (
-              <button
-                type="button"
-                onClick={() =>
-                  handleStepNavigation(activeStep < 3 ? activeStep + 1 : 1)
-                }
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-emerald-400 px-3.5 py-2 text-xs font-semibold text-[#091a13] shadow-sm transition hover:bg-emerald-300"
-              >
-                {activeStep === 1
-                  ? "Laboratory results"
-                  : activeStep === 2
-                    ? "Upload paper"
-                    : "Back to summary"}
-                <ArrowRight className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
-
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
-            {STEPS.map((step) => {
-              const Icon = step.icon;
-              const isCurrent = activeStep === step.number;
-              const isDone =
-                (step.number === 1 && isSummaryReady && !hasUnsavedSummaryEdits) ||
-                (step.number === 2 && labResultsCount > 0) ||
-                (step.number === 3 && isManuscriptReady);
-              return (
-                <button
-                  key={step.number}
-                  type="button"
-                  onClick={() => handleStepNavigation(step.number)}
-                  className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-[11px] font-semibold transition ${
-                    isCurrent
-                      ? "bg-emerald-400 text-[#091a13] shadow-sm"
-                      : isDone
-                        ? "border border-emerald-400/30 bg-emerald-500/15 text-emerald-100 hover:bg-emerald-500/25"
-                        : "border border-white/10 bg-white/5 text-emerald-100/70 hover:bg-white/10 hover:text-white"
-                  }`}
-                >
-                  <Icon className="h-3.5 w-3.5" />
-                  <span className="font-mono text-[10px] opacity-80">{step.number}</span>
-                  <span>{step.title}</span>
-                  {isDone && !isCurrent && <CheckCircle2 className="h-3 w-3 opacity-80" />}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </motion.div>
+      <ResearchSectionWorkspaceHeader
+        projectId={project.id}
+        sectionLabel="Paper Submission"
+        steps={headerSteps}
+        activeStep={activeStep}
+        onStepChange={handleStepNavigation}
+        statusLabel={statusLabel}
+        statusVariant={statusVariant}
+        subtitle={project.title}
+        proceedSlot={
+          hasSubmittedDossier ? (
+            <Link
+              href={`/researcher/projects/${project.id}/completion`}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-emerald-400 px-3 py-1.5 text-xs font-bold text-[#091a13] shadow-sm transition hover:bg-emerald-300"
+            >
+              Approval status
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          ) : (
+            <button
+              type="button"
+              onClick={() => handleStepNavigation(activeStep < 3 ? activeStep + 1 : 1)}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-emerald-400 px-3 py-1.5 text-xs font-bold text-[#091a13] shadow-sm transition hover:bg-emerald-300"
+            >
+              {activeStep === 1
+                ? "Laboratory results"
+                : activeStep === 2
+                  ? "Upload paper"
+                  : "Back to summary"}
+              <ArrowRight className="h-3.5 w-3.5" />
+            </button>
+          )
+        }
+      />
 
       <AnimatePresence>
         {message && (

@@ -46,17 +46,8 @@ export const WORKFLOW_STAGES: WorkflowStage[] = [
     iconName: "FlaskConical",
   },
   {
-    key: "safety",
-    number: 5,
-    label: "Safety / Clinical",
-    shortLabel: "Safety",
-    path: "safety",
-    description: "Evaluate preclinical and clinical safety evidence, toxicity boundaries, contraindications, and interactions.",
-    iconName: "ShieldCheck",
-  },
-  {
     key: "knowledge-integration",
-    number: 6,
+    number: 5,
     label: "Knowledge Integration",
     shortLabel: "Integration",
     path: "knowledge-integration",
@@ -64,6 +55,9 @@ export const WORKFLOW_STAGES: WorkflowStage[] = [
     iconName: "CheckCircle2",
   },
 ];
+
+/** Total stages in the researcher workflow after Safety / Clinical removal. */
+export const WORKFLOW_STAGE_COUNT = WORKFLOW_STAGES.length;
 
 // Mapping aliases for backward compatibility and redirects
 const STAGE_KEY_ALIASES: Record<string, string> = {
@@ -78,13 +72,14 @@ const STAGE_KEY_ALIASES: Record<string, string> = {
   "docking": "docking",
   "formulation": "formulation-safety",
   "formulation-safety": "formulation-safety",
-  "safety": "safety",
-  "safety-clinical": "safety",
-  "clinical-safety": "safety",
-  "completion-integration": "safety",
-  "completion": "safety",
-  "laboratory": "safety",
-  "lab": "safety",
+  // Removed Safety / Clinical stage — legacy keys resolve to Knowledge Integration
+  "safety": "knowledge-integration",
+  "safety-clinical": "knowledge-integration",
+  "clinical-safety": "knowledge-integration",
+  "completion-integration": "knowledge-integration",
+  "completion": "knowledge-integration",
+  "laboratory": "knowledge-integration",
+  "lab": "knowledge-integration",
   "knowledge-integration": "knowledge-integration",
   "expert-review": "knowledge-integration",
   "review": "knowledge-integration",
@@ -94,7 +89,7 @@ const STAGE_KEY_ALIASES: Record<string, string> = {
 };
 
 export function getStageByNumber(num: number): WorkflowStage | undefined {
-  const boundedNum = Math.max(1, Math.min(6, num));
+  const boundedNum = Math.max(1, Math.min(WORKFLOW_STAGE_COUNT, num));
   return WORKFLOW_STAGES.find((s) => s.number === boundedNum) || WORKFLOW_STAGES[0];
 }
 

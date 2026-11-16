@@ -1,25 +1,14 @@
-import React from "react";
 import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth";
-import SafetyClinicalClient from "@/components/researcher/safety/SafetyClinicalClient";
 
-interface Props {
+/**
+ * Legacy Stage 05 Safety / Clinical route.
+ * Feature removed — redirect bookmarks to Knowledge Integration.
+ */
+export default async function LegacySafetyClinicalRedirectPage({
+  params,
+}: {
   params: Promise<{ id: string }>;
-}
-
-export const instant = false;
-
-export default async function SafetyClinicalStagePage({ params }: Props) {
-  const session = await getSession();
-  if (!session || session.role !== "RESEARCHER") {
-    redirect("/login");
-  }
-
+}) {
   const { id } = await params;
-  const projectId = parseInt(id, 10);
-  if (isNaN(projectId)) {
-    redirect("/researcher/projects");
-  }
-
-  return <SafetyClinicalClient projectId={projectId} />;
+  redirect(`/researcher/projects/${id}/knowledge-integration`);
 }

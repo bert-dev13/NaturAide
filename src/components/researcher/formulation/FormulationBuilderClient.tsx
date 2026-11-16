@@ -651,7 +651,7 @@ export default function FormulationBuilderClient({
       showToast("Stage 6 - Formulation Builder completed! Advancing to Safety Assessment...");
       setIsCompleteConfirmationOpen(false);
 
-      router.push(`/researcher/projects/${projectId}/safety`);
+      router.push(`/researcher/projects/${projectId}/knowledge-integration`);
     } catch (err: any) {
       showToast(err.message || "Failed to complete stage", "error");
     } finally {

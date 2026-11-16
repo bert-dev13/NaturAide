@@ -113,19 +113,38 @@ export async function POST(
       );
     }
 
-    if (!progress.section3.steps[0]?.completed) {
+    // Look up by stepKey — Section 3 order is Summary → Laboratory Results (optional) → Upload Paper.
+    // Do not use hard-coded array indexes; lab results sit at steps[1] and are not required to submit.
+    const summaryStep = progress.section3.steps.find((s) => s.stepKey === "research-summary");
+    const manuscriptStep = progress.section3.steps.find(
+      (s) => s.stepKey === "upload-research-paper"
+    );
+
+    if (!summaryStep?.completed) {
       return NextResponse.json(
         {
-          error: "Step 1 (Research Summary) is required before submitting. Please review and save your Research Summary.",
+          error:
+            "Step 1 (Research Summary) is required before submitting. Please review and save your Research Summary.",
         },
         { status: 400 }
       );
     }
 
-    if (!progress.section3.steps[1]?.completed) {
+    if (!manuscriptStep?.completed) {
       return NextResponse.json(
         {
-          error: "Step 2 (Upload Research Paper) is required before submitting. Please upload your completed manuscript in PDF or DOCX format.",
+          error:
+            "Upload Research Paper is required before submitting. Please upload your completed manuscript in PDF or DOCX format.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (!progress.canSubmit) {
+      return NextResponse.json(
+        {
+          error:
+            "This research package is not ready for submission. Complete Section 1, Section 2, Research Summary, and manuscript upload first.",
         },
         { status: 400 }
       );

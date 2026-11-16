@@ -276,11 +276,11 @@ export async function POST(
         [projectId]
       );
 
-      // 4. Unlock Stage 5 (Safety / Clinical)
+      // 4. Unlock Stage 5 (Knowledge Integration) — Safety / Clinical stage removed
       await pool.query(
         `UPDATE research_project_stages
          SET status = 'IN_PROGRESS', updatedAt = CURRENT_TIMESTAMP(3)
-         WHERE projectId = ? AND (stageKey = 'safety' OR stageKey = 'completion-integration' OR stageKey = 'completion') AND status <> 'COMPLETED'`,
+         WHERE projectId = ? AND (stageKey = 'knowledge-integration' OR stageKey = 'completion-integration' OR stageKey = 'completion') AND status <> 'COMPLETED'`,
         [projectId]
       );
 
@@ -288,10 +288,10 @@ export async function POST(
       await pool.query(
         `UPDATE research_projects
          SET currentStage = CASE
-               WHEN currentStage IN ('plant-literature', 'in-silico', 'docking', 'formulation-safety', 'formulation') THEN 'safety'
+               WHEN currentStage IN ('plant-literature', 'in-silico', 'docking', 'formulation-safety', 'formulation', 'safety') THEN 'knowledge-integration'
                ELSE currentStage
              END,
-             progressPercent = GREATEST(progressPercent, 67),
+             progressPercent = GREATEST(progressPercent, 80),
              status = 'IN_PROGRESS',
              updatedAt = CURRENT_TIMESTAMP(3)
          WHERE id = ?`,
@@ -344,14 +344,14 @@ export async function POST(
 
       await pool.query(
         `INSERT INTO research_activity_logs (projectId, researcherId, actionType, description)
-         VALUES (?, ?, 'STAGE_COMPLETED', 'Completed Stage 4: Formulation Development, queued Formulation professional review, and unlocked Stage 5')`,
+         VALUES (?, ?, 'STAGE_COMPLETED', 'Completed Stage 4: Formulation Development, queued Formulation professional review, and unlocked Knowledge Integration')`,
         [projectId, session.id]
       );
 
       return NextResponse.json({
         success: true,
-        message: "Formulation Development completed. Review queued. Moving to Stage 5.",
-        redirectUrl: `/researcher/projects/${projectId}/safety`,
+        message: "Formulation Development completed. Review queued. Moving to Knowledge Integration.",
+        redirectUrl: `/researcher/projects/${projectId}/knowledge-integration`,
       });
     }
 

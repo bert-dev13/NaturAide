@@ -772,12 +772,12 @@ export async function POST(
         [projectId]
       );
 
-      // 2. Mark Stage 7 (safety) IN_PROGRESS
+      // 2. Unlock Knowledge Integration (Safety / Clinical stage removed)
       await pool.query(
         `
         UPDATE research_project_stages
         SET status = 'IN_PROGRESS'
-        WHERE projectId = ? AND stageKey = 'safety'
+        WHERE projectId = ? AND stageKey = 'knowledge-integration'
         `,
         [projectId]
       );
@@ -786,7 +786,7 @@ export async function POST(
       await pool.query(
         `
         UPDATE research_projects
-        SET currentStage = 'safety', progressPercent = GREATEST(progressPercent, 50), updatedAt = NOW()
+        SET currentStage = 'knowledge-integration', progressPercent = GREATEST(progressPercent, 80), updatedAt = NOW()
         WHERE id = ?
         `,
         [projectId]

@@ -21,8 +21,8 @@ const STAGE_NAMES: Record<string, string> = {
   docking: "Molecular Docking",
   "formulation-safety": "Formulation Development",
   formulation: "Formulation Development",
-  safety: "Safety / Clinical",
-  "expert-review": "Safety / Clinical",
+  safety: "Knowledge Integration",
+  "expert-review": "Knowledge Integration",
   "knowledge-integration": "Knowledge Integration",
   "completion-integration": "Knowledge Integration",
 };

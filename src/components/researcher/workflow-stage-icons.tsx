@@ -6,7 +6,6 @@ import {
   Cpu,
   Dna,
   FlaskConical,
-  ShieldCheck,
   CheckCircle2,
   HelpCircle,
   type LucideIcon,
@@ -17,7 +16,6 @@ export const WORKFLOW_STAGE_ICONS: Record<string, LucideIcon> = {
   "in-silico": Cpu,
   "docking": Dna,
   "formulation-safety": FlaskConical,
-  "safety": ShieldCheck,
   "knowledge-integration": CheckCircle2,
 };
 
@@ -26,8 +24,7 @@ export const WORKFLOW_STAGE_NUMBER_ICONS: Record<number, LucideIcon> = {
   2: Cpu,
   3: Dna,
   4: FlaskConical,
-  5: ShieldCheck,
-  6: CheckCircle2,
+  5: CheckCircle2,
 };
 
 export function getStageIcon(keyOrNumber: string | number): LucideIcon {
@@ -58,10 +55,7 @@ export function StageIcon({
   if (stageNumber === 4 || stageKey === "formulation-safety") {
     return <FlaskConical className={className} />;
   }
-  if (stageNumber === 5 || stageKey === "safety") {
-    return <ShieldCheck className={className} />;
-  }
-  if (stageNumber === 6 || stageKey === "knowledge-integration") {
+  if (stageNumber === 5 || stageKey === "knowledge-integration") {
     return <CheckCircle2 className={className} />;
   }
   return <HelpCircle className={className} />;

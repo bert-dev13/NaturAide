@@ -41,10 +41,11 @@ const AREA_STAGE_MAPPING: Record<
     route: "formulation-safety",
   },
   clinical_safety: {
+    // Safety / Clinical researcher stage removed — clinical specialty reviews attach to Knowledge Integration
     stageNumber: 5,
-    stageKey: "safety",
-    stageTitle: "Stage 5 · Safety / Clinical",
-    route: "safety",
+    stageKey: "knowledge-integration",
+    stageTitle: "Stage 5 · Knowledge Integration",
+    route: "knowledge-integration",
   },
 };
 

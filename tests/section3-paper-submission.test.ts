@@ -138,7 +138,11 @@ async function runTests() {
   assert.equal(progress.section3.totalSteps, 3);
   assert.deepEqual(
     progress.section3.steps.map((s) => s.title),
-    ["Research Summary", "Upload Research Paper", "Review & Submit"]
+    ["Research Summary", "Laboratory Results", "Upload Research Paper"]
+  );
+  assert.equal(
+    progress.section3.steps.find((s) => s.stepKey === "upload-research-paper")?.completed,
+    true
   );
   assert.equal(progress.canSubmit, true);
   console.log("✓ Test 4 Passed: 3-step V2 progress service and submission readiness verified.");
