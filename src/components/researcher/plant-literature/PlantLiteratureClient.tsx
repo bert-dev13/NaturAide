@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
+import { toastError } from "@/lib/toast";
 import {
   ArrowLeft,
   ChevronRight,
@@ -471,7 +472,7 @@ export default function PlantLiteratureClient({
     } catch (err) {
       console.error("Failed to save draft:", err);
       if (showNotification) {
-        alert("Failed to save research record. Please check your network connection.");
+        toastError("Failed to save research record. Please check your network connection.");
       }
       return false;
     } finally {

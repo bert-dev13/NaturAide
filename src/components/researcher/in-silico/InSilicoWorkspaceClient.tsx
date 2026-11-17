@@ -800,7 +800,6 @@ export default function InSilicoWorkspaceClient({
   }, [projectId, router]);
 
   const [showPhytoSelector, setShowPhytoSelector] = useState(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [modalSearchTerm, setModalSearchTerm] = useState("");
   const [selectedClassFilter, setSelectedClassFilter] = useState("ALL");
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<

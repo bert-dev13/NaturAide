@@ -30,6 +30,7 @@ import ResearchSectionWorkspaceHeader from "@/components/researcher/ResearchSect
 import ResearchSummaryStep1Section from "./ResearchSummaryStep1Section";
 import LaboratoryResultsStepSection from "./LaboratoryResultsStepSection";
 import UploadPaperStep2Section from "./UploadPaperStep2Section";
+import { showToast, confirmAction } from "@/lib/toast";
 
 interface Props {
   project: {
@@ -128,6 +129,10 @@ export default function ResearchPaperSubmissionClient({
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [showSubmitModal, setShowSubmitModal] = useState<boolean>(false);
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
+  const notify = (text: string, type: "success" | "error") => {
+    setMessage({ text, type });
+    showToast(text, type);
+  };
   const [compiledOverview, setCompiledOverview] =
     useState<CompiledResearchOverview>(initialCompiledOverview);
   const [updatedSectionLabels, setUpdatedSectionLabels] = useState<string[]>([]);
@@ -218,16 +223,15 @@ export default function ResearchPaperSubmissionClient({
     }
   }, [project.id]);
 
-  const handleStepNavigation = (targetStep: number) => {
-    if (
-      targetStep !== activeStep &&
-      activeStep === 1 &&
-      hasUnsavedSummaryEdits &&
-      typeof window !== "undefined"
-    ) {
-      const leave = window.confirm(
-        "You have unsaved research summary edits. Leave without saving?"
-      );
+  const handleStepNavigation = async (targetStep: number) => {
+    if (targetStep !== activeStep && activeStep === 1 && hasUnsavedSummaryEdits) {
+      const leave = await confirmAction({
+        title: "Unsaved summary edits",
+        message: "You have unsaved research summary edits. Leave without saving?",
+        confirmLabel: "Leave",
+        cancelLabel: "Stay",
+        variant: "destructive",
+      });
       if (!leave) return;
     }
     setMessage(null);
@@ -259,10 +263,14 @@ export default function ResearchPaperSubmissionClient({
       previousCompiled
     );
 
-    if (replacingRealEdit && typeof window !== "undefined") {
-      const confirmed = window.confirm(
-        "Recompiling retrieves the latest Sections 1 and 2 records and may replace your current dossier edits. Continue?"
-      );
+    if (replacingRealEdit) {
+      const confirmed = await confirmAction({
+        title: "Recompile research summary?",
+        message:
+          "Recompiling retrieves the latest Sections 1 and 2 records and may replace your current dossier edits. Continue?",
+        confirmLabel: "Recompile",
+        cancelLabel: "Cancel",
+      });
       if (!confirmed) return;
     }
 
@@ -293,18 +301,14 @@ export default function ResearchPaperSubmissionClient({
       setExecutiveSummary(freshCompiled);
       setUpdatedSectionLabels(changed);
       setLastCompiledAt(data.compiledAt || new Date().toISOString());
-      setMessage({
-        text:
-          changed.length > 0
-            ? `Dossier recompiled. Updated: ${changed.join(", ")}. Save to persist.`
-            : "Dossier recompiled from Sections 1 and 2 (no section text changes detected). Save to persist.",
-        type: "success",
-      });
+      notify(
+        changed.length > 0
+          ? `Dossier recompiled. Updated: ${changed.join(", ")}. Save to persist.`
+          : "Dossier recompiled from Sections 1 and 2 (no section text changes detected). Save to persist.",
+        "success"
+      );
     } catch (e: any) {
-      setMessage({
-        text: e?.message || "Compilation failed. Please try again.",
-        type: "error",
-      });
+      notify(e?.message || "Compilation failed. Please try again.", "error");
     } finally {
       setIsRecompiling(false);
     }
@@ -313,7 +317,7 @@ export default function ResearchPaperSubmissionClient({
   const handleSaveSummary = async (): Promise<boolean> => {
     const cleanText = executiveSummary.trim();
     if (!cleanText) {
-      setMessage({ text: "Research summary cannot be empty.", type: "error" });
+      notify("Research summary cannot be empty.", "error");
       return false;
     }
     setIsSaving(true);
@@ -328,10 +332,10 @@ export default function ResearchPaperSubmissionClient({
       if (!res.ok) throw new Error(data.error || "Failed to save research summary");
       setSavedSummaryBaseline(cleanText);
       setUpdatedSectionLabels([]);
-      setMessage({ text: "Research summary saved to database.", type: "success" });
+      notify("Research summary saved to database.", "success");
       return true;
     } catch (e: any) {
-      setMessage({ text: e.message || "Failed to save summary", type: "error" });
+      notify(e.message || "Failed to save summary", "error");
       return false;
     } finally {
       setIsSaving(false);
@@ -357,19 +361,19 @@ export default function ResearchPaperSubmissionClient({
       const err =
         "Unsupported format. Please upload a PDF (.pdf) or DOCX (.docx) manuscript.";
       setUploadError(err);
-      setMessage({ text: err, type: "error" });
+      notify(err, "error");
       return;
     }
     if (file.size <= 0) {
       const err = "Selected file is empty.";
       setUploadError(err);
-      setMessage({ text: err, type: "error" });
+      notify(err, "error");
       return;
     }
     if (file.size > 25 * 1024 * 1024) {
       const err = "File exceeds the 25 MB maximum size limit.";
       setUploadError(err);
-      setMessage({ text: err, type: "error" });
+      notify(err, "error");
       return;
     }
 
@@ -407,14 +411,11 @@ export default function ResearchPaperSubmissionClient({
         setPendingRetryFile(null);
         setUploadError(null);
         setUploadProgress(100);
-        setMessage({
-          text: `Uploaded "${file.name}" (${formatFileSize(file.size)}) successfully.`,
-          type: "success",
-        });
+        notify(`Uploaded "${file.name}" (${formatFileSize(file.size)}) successfully.`, "success");
       } else {
         const err = data.error || "Failed to upload research paper.";
         setUploadError(err);
-        setMessage({ text: err, type: "error" });
+        notify(err, "error");
       }
       setIsUploading(false);
       setUploadProgress(null);
@@ -425,7 +426,7 @@ export default function ResearchPaperSubmissionClient({
       uploadXhrRef.current = null;
       const err = "Upload failed due to a network error. Please retry.";
       setUploadError(err);
-      setMessage({ text: err, type: "error" });
+      notify(err, "error");
       setIsUploading(false);
       setUploadProgress(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -463,9 +464,9 @@ export default function ResearchPaperSubmissionClient({
       }
       setManuscript(data.manuscript || null);
       setPendingRetryFile(null);
-      setMessage({ text: "Uploaded research paper removed.", type: "success" });
+      notify("Uploaded research paper removed.", "success");
     } catch (e: any) {
-      setMessage({ text: e.message || "Failed to remove file.", type: "error" });
+      notify(e.message || "Failed to remove file.", "error");
     } finally {
       setIsUploading(false);
       setUploadProgress(null);
@@ -486,36 +487,33 @@ export default function ResearchPaperSubmissionClient({
     setMessage(null);
 
     if (isAlreadyUnderReview) {
-      setMessage({
-        text: `This research has already been submitted (${latestSubmission?.versionTag || "v1.0"}) and is currently under expert review.`,
-        type: "error",
-      });
+      notify(
+        `This research has already been submitted (${latestSubmission?.versionTag || "v1.0"}) and is currently under expert review.`,
+        "error"
+      );
       return;
     }
 
     if (!isSummaryReady) {
-      setMessage({
-        text: "Please review and save your Research Summary in Step 1 before submitting.",
-        type: "error",
-      });
+      notify("Please review and save your Research Summary in Step 1 before submitting.", "error");
       setActiveStep(1);
       return;
     }
 
     if (!isManuscriptReady) {
-      setMessage({
-        text: "Please upload your Research Paper (PDF or DOCX) in Step 3 before submitting.",
-        type: "error",
-      });
+      notify(
+        "Please upload your Research Paper (PDF or DOCX) in Step 3 before submitting.",
+        "error"
+      );
       setActiveStep(3);
       return;
     }
 
     if (v2Progress.section1.status !== "COMPLETED" || v2Progress.section2.status !== "COMPLETED") {
-      setMessage({
-        text: "Please complete all steps in Section 1 and Section 2 before submitting for review.",
-        type: "error",
-      });
+      notify(
+        "Please complete all steps in Section 1 and Section 2 before submitting for review.",
+        "error"
+      );
       return;
     }
 
@@ -555,14 +553,14 @@ export default function ResearchPaperSubmissionClient({
 
       setShowSubmitModal(false);
       await refreshApprovalStatus();
-      setMessage({
-        text: `Submitted (${data.versionTag || "v1.0"}) for multidisciplinary expert review! Redirecting to Professional Approval...`,
-        type: "success",
-      });
+      notify(
+        `Submitted (${data.versionTag || "v1.0"}) for multidisciplinary expert review! Redirecting to Professional Approval...`,
+        "success"
+      );
       router.push(`/researcher/projects/${project.id}/completion`);
     } catch (e: any) {
       // Preserve manuscript + summary on failure; only show error.
-      setMessage({ text: e.message || "Submission failed.", type: "error" });
+      notify(e.message || "Submission failed.", "error");
     } finally {
       setIsSubmitting(false);
     }
@@ -577,11 +575,11 @@ export default function ResearchPaperSubmissionClient({
   );
 
   const statusLabel = isCompletedProject
-    ? `Completed (${approvalState?.approvedCount ?? 5}/5)`
+    ? `Completed (${approvalState?.approvedCount ?? 0}/${approvalState?.totalSpecialties ?? 3})`
     : (approvalState?.revisionsRequiredSpecialties?.length || 0) > 0
       ? "Revisions required"
       : hasSubmittedDossier
-        ? `${latestSubmission?.versionTag || "v1.0"} · ${approvalState?.approvedCount ?? 0}/${approvalState?.totalSpecialties ?? 5}`
+        ? `${latestSubmission?.versionTag || "v1.0"} · ${approvalState?.approvedCount ?? 0}/${approvalState?.totalSpecialties ?? 3}`
         : isSaving || isRecompiling
           ? isRecompiling
             ? "Recompiling…"
@@ -651,38 +649,6 @@ export default function ResearchPaperSubmissionClient({
           )
         }
       />
-
-      <AnimatePresence>
-        {message && (
-          <motion.div
-            initial={{ opacity: 0, y: -6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-xs font-medium ${
-              message.type === "success"
-                ? "border-emerald-200 bg-emerald-50 text-emerald-900"
-                : "border-rose-200 bg-rose-50 text-rose-900"
-            }`}
-          >
-            <span className="flex items-start gap-2">
-              {message.type === "success" ? (
-                <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              ) : (
-                <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              )}
-              {message.text}
-            </span>
-            <button
-              type="button"
-              onClick={() => setMessage(null)}
-              className="rounded-md p-1 text-current/60 hover:bg-black/5 hover:text-current"
-              aria-label="Dismiss"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       <ResearcherStepRevisionBanner
         projectId={project.id}

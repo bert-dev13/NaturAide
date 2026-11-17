@@ -24,6 +24,7 @@ import {
   type RegistrationField,
 } from "@/lib/community-registration";
 import RegistrationLegalModal, { type RegistrationLegalNotice } from "@/components/auth/RegistrationLegalModals";
+import { showToast } from "@/lib/toast";
 
 type FieldErrors = Partial<Record<RegistrationField, string>>;
 
@@ -44,7 +45,6 @@ export default function RegisterPage() {
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [legalNotice, setLegalNotice] = useState<RegistrationLegalNotice | null>(null);
 
   const openLegalNotice = (event: React.MouseEvent<HTMLButtonElement>, notice: RegistrationLegalNotice) => {
@@ -88,7 +88,6 @@ export default function RegisterPage() {
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setErrorMessage(null);
-    setSuccessMessage(null);
 
     const validation = validateCommunityRegistration({
       firstName,
@@ -135,7 +134,7 @@ export default function RegisterPage() {
         throw new Error(data.error || "We couldn’t create your account. Please try again.");
       }
 
-      setSuccessMessage("Community account created. Taking you to health screening...");
+      showToast("Community account created. Taking you to health screening...", "success");
       window.setTimeout(() => {
         window.location.assign(data.redirectUrl || "/community/screening");
       }, 900);
@@ -269,21 +268,6 @@ export default function RegisterPage() {
                   >
                     <AlertCircle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
                     <p className="flex-1 font-medium leading-relaxed">{errorMessage}</p>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              <AnimatePresence>
-                {successMessage && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -8, height: 0 }}
-                    animate={{ opacity: 1, y: 0, height: "auto" }}
-                    exit={{ opacity: 0, y: -8, height: 0 }}
-                    className="mb-5 p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-950 text-sm flex items-start gap-2.5"
-                    role="status"
-                  >
-                    <CheckCircle2 className="w-4 h-4 text-[#16a34a] shrink-0 mt-0.5" />
-                    <p className="font-medium text-[#143d2b]">{successMessage}</p>
                   </motion.div>
                 )}
               </AnimatePresence>

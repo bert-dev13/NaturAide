@@ -481,7 +481,7 @@ export async function getSection3CompiledContext(
   // 3. In-Silico Screening
   const selectedCompounds = compRows.filter((c: any) => c.selectedForDocking !== 0);
   const activeCompoundsRaw = selectedCompounds.length > 0 ? selectedCompounds : compRows;
-  const activeCompounds = Array.from(
+  const activeCompounds: any[] = Array.from(
     new Map(
       activeCompoundsRaw.map((c: any) => [
         String(c.compoundName || c.id || "")

@@ -5,7 +5,7 @@ import {
   UserCard2DIcon,
   EditPencil2DIcon,
 } from "./ProfileIcons2D";
-import { CheckCircle2, AlertCircle, Loader2, Lock, X } from "lucide-react";
+import { Loader2, Lock, X } from "lucide-react";
 
 interface PersonalInfoProps {
   firstName: string;
@@ -13,7 +13,6 @@ interface PersonalInfoProps {
   phone: string;
   email?: string;
   onUpdate: (data: { firstName: string; lastName: string; phone: string }) => Promise<void>;
-  feedback: { type: "success" | "error"; text: string } | null;
   saving: boolean;
 }
 
@@ -23,7 +22,6 @@ export default function PersonalInformationCard({
   phone,
   email,
   onUpdate,
-  feedback,
   saving,
 }: PersonalInfoProps) {
   const [isEditing, setIsEditing] = useState(false);
@@ -96,23 +94,6 @@ export default function PersonalInformationCard({
 
       {/* Body */}
       <div className="p-5 sm:p-6">
-        {feedback && (
-          <div
-            className={`mb-4 p-3.5 rounded-2xl text-xs sm:text-sm font-semibold flex items-center gap-2.5 ${
-              feedback.type === "success"
-                ? "bg-emerald-50 text-emerald-900 border border-emerald-200"
-                : "bg-rose-50 text-rose-900 border border-rose-200"
-            }`}
-          >
-            {feedback.type === "success" ? (
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-            ) : (
-              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-            )}
-            <span>{feedback.text}</span>
-          </div>
-        )}
-
         {!isEditing ? (
           /* View Mode */
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

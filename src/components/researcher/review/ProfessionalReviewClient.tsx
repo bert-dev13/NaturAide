@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import StagePageHeader from "@/components/researcher/StagePageHeader";
+import { toastError } from "@/lib/toast";
 import {
   ClipboardCheck,
   CheckCircle2,
@@ -120,11 +121,11 @@ export default function ProfessionalReviewClient({ projectId }: Props) {
         setMessageToReviewers("");
         await loadData();
       } else {
-        alert(data.error || "Failed to submit research dossier");
+        toastError(data.error || "Failed to submit research dossier");
       }
     } catch (err) {
       console.error(err);
-      alert("Error submitting research dossier");
+      toastError("Error submitting research dossier");
     } finally {
       setSubmitting(false);
     }

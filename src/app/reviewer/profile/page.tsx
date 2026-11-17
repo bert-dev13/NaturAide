@@ -7,7 +7,6 @@ import {
   ShieldCheck,
   Building2,
   Award,
-  CheckCircle2,
   Save,
   Loader2,
   Leaf,
@@ -16,7 +15,6 @@ import {
   FlaskConical,
   Stethoscope,
   Lock,
-  X,
 } from "lucide-react";
 import {
   EXPERT_REVIEW_AREAS,
@@ -24,6 +22,7 @@ import {
   expertReviewAreaLabel,
 } from "@/lib/expert-review-areas";
 import { broadcastProfileNameUpdate } from "@/hooks/useLiveDisplayName";
+import { toastError, toastSuccess } from "@/lib/toast";
 
 const fieldClass =
   "w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/20";
@@ -43,8 +42,6 @@ export default function ProfessionalProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [profile, setProfile] = useState<any>(null);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-
   const [name, setName] = useState("");
   const [professionalTitle, setProfessionalTitle] = useState("");
   const [institution, setInstitution] = useState("");
@@ -115,14 +112,13 @@ export default function ProfessionalProfilePage() {
         });
 
         router.refresh();
-        setToastMessage("Profile saved");
-        setTimeout(() => setToastMessage(null), 2500);
+        toastSuccess("Profile saved");
       } else {
-        alert("Failed to update reviewer profile");
+        toastError("Failed to update reviewer profile");
       }
     } catch (err) {
       console.error(err);
-      alert("Error saving profile");
+      toastError("Error saving profile");
     } finally {
       setSaving(false);
     }
@@ -160,18 +156,6 @@ export default function ProfessionalProfilePage() {
           <p className="text-[10px] font-medium text-blue-200/60 sm:text-right">Shown on review sign-offs</p>
         </div>
       </div>
-
-      {toastMessage && (
-        <div className="flex items-center justify-between gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-[11px] font-semibold text-emerald-900">
-          <span className="inline-flex items-center gap-1.5">
-            <CheckCircle2 className="h-3.5 w-3.5" />
-            {toastMessage}
-          </span>
-          <button type="button" onClick={() => setToastMessage(null)} aria-label="Dismiss">
-            <X className="h-3.5 w-3.5 text-emerald-700/70" />
-          </button>
-        </div>
-      )}
 
       <form
         onSubmit={handleSaveProfile}

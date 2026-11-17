@@ -295,7 +295,7 @@ export default function ProductSelectionStep2Section({
   }, [productSelection.targetIndications]);
 
   const knownAppValues = useMemo(
-    () => new Set(SIMPLE_APPLICATIONS.map((a) => a.value)),
+    () => new Set<string>(SIMPLE_APPLICATIONS.map((a) => a.value)),
     []
   );
 

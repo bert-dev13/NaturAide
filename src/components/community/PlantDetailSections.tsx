@@ -15,6 +15,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import RelatedProductsSection, { RelatedProductItem } from "@/components/community/RelatedProductsSection";
+import { toastSuccess } from "@/lib/toast";
 import {
   Plant2DIcon,
   TeaCup2DIcon,
@@ -111,8 +112,6 @@ export default function PlantDetailSections({
 }: PlantDetailSectionsProps) {
   const [isSaved, setIsSaved] = useState(plant.isSaved);
   const [saving, setSaving] = useState(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-
   // Progressive disclosure toggle states
   const [showMoreInfo, setShowMoreInfo] = useState(false);
   const [showAllReferences, setShowAllReferences] = useState(false);
@@ -128,8 +127,7 @@ export default function PlantDetailSections({
       const data = await res.json();
       if (data.success) {
         setIsSaved(data.saved);
-        setToastMessage(data.saved ? "Saved to My Guide" : "Removed from Saved");
-        setTimeout(() => setToastMessage(null), 2400);
+        toastSuccess(data.saved ? "Saved to My Guide" : "Removed from Saved");
       }
     } catch (err) {
       console.error("Save error:", err);
@@ -335,11 +333,6 @@ export default function PlantDetailSections({
                 <Bookmark2DIcon size={18} isSaved={isSaved} />
               )}
             </button>
-            {toastMessage && (
-              <div className="absolute right-0 top-11 whitespace-nowrap px-2.5 py-1 rounded-lg bg-[#0f2c20] text-white text-[11px] font-bold shadow-md animate-fade-in pointer-events-none z-50">
-                {toastMessage}
-              </div>
-            )}
           </div>
         </div>
       </header>

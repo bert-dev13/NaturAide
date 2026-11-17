@@ -15,6 +15,7 @@ import {
   Crosshair,
   X,
 } from "lucide-react";
+import { toastError } from "@/lib/toast";
 
 declare global {
   interface Window {
@@ -293,7 +294,7 @@ export default function Molecular3DViewer({
       a.download = `${proteinName}_${ligandName}_docked_3d.png`;
       a.click();
     } catch {
-      alert("Failed to export screenshot");
+      toastError("Failed to export screenshot");
     }
   };
 

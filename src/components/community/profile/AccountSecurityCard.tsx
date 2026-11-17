@@ -3,20 +3,17 @@
 import React, { useState } from "react";
 import { Lock2DIcon } from "./ProfileIcons2D";
 import LogoutButton from "@/components/LogoutButton";
-import { CheckCircle2, AlertCircle, Loader2, ChevronDown, ChevronUp } from "lucide-react";
+import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
+import { showToast } from "@/lib/toast";
 
 interface AccountSecurityProps {
   onChangePassword: (data: { currentPassword: string; newPassword: string }) => Promise<void>;
   changing: boolean;
-  feedback: { type: "success" | "error"; text: string } | null;
-  setFeedback: React.Dispatch<React.SetStateAction<{ type: "success" | "error"; text: string } | null>>;
 }
 
 export default function AccountSecurityCard({
   onChangePassword,
   changing,
-  feedback,
-  setFeedback,
 }: AccountSecurityProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
@@ -25,15 +22,14 @@ export default function AccountSecurityCard({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setFeedback(null);
 
     if (newPassword !== confirmPassword) {
-      setFeedback({ type: "error", text: "New password and confirmation do not match." });
+      showToast("New password and confirmation do not match.", "error");
       return;
     }
 
     if (newPassword.length < 6) {
-      setFeedback({ type: "error", text: "New password must be at least 6 characters." });
+      showToast("New password must be at least 6 characters.", "error");
       return;
     }
 
@@ -84,23 +80,6 @@ export default function AccountSecurityCard({
       {/* Expanded Form */}
       {isOpen && (
         <div className="p-5 sm:p-6 border-t border-[#f0f4f1] bg-[#faf9f5]/70 space-y-4">
-          {feedback && (
-            <div
-              className={`p-3.5 rounded-2xl text-xs sm:text-sm font-semibold flex items-center gap-2.5 ${
-                feedback.type === "success"
-                  ? "bg-emerald-50 text-emerald-900 border border-emerald-200"
-                  : "bg-rose-50 text-rose-900 border border-rose-200"
-              }`}
-            >
-              {feedback.type === "success" ? (
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-              ) : (
-                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-              )}
-              <span>{feedback.text}</span>
-            </div>
-          )}
-
           <form onSubmit={handleSubmit} className="space-y-3.5">
             <div>
               <label className="block text-xs font-bold text-[#0f2c20] mb-1.5">

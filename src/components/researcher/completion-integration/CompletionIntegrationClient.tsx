@@ -45,6 +45,7 @@ import {
   WORKSPACE_TEXTAREA,
 } from "@/components/researcher/stage/ResearchWorkspaceUI";
 import { ResearchStageFooter } from "@/components/researcher/stage/ResearchStageFooter";
+import { confirmAction } from "@/lib/toast";
 
 interface Props {
   projectId: number;
@@ -206,13 +207,13 @@ export default function CompletionIntegrationClient({ projectId }: Props) {
   };
 
   // Regenerate draft from initial AI generation
-  const handleRegenerateDraft = () => {
+  const handleRegenerateDraft = async () => {
     if (!defaultDraft) return;
-    if (
-      window.confirm(
-        "Regenerate Research Synthesis? This will update the synthesis fields using current live Stage 1–4 project data."
-      )
-    ) {
+    const confirmed = await confirmAction({
+      message:
+        "Regenerate Research Synthesis? This will update the synthesis fields using current live Stage 1–4 project data.",
+    });
+    if (confirmed) {
       setEvidenceAlignment(defaultDraft.evidenceAlignment || "");
       setScientificInterpretation(defaultDraft.scientificInterpretation || "");
       setLimitations(defaultDraft.limitations || "");

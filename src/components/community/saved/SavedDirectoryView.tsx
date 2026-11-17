@@ -12,6 +12,7 @@ import SavedEmptyState from "./SavedEmptyState";
 import SavedDiscoveryBanner from "./SavedDiscoveryBanner";
 import SavedCardSkeleton from "./SavedCardSkeleton";
 import { SavedPlantItem, SavedProductItem, SavedGuideItem } from "./types";
+import { showToast } from "@/lib/toast";
 
 interface SavedDirectoryViewProps {
   initialPlants?: SavedPlantItem[];
@@ -34,7 +35,6 @@ export default function SavedDirectoryView({
 
   const [selectedCategory, setSelectedCategory] = useState<SavedFilterCategory>("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const plantCount = savedPlants.length;
   const productCount = savedProducts.length;
@@ -58,8 +58,7 @@ export default function SavedDirectoryView({
         } else if (type === "guide") {
           setSavedGuides((prev) => prev.filter((g) => String(g.id) !== String(id)));
         }
-        setToastMessage("Removed from saved items");
-        setTimeout(() => setToastMessage(null), 2500);
+        showToast("Removed from saved items", "success");
       }
     } catch (err) {
       console.error("Failed to remove item:", err);
@@ -140,19 +139,6 @@ export default function SavedDirectoryView({
 
   return (
     <div className="space-y-4 sm:space-y-5">
-      {/* Toast Notification */}
-      {toastMessage && (
-        <motion.div
-          initial={{ opacity: 0, y: -8 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -8 }}
-          className="fixed top-20 right-4 sm:right-8 z-50 bg-[#0f2c20] text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow-lg border border-emerald-700/50 flex items-center gap-2"
-        >
-          <span>✓</span>
-          <span>{toastMessage}</span>
-        </motion.div>
-      )}
-
       {/* 1. SAVED HERO (60% content / 40% mascot with true transparency) */}
       <SavedHero
         plantCount={plantCount}

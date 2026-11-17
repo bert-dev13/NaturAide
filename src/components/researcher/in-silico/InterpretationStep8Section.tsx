@@ -22,6 +22,7 @@ import {
   Atom,
 } from "lucide-react";
 import { DockingRunItem } from "./DockingExecutionStep4Section";
+import { confirmAction } from "@/lib/toast";
 
 interface Step8Props {
   projectId: number;
@@ -224,12 +225,12 @@ export default function InterpretationStep8Section({
     }
   };
 
-  const handleProceed = () => {
+  const handleProceed = async () => {
     if (!onProceedToSection3) return;
     if (isDirty) {
-      const leave = window.confirm(
-        "You have unsaved interpretation edits. Leave without saving?"
-      );
+      const leave = await confirmAction({
+        message: "You have unsaved interpretation edits. Leave without saving?",
+      });
       if (!leave) return;
     }
     onProceedToSection3();

@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Bookmark2DIcon } from "./CommunityIcons2D";
+import { toastSuccess } from "@/lib/toast";
 
 export default function PlantSaveButton({
   plantId,
@@ -15,8 +16,6 @@ export default function PlantSaveButton({
 }) {
   const [isSaved, setIsSaved] = useState(initialSaved);
   const [loading, setLoading] = useState(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-
   const handleToggle = async () => {
     setLoading(true);
     try {
@@ -28,8 +27,7 @@ export default function PlantSaveButton({
       const data = await res.json();
       if (data.success) {
         setIsSaved(data.saved);
-        setToastMessage(data.saved ? "Saved to My Guide" : "Removed from Saved");
-        setTimeout(() => setToastMessage(null), 2400);
+        toastSuccess(data.saved ? "Saved to My Guide" : "Removed from Saved");
       }
     } catch (err) {
       console.error("Failed to toggle save:", err);
@@ -62,12 +60,6 @@ export default function PlantSaveButton({
         <span>{isSaved ? "Saved" : "Save Guide"}</span>
       </button>
 
-      {/* Floating subtle toast */}
-      {toastMessage && (
-        <div className="absolute -top-9 left-1/2 -translate-x-1/2 whitespace-nowrap px-2.5 py-1 rounded-lg bg-[#0f2c20] text-white text-[11px] font-bold shadow-md animate-fade-in pointer-events-none z-50">
-          {toastMessage}
-        </div>
-      )}
     </div>
   );
 }

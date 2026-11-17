@@ -19,6 +19,7 @@ import {
   ChevronRight,
   Maximize2
 } from "lucide-react";
+import { toastInfo } from "@/lib/toast";
 
 export function PlatformWorkbench() {
   const [activeTab, setActiveTab] = useState<"docking" | "phytochem" | "clinical" | "preparation">("docking");
@@ -402,7 +403,7 @@ export function PlatformWorkbench() {
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => alert("PDBQT coordinates and parameters copied to clipboard.")}
+                onClick={() => toastInfo("PDBQT coordinates and parameters copied to clipboard.")}
                 className="hover:text-white flex items-center gap-1 transition-colors"
               >
                 <Download className="w-3.5 h-3.5 text-[#0d9488]" />

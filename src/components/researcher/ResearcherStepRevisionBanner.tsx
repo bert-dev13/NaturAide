@@ -3,17 +3,14 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
   AlertTriangle,
-  CheckCircle2,
-  Clock,
   Send,
   Loader2,
   X,
-  MessageSquareWarning,
   FileCheck2,
-  Sparkles,
   Check,
 } from "lucide-react";
 import { isFeedbackBelongsToStep } from "@/lib/feedback-step-filter";
+import { showToast, toastError, toastWarning } from "@/lib/toast";
 
 export interface ResearcherStepRevisionBannerProps {
   projectId: number;
@@ -37,8 +34,6 @@ export default function ResearcherStepRevisionBanner({
   const [activeItem, setActiveItem] = useState<any | null>(null);
   const [resolutionNote, setResolutionNote] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [showSuccessModal, setShowSuccessModal] = useState<boolean>(false);
-  const [successMessage, setSuccessMessage] = useState<string>("");
 
   const loadFeedback = useCallback(async () => {
     try {
@@ -88,7 +83,9 @@ export default function ResearcherStepRevisionBanner({
     if (!activeItem) return;
     const trimmed = resolutionNote.trim();
     if (!trimmed) {
-      alert("Please provide a brief resolution note describing your updates for the reviewer.");
+      toastWarning(
+        "Please provide a brief resolution note describing your updates for the reviewer."
+      );
       return;
     }
 
@@ -108,12 +105,12 @@ export default function ResearcherStepRevisionBanner({
         throw new Error(json.error || "Failed to resubmit revision.");
       }
 
-      setSuccessMessage(
-        `Step ${stepNumber} revision resubmitted successfully! The scientific reviewer has been notified to re-evaluate your updates.`
+      showToast(
+        `Step ${stepNumber} revision resubmitted successfully! The scientific reviewer has been notified to re-evaluate your updates.`,
+        "success"
       );
       setActiveItem(null);
       setResolutionNote("");
-      setShowSuccessModal(true);
 
       await loadFeedback();
 
@@ -122,7 +119,7 @@ export default function ResearcherStepRevisionBanner({
         window.dispatchEvent(new CustomEvent("natureaide:review-updated"));
       }
     } catch (err: any) {
-      alert(err.message || "Could not resubmit revision.");
+      toastError(err.message || "Could not resubmit revision.");
     } finally {
       setIsSubmitting(false);
     }
@@ -355,42 +352,6 @@ export default function ResearcherStepRevisionBanner({
                   <Check className="w-3.5 h-3.5" />
                 )}
                 <span>Confirm &amp; Resubmit Revision</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ===================================================================== */}
-      {/* 3. RESUBMISSION SUCCESS MODAL                                         */}
-      {/* ===================================================================== */}
-      {showSuccessModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-7 shadow-2xl border border-emerald-200 text-center space-y-4 animate-in fade-in zoom-in-95">
-            <div className="w-16 h-16 rounded-2xl bg-emerald-100 border border-emerald-300 text-emerald-700 flex items-center justify-center mx-auto shadow-inner">
-              <CheckCircle2 className="w-9 h-9" />
-            </div>
-
-            <div className="space-y-1.5">
-              <h3 className="text-lg font-heading font-extrabold text-slate-900 tracking-tight">
-                Revision Resubmitted Successfully!
-              </h3>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                {successMessage}
-              </p>
-            </div>
-
-            <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-[11px] text-emerald-900 font-medium">
-              Status updated to <strong>Resubmitted</strong>. The reviewer has received an instant notification to review your revised data.
-            </div>
-
-            <div className="pt-2">
-              <button
-                type="button"
-                onClick={() => setShowSuccessModal(false)}
-                className="w-full py-2.5 px-4 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer"
-              >
-                Continue Research
               </button>
             </div>
           </div>

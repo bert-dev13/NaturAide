@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import pool from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { assertReviewerEligible } from "@/lib/reviewer-eligibility";
+import { evaluateOverallApproval } from "@/lib/expert-review-assignment";
+import { EXPERT_REVIEW_AREAS, normalizeReviewAreaKey } from "@/lib/expert-review-areas";
 
 export async function POST(
   request: Request,
@@ -24,6 +26,8 @@ export async function POST(
         ra.submissionId,
         ra.projectId,
         ra.reviewRound,
+        ra.specialtyNeeded,
+        ra.areaKey,
         rp.researcherId,
         rp.title as projectTitle,
         rs.versionTag
@@ -45,10 +49,15 @@ export async function POST(
       submissionId,
       projectId,
       reviewRound,
+      specialtyNeeded,
+      areaKey: rawAreaKey,
       researcherId,
       projectTitle,
       versionTag,
     } = assignRows[0];
+    const specialtyKey = normalizeReviewAreaKey(
+      String(rawAreaKey || specialtyNeeded || "formulation")
+    );
 
     // Only ACTIVE + VERIFIED reviewers can submit official decisions
     const ineligible = await assertReviewerEligible(session.id);
@@ -239,57 +248,75 @@ export async function POST(
         decision: "REQUEST_REVISION",
       });
     } else {
-      // ACCEPT_FOR_NEXT_STAGE
+      // ACCEPT_FOR_NEXT_STAGE — mark this specialty approved, then evaluate 3/3 gate.
+      // Never set research_projects.status = COMPLETED here; researcher complete-research owns that.
       await pool.query(
-        `UPDATE review_assignments SET status = 'COMPLETED', completedAt = CURRENT_TIMESTAMP(3), updatedAt = CURRENT_TIMESTAMP(3) WHERE id = ?`,
+        `UPDATE review_assignments
+         SET status = 'COMPLETED', completedAt = CURRENT_TIMESTAMP(3), updatedAt = CURRENT_TIMESTAMP(3)
+         WHERE id = ?`,
         [assignmentId]
       );
 
+      const areaDef = EXPERT_REVIEW_AREAS.find((a) => a.key === specialtyKey);
+      const matchKeys = Array.from(
+        new Set([specialtyKey, ...(areaDef?.aliases || [])].map((k) =>
+          k.toLowerCase().replace(/-/g, "_")
+        ))
+      );
       await pool.query(
-        `UPDATE review_submissions SET status = 'ACCEPTED_FOR_NEXT_STAGE', reviewedAt = CURRENT_TIMESTAMP(3) WHERE id = ?`,
-        [submissionId]
+        `UPDATE review_area_coverage
+         SET status = 'APPROVED', reviewerId = ?, updatedAt = CURRENT_TIMESTAMP(3)
+         WHERE submissionId = ? AND LOWER(REPLACE(areaKey, '-', '_')) IN (?)`,
+        [session.id, submissionId, matchKeys]
       );
 
       await pool.query(
-        `UPDATE research_dossiers SET status = 'ACCEPTED_FOR_NEXT_STAGE', updatedAt = CURRENT_TIMESTAMP(3) WHERE projectId = ?`,
-        [projectId]
-      );
-
-      await pool.query(
-        `
-        UPDATE research_projects
-        SET status = 'COMPLETED', currentStage = 'expert-review', progressPercent = 100, updatedAt = CURRENT_TIMESTAMP(3)
-        WHERE id = ?
-        `,
-        [projectId]
-      );
-
-      await pool.query(
-        `UPDATE research_project_stages SET status = 'COMPLETED', completedAt = CURRENT_TIMESTAMP(3) WHERE projectId = ? AND (stageKey = 'expert-review' OR stageKey = 'review')`,
-        [projectId]
-      );
-
-      // Mark revision cycles resolved
-      await pool.query(
-        `UPDATE revision_cycles SET status = 'RESOLVED', resolvedAt = CURRENT_TIMESTAMP(3) WHERE projectId = ? AND status = 'IN_PROGRESS'`,
-        [projectId]
-      );
-
-      // Notify researcher
-      await pool.query(
-        `
-        INSERT INTO review_notifications (userId, type, title, message, link)
-        VALUES (?, 'ACCEPTED_FOR_NEXT_STAGE', ?, ?, ?)
-        `,
+        `INSERT INTO professional_reviews (
+           submissionId, projectId, reviewerId, areaKey, assessment, comments, status, submittedAt
+         ) VALUES (?, ?, ?, ?, 'ACCEPTABLE', ?, 'SUBMITTED', CURRENT_TIMESTAMP(3))
+         ON DUPLICATE KEY UPDATE
+           assessment = 'ACCEPTABLE',
+           comments = VALUES(comments),
+           status = 'SUBMITTED',
+           updatedAt = CURRENT_TIMESTAMP(3)`,
         [
-          researcherId,
-          `Accepted for Next Stage: ${projectTitle}`,
-          `Your complete research dossier ${versionTag} has received final professional approval.`,
-          `/researcher/projects/${projectId}/expert-review`,
+          submissionId,
+          projectId,
+          session.id,
+          specialtyKey,
+          overallAssessment.trim(),
         ]
       );
 
-      // Audit logs
+      const overall = await evaluateOverallApproval(Number(submissionId), Number(projectId));
+
+      await pool.query(
+        `UPDATE revision_cycles SET status = 'RESOLVED', resolvedAt = CURRENT_TIMESTAMP(3)
+         WHERE projectId = ? AND status = 'IN_PROGRESS'`,
+        [projectId]
+      );
+
+      const fullyApproved = Boolean(overall?.allApproved);
+      await pool.query(
+        `
+        INSERT INTO review_notifications (userId, type, title, message, link)
+        VALUES (?, ?, ?, ?, ?)
+        `,
+        [
+          researcherId,
+          fullyApproved ? "APPROVED" : "ACCEPTED_FOR_NEXT_STAGE",
+          fullyApproved
+            ? `All specialties approved: ${projectTitle}`
+            : `Specialty approved: ${projectTitle}`,
+          fullyApproved
+            ? `All 3 professional reviewer roles approved dossier ${versionTag}. You may complete the research archive.`
+            : `A specialty reviewer approved dossier ${versionTag}. Remaining specialties are still under review.`,
+          fullyApproved
+            ? `/researcher/projects/${projectId}/completion`
+            : `/researcher/projects/${projectId}/completion`,
+        ]
+      );
+
       await pool.query(
         `
         INSERT INTO review_activity_logs (projectId, submissionId, actorId, actorRole, actionType, description)
@@ -299,7 +326,7 @@ export async function POST(
           projectId,
           submissionId,
           session.id,
-          `Reviewer gave final approval to dossier ${versionTag}`,
+          `Reviewer approved specialty ${specialtyKey} for dossier ${versionTag}`,
         ]
       );
 
@@ -311,14 +338,18 @@ export async function POST(
         [
           projectId,
           session.id,
-          `Reviewer gave final approval to dossier ${versionTag}`,
+          `Reviewer approved specialty ${specialtyKey} for dossier ${versionTag}`,
         ]
       );
 
       return NextResponse.json({
         success: true,
-        message: "Research dossier successfully reviewed and approved.",
+        message: fullyApproved
+          ? "All 3 professional reviewer roles have approved. Researcher may complete the archive."
+          : "Specialty approval recorded. Waiting for remaining professional reviewer roles.",
         decision: "ACCEPT_FOR_NEXT_STAGE",
+        allApproved: fullyApproved,
+        specialtyKey,
       });
     }
   } catch (error) {

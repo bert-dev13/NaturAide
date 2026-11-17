@@ -10,6 +10,7 @@ import ProfilePreferencesCard from "@/components/community/profile/ProfilePrefer
 import AccountSecurityCard from "@/components/community/profile/AccountSecurityCard";
 import SafetyGuidelinesCard from "@/components/community/profile/SafetyGuidelinesCard";
 import ProfileSkeleton from "@/components/community/profile/ProfileSkeleton";
+import { showToast } from "@/lib/toast";
 
 interface UserProfile {
   id?: number;
@@ -40,17 +41,9 @@ export default function ProfilePage() {
 
   // Profile Edit State
   const [savingProfile, setSavingProfile] = useState(false);
-  const [profileFeedback, setProfileFeedback] = useState<{
-    type: "success" | "error";
-    text: string;
-  } | null>(null);
 
   // Change Password State
   const [changingPassword, setChangingPassword] = useState(false);
-  const [passwordFeedback, setPasswordFeedback] = useState<{
-    type: "success" | "error";
-    text: string;
-  } | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -110,7 +103,6 @@ export default function ProfilePage() {
     lastName: string;
     phone: string;
   }) => {
-    setProfileFeedback(null);
     setSavingProfile(true);
 
     try {
@@ -131,7 +123,7 @@ export default function ProfilePage() {
         throw new Error(data.error || "Failed to update profile");
       }
 
-      setProfileFeedback({ type: "success", text: "Profile details updated successfully." });
+      showToast("Profile details updated successfully.", "success");
       setProfile((prev) => ({
         ...prev,
         firstName: dataToUpdate.firstName,
@@ -141,7 +133,7 @@ export default function ProfilePage() {
       }));
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to save profile.";
-      setProfileFeedback({ type: "error", text: message });
+      showToast(message, "error");
       throw err;
     } finally {
       setSavingProfile(false);
@@ -191,7 +183,6 @@ export default function ProfilePage() {
     currentPassword: string;
     newPassword: string;
   }) => {
-    setPasswordFeedback(null);
     setChangingPassword(true);
 
     try {
@@ -206,10 +197,10 @@ export default function ProfilePage() {
         throw new Error(data.error || "Failed to change password");
       }
 
-      setPasswordFeedback({ type: "success", text: "Password updated successfully." });
+      showToast("Password updated successfully.", "success");
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to change password.";
-      setPasswordFeedback({ type: "error", text: message });
+      showToast(message, "error");
       throw err;
     } finally {
       setChangingPassword(false);
@@ -254,7 +245,6 @@ export default function ProfilePage() {
             phone={profile?.phone || ""}
             email={profile?.email}
             onUpdate={handleUpdatePersonalInfo}
-            feedback={profileFeedback}
             saving={savingProfile}
           />
 
@@ -276,8 +266,6 @@ export default function ProfilePage() {
           <AccountSecurityCard
             onChangePassword={handleChangePassword}
             changing={changingPassword}
-            feedback={passwordFeedback}
-            setFeedback={setPasswordFeedback}
           />
         </main>
       )}

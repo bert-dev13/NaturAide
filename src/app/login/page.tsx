@@ -17,6 +17,7 @@ import {
   Loader2, 
   Leaf
 } from "lucide-react";
+import { toastInfo } from "@/lib/toast";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -327,7 +328,11 @@ export default function LoginPage() {
                     </label>
                     <button
                       type="button"
-                      onClick={() => alert("Password reset instructions will be sent to your verified email.")}
+                      onClick={() =>
+                        toastInfo(
+                          "Password reset instructions will be sent to your verified email."
+                        )
+                      }
                       className="text-xs font-semibold text-[#16a34a] hover:text-[#15803d] hover:underline transition-colors cursor-pointer"
                     >
                       Forgot Password?

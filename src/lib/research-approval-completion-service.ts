@@ -1092,8 +1092,8 @@ export async function getCompletedResearchListForResearcher(
   for (const row of rows) {
     const projectId = Number(row.projectId);
     const state = await getProjectProfessionalApprovalState(projectId);
-    const approvedCount = state ? state.approvedCount : 5;
-    const totalSpecialties = state ? state.totalSpecialties : 5;
+    const approvedCount = state ? state.approvedCount : 0;
+    const totalSpecialties = state ? state.totalSpecialties : EXPERT_REVIEW_AREAS.length;
 
     const basePlantCommon = row.plantCommonName || row.plantCustomName || null;
     const plantName = basePlantCommon

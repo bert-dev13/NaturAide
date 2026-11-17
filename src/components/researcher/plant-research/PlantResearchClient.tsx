@@ -41,6 +41,7 @@ import {
   StageTabs,
   StageHelpTooltip,
 } from "@/components/researcher/stage";
+import { showToast } from "@/lib/toast";
 
 interface PlantResearchClientProps {
   projectId: number;
@@ -170,15 +171,6 @@ export default function PlantResearchClient({
   const [uploadedDocName, setUploadedDocName] = useState<string | null>(null);
   const [isCompleteConfirmationOpen, setIsCompleteConfirmationOpen] = useState(false);
   const [completingStage, setCompletingStage] = useState(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [toastType, setToastType] = useState<"success" | "error" | "info">("success");
-
-  const showToast = (msg: string, type: "success" | "error" | "info" = "success") => {
-    setToastMessage(msg);
-    setToastType(type);
-    setTimeout(() => setToastMessage(null), 4000);
-  };
-
   // Upload Supporting Document
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -382,33 +374,6 @@ export default function PlantResearchClient({
         />
       }
     >
-      {/* TOAST FEEDBACK */}
-      <AnimatePresence>
-        {toastMessage && (
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-2xl shadow-xl flex items-center gap-2.5 text-xs font-bold border ${
-              toastType === "error"
-                ? "bg-rose-50 text-rose-800 border-rose-200"
-                : toastType === "info"
-                ? "bg-sky-50 text-sky-800 border-sky-200"
-                : "bg-emerald-50 text-emerald-900 border-emerald-200"
-            }`}
-          >
-            {toastType === "error" ? (
-              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-            ) : toastType === "info" ? (
-              <AlertCircle className="w-4 h-4 text-sky-600 shrink-0" />
-            ) : (
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-            )}
-            <span>{toastMessage}</span>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* 1. UNIVERSAL STAGE HEADER */}
       <StageHeader
         projectId={projectId}

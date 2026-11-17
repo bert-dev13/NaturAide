@@ -14,6 +14,7 @@ import {
   BookOpen
 } from "lucide-react";
 import { EXPERT_REVIEWERS } from "@/data/plantData";
+import { toastInfo } from "@/lib/toast";
 
 export function ExpertReviewers() {
   const reviewerDomains = [
@@ -137,7 +138,7 @@ export function ExpertReviewers() {
           </div>
 
           <button
-            onClick={() => alert("Reviewer accreditation portal opening soon.")}
+            onClick={() => toastInfo("Reviewer accreditation portal opening soon.")}
             className="shrink-0 px-5 py-3 rounded-xl bg-[#0f2c20] hover:bg-[#164533] text-white text-xs sm:text-sm font-semibold transition-colors flex items-center gap-2"
           >
             <GraduationCap className="w-4 h-4 text-[#ccfbf1]" />

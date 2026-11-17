@@ -46,6 +46,7 @@ import {
 import Molecular3DViewer from "@/components/researcher/in-silico/Molecular3DViewer";
 import Interaction2DDiagram from "@/components/researcher/in-silico/Interaction2DDiagram";
 import AiResearchReviewBrief from "@/components/reviewer/ai/AiResearchReviewBrief";
+import { showToast, toastError, toastWarning } from "@/lib/toast";
 
 interface Props {
   assignmentId: number;
@@ -97,7 +98,6 @@ export default function DossierReviewWorkspaceClient({ assignmentId }: Props) {
 
   const [savingDraft, setSavingDraft] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [showCriteria, setShowCriteria] = useState(false);
 
   useEffect(() => {
@@ -171,11 +171,6 @@ export default function DossierReviewWorkspaceClient({ assignmentId }: Props) {
     };
   }, [data, selectedDockingRunIndex]);
 
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 4000);
-  };
-
   const handleNavigateToSection = (sectionId: string, anchorId?: string) => {
     setActiveSection(sectionId);
     if (anchorId) {
@@ -226,11 +221,11 @@ export default function DossierReviewWorkspaceClient({ assignmentId }: Props) {
         showToast("Draft review saved successfully.");
       } else {
         const err = await res.json().catch(() => ({}));
-        alert(err.error || "Failed to save draft");
+        toastError(err.error || "Failed to save draft");
       }
     } catch (err) {
       console.error(err);
-      alert("Error saving draft");
+      toastError("Error saving draft");
     } finally {
       setSavingDraft(false);
     }
@@ -238,15 +233,15 @@ export default function DossierReviewWorkspaceClient({ assignmentId }: Props) {
 
   const handleSubmitReview = async () => {
     if (!assessment) {
-      alert("Please select a Professional Assessment (Acceptable or Revision Required).");
+      toastWarning("Please select a Professional Assessment (Acceptable or Revision Required).");
       return;
     }
     if (!comments.trim()) {
-      alert("Please enter professional evaluation comments before submitting.");
+      toastWarning("Please enter professional evaluation comments before submitting.");
       return;
     }
     if (assessment === "REVISION_REQUIRED" && findings.length === 0 && comments.trim().length < 20) {
-      alert("Please add at least one specific finding explaining the required revision.");
+      toastWarning("Please add at least one specific finding explaining the required revision.");
       return;
     }
 
@@ -269,11 +264,11 @@ export default function DossierReviewWorkspaceClient({ assignmentId }: Props) {
           router.push("/reviewer");
         }, 1200);
       } else {
-        alert(json.error || "Failed to submit review");
+        toastError(json.error || "Failed to submit review");
       }
     } catch (err) {
       console.error(err);
-      alert("Error submitting review");
+      toastError("Error submitting review");
     } finally {
       setSubmitting(false);
     }
@@ -281,11 +276,11 @@ export default function DossierReviewWorkspaceClient({ assignmentId }: Props) {
 
   const handleCommitConsolidatedDecision = async () => {
     if (!overallAssessment.trim() || overallAssessment.trim().length < 20) {
-      alert("Please provide a comprehensive overall assessment (at least 20 characters).");
+      toastWarning("Please provide a comprehensive overall assessment (at least 20 characters).");
       return;
     }
     if (consolidatedDecision === "REQUEST_REVISION" && (!requiredRevisions.trim() || requiredRevisions.trim().length < 15)) {
-      alert("Detailed Required Revisions explanation is mandatory when requesting revisions.");
+      toastWarning("Detailed Required Revisions explanation is mandatory when requesting revisions.");
       return;
     }
 
@@ -310,11 +305,11 @@ export default function DossierReviewWorkspaceClient({ assignmentId }: Props) {
           router.push("/reviewer");
         }, 1200);
       } else {
-        alert(json.error || "Failed to commit consolidated decision");
+        toastError(json.error || "Failed to commit consolidated decision");
       }
     } catch (err) {
       console.error(err);
-      alert("Error committing consolidated decision");
+      toastError("Error committing consolidated decision");
     } finally {
       setSubmitting(false);
     }
@@ -356,14 +351,6 @@ export default function DossierReviewWorkspaceClient({ assignmentId }: Props) {
 
   return (
     <div className="space-y-6 pb-12">
-      {/* TOAST ALERT */}
-      {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 px-4 py-3 rounded-xl bg-slate-900 text-white text-xs font-bold shadow-xl border border-slate-700 flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
-
       {/* HEADER BANNER */}
       <div className="relative overflow-hidden p-6 sm:p-7 rounded-2xl bg-gradient-to-r from-[#071d3a] via-[#0b2b54] to-[#123e73] border border-blue-400/30 text-white shadow-lg shadow-blue-950/20">
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -1000,7 +987,7 @@ export default function DossierReviewWorkspaceClient({ assignmentId }: Props) {
                     <ShieldCheck className="w-4 h-4 text-emerald-600" />
                     <span>Multidisciplinary Review Coverage Status</span>
                   </h3>
-                  <span className="text-xs text-slate-500 font-medium">5 Specializations</span>
+                  <span className="text-xs text-slate-500 font-medium">3 Specializations</span>
                 </div>
 
                 <div className="space-y-2 text-xs">

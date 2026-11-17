@@ -20,6 +20,7 @@ import {
   getTestsForCategory,
   type LabTestCategoryKey,
 } from "@/lib/laboratory-results-catalog";
+import { confirmAction } from "@/lib/toast";
 
 export interface LabResultRecord {
   id: number;
@@ -254,7 +255,12 @@ export default function LaboratoryResultsStepSection({
 
   const handleDelete = async (row: LabResultRecord) => {
     if (readOnly) return;
-    if (!confirm(`Delete “${row.testName}”?`)) return;
+    const confirmed = await confirmAction({
+      message: `Delete “${row.testName}”?`,
+      variant: "destructive",
+      confirmLabel: "Delete",
+    });
+    if (!confirmed) return;
     setError(null);
     try {
       const res = await fetch(

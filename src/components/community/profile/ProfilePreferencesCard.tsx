@@ -2,7 +2,8 @@
 
 import React, { useState } from "react";
 import { Globe2DIcon } from "./ProfileIcons2D";
-import { CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
+import { showToast } from "@/lib/toast";
 
 interface ProfilePreferencesProps {
   preferredLanguage: string;
@@ -41,20 +42,18 @@ function PreferencesForm({
 }) {
   const [lang, setLang] = useState(initialLang);
   const [interests, setInterests] = useState(initialInterests);
-  const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setFeedback(null);
     try {
       await onUpdate({
         preferredLanguage: lang,
         healthInterests: interests,
       });
-      setFeedback({ type: "success", text: "Preferences saved successfully." });
+      showToast("Preferences saved successfully.", "success");
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to update preferences.";
-      setFeedback({ type: "error", text: message });
+      showToast(message, "error");
     }
   };
 
@@ -94,23 +93,6 @@ function PreferencesForm({
 
       {/* Body */}
       <div className="p-5 sm:p-6 space-y-4">
-        {feedback && (
-          <div
-            className={`p-3.5 rounded-2xl text-xs sm:text-sm font-semibold flex items-center gap-2.5 ${
-              feedback.type === "success"
-                ? "bg-emerald-50 text-emerald-900 border border-emerald-200"
-                : "bg-rose-50 text-rose-900 border border-rose-200"
-            }`}
-          >
-            {feedback.type === "success" ? (
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-            ) : (
-              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-            )}
-            <span>{feedback.text}</span>
-          </div>
-        )}
-
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-bold text-[#0f2c20] mb-1.5">

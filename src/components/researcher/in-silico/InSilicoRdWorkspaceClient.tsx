@@ -14,10 +14,10 @@ import {
   Play,
   Atom,
   Info,
-  X,
 } from "lucide-react";
 import ResearchStepFooterNav from "@/components/researcher/ResearchStepFooterNav";
 import ResearchSectionWorkspaceHeader from "@/components/researcher/ResearchSectionWorkspaceHeader";
+import { showToast } from "@/lib/toast";
 
 // 7 Modular Step Section Components (Section 1 compounds reused automatically)
 import TargetProteinStep2Section from "./TargetProteinStep2Section";
@@ -74,6 +74,10 @@ export default function InSilicoRdWorkspaceClient({
 
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
+  const notify = (text: string, type: "success" | "error") => {
+    setMessage({ text, type });
+    showToast(text, type);
+  };
   const [ligandStatus, setLigandStatus] = useState<{
     total: number;
     structureReady: number;
@@ -326,7 +330,7 @@ export default function InSilicoRdWorkspaceClient({
         ...prev,
         targets: (prev?.targets || []).filter((t: any) => t.id !== optimisticId),
       }));
-      setMessage({ text: e.message || "Failed to add target", type: "error" });
+      notify(e.message || "Failed to add target", "error");
     } finally {
       setIsAddingTarget(false);
     }
@@ -355,14 +359,11 @@ export default function InSilicoRdWorkspaceClient({
       } else {
         setWorkspace(previous);
         const data = await res.json().catch(() => ({}));
-        setMessage({
-          text: data.error || "Failed to remove target",
-          type: "error",
-        });
+        notify(data.error || "Failed to remove target", "error");
       }
     } catch {
       setWorkspace(previous);
-      setMessage({ text: "Failed to remove target", type: "error" });
+      notify("Failed to remove target", "error");
     }
   };
 
@@ -395,12 +396,12 @@ export default function InSilicoRdWorkspaceClient({
         if (dScr.results) setScreenResults(dScr.results);
         if (dScr.compounds) setCompounds(dScr.compounds);
       }
-      setMessage({
-        text: `Computational screening completed for ${data.count || compounds.length} compound(s)!`,
-        type: "success",
-      });
+      notify(
+        `Computational screening completed for ${data.count || compounds.length} compound(s)!`,
+        "success"
+      );
     } catch (e: any) {
-      setMessage({ text: e.message || "Screening failed", type: "error" });
+      notify(e.message || "Screening failed", "error");
       throw e;
     } finally {
       setIsScreening(false);
@@ -442,12 +443,12 @@ export default function InSilicoRdWorkspaceClient({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to start docking");
       if (data.workspace) setWorkspace(data.workspace);
-      setMessage({
-        text: "Molecular docking started! Running AutoDock Vina calculations in the background...",
-        type: "success",
-      });
+      notify(
+        "Molecular docking started! Running AutoDock Vina calculations in the background...",
+        "success"
+      );
     } catch (e: any) {
-      setMessage({ text: e.message, type: "error" });
+      notify(e.message, "error");
     } finally {
       setIsRunningDocking(false);
     }
@@ -464,12 +465,9 @@ export default function InSilicoRdWorkspaceClient({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to retry failed docking jobs");
       if (data.workspace) setWorkspace(data.workspace);
-      setMessage({
-        text: "Retrying failed docking combinations...",
-        type: "success",
-      });
+      notify("Retrying failed docking combinations...", "success");
     } catch (e: any) {
-      setMessage({ text: e.message, type: "error" });
+      notify(e.message, "error");
     }
   };
 
@@ -485,7 +483,7 @@ export default function InSilicoRdWorkspaceClient({
       if (!res.ok) throw new Error(data.error || "Failed to start docking combination");
       if (data.workspace) setWorkspace(data.workspace);
     } catch (e: any) {
-      setMessage({ text: e.message, type: "error" });
+      notify(e.message, "error");
     }
   };
 
@@ -509,14 +507,11 @@ export default function InSilicoRdWorkspaceClient({
         }),
       });
       if (!res.ok) throw new Error("Failed to save computational interpretation");
-      setMessage({
-        text: "Interpretation saved and synchronized with Section 3.",
-        type: "success",
-      });
+      notify("Interpretation saved and synchronized with Section 3.", "success");
       setInterpretationDirty(false);
       return true;
     } catch (e: any) {
-      setMessage({ text: e.message, type: "error" });
+      notify(e.message, "error");
       return false;
     } finally {
       setIsSaving(false);
@@ -541,10 +536,10 @@ export default function InSilicoRdWorkspaceClient({
         const d = await res.json().catch(() => ({}));
         throw new Error(d.error || `Failed to save Step ${activeStep} draft`);
       }
-      setMessage({ text: `Step ${activeStep} draft saved.`, type: "success" });
+      notify(`Step ${activeStep} draft saved.`, "success");
       return true;
     } catch (e: any) {
-      setMessage({ text: e.message || "Save error", type: "error" });
+      notify(e.message || "Save error", "error");
       return false;
     } finally {
       setIsSaving(false);
@@ -612,31 +607,6 @@ export default function InSilicoRdWorkspaceClient({
           </Link>
         }
       />
-
-      <AnimatePresence>
-        {message && (
-          <motion.div
-            initial={{ opacity: 0, y: -6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-xs font-medium ${
-              message.type === "success"
-                ? "border-emerald-200 bg-emerald-50 text-emerald-900"
-                : "border-rose-200 bg-rose-50 text-rose-900"
-            }`}
-          >
-            <span>{message.text}</span>
-            <button
-              type="button"
-              onClick={() => setMessage(null)}
-              className="rounded-md p-1 text-current/60 hover:bg-black/5 hover:text-current"
-              aria-label="Dismiss"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       <ResearcherStepRevisionBanner
         projectId={project.id}

@@ -618,9 +618,10 @@ export default function ReviewerFormulationRdSection({
         roleProfession={currentStepConfig.roleProfession}
         isApproved={approvedSteps.includes(activeStep)}
         onToggleApprove={() => onToggleApproveStep && onToggleApproveStep(activeStep)}
-        onRefreshFeedback={onRefreshFeedback}
-        onDeleteFeedback={onDeleteFeedback}
-        onResolveFeedback={onResolveFeedback}
+        feedbackList={feedbackList}
+        onRefreshFeedback={onRefreshFeedback || (async () => {})}
+        onDeleteFeedback={onDeleteFeedback || (async () => {})}
+        onResolveFeedback={onResolveFeedback || (async () => {})}
       />
 
     </div>

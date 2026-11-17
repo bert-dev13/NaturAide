@@ -7,6 +7,7 @@ import {
   assertReviewerPermissionForSpecialty,
 } from "@/lib/expert-review-assignment";
 
+/** V2 Section routes for researcher notifications after specialty decisions. */
 const AREA_STAGE_MAPPING: Record<
   string,
   {
@@ -16,36 +17,23 @@ const AREA_STAGE_MAPPING: Record<
     route: string;
   }
 > = {
-  pharmacognosy: {
+  formulation: {
     stageNumber: 1,
-    stageKey: "plant-literature",
-    stageTitle: "Stage 1 · Plant & Literature Research",
-    route: "plant-literature",
+    stageKey: "formulation-rd",
+    stageTitle: "Section 1 · Formulation R&D",
+    route: "formulation-rd",
   },
   bioinformatics: {
     stageNumber: 2,
     stageKey: "in-silico",
-    stageTitle: "Stage 2 · In-Silico Analysis",
+    stageTitle: "Section 2 · In-Silico Molecular Docking",
     route: "in-silico",
   },
   pharmacology: {
     stageNumber: 3,
-    stageKey: "docking",
-    stageTitle: "Stage 3 · Molecular Docking",
-    route: "docking",
-  },
-  formulation: {
-    stageNumber: 4,
-    stageKey: "formulation-safety",
-    stageTitle: "Stage 4 · Formulation Development",
-    route: "formulation-safety",
-  },
-  clinical_safety: {
-    // Safety / Clinical researcher stage removed — clinical specialty reviews attach to Knowledge Integration
-    stageNumber: 5,
-    stageKey: "knowledge-integration",
-    stageTitle: "Stage 5 · Knowledge Integration",
-    route: "knowledge-integration",
+    stageKey: "submission",
+    stageTitle: "Section 3 · Paper Submission",
+    route: "submission",
   },
 };
 
@@ -135,23 +123,13 @@ export async function POST(
       );
     }
 
-    // Stage route determination
-    let stageInfo = AREA_STAGE_MAPPING[areaKey] || {
+    // Section route for researcher notifications (V2: 3 specialty → section mapping)
+    const stageInfo = AREA_STAGE_MAPPING[areaKey] || {
       stageNumber: 1,
-      stageKey: "plant-literature",
-      stageTitle: "Stage 1 · Plant & Literature Research",
-      route: "plant-literature",
+      stageKey: "formulation-rd",
+      stageTitle: "Section 1 · Formulation R&D",
+      route: "formulation-rd",
     };
-
-    // If project is at Stage 6, map pharmacognosy review to Stage 6
-    if (currentStage === "knowledge-integration" || currentStage === "completion-integration") {
-      stageInfo = {
-        stageNumber: 6,
-        stageKey: "completion-integration",
-        stageTitle: "Stage 6 · Knowledge Integration",
-        route: "knowledge-integration",
-      };
-    }
 
     // 1. Record official consolidated professional review
     const [insRes]: any = await pool.query(

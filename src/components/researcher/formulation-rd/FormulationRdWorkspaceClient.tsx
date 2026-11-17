@@ -14,13 +14,16 @@ import {
   X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { showToast } from "@/lib/toast";
 import BotanicalStep1Section, {
   PlantRecord,
   PhytochemicalItem,
   LiteratureItem,
 } from "@/components/researcher/formulation-rd/BotanicalStep1Section";
 import ProductSelectionStep2Section from "@/components/researcher/formulation-rd/ProductSelectionStep2Section";
-import ExtractionStep3Section from "@/components/researcher/formulation-rd/ExtractionStep3Section";
+import ExtractionStep3Section, {
+  type ExtractionState,
+} from "@/components/researcher/formulation-rd/ExtractionStep3Section";
 import MaterialsStep4Section from "@/components/researcher/formulation-rd/MaterialsStep4Section";
 import FormulationStep5Section, {
   FormulationState,
@@ -79,6 +82,10 @@ export default function FormulationRdWorkspaceClient({
   const [activeStep, setActiveStep] = useState<number>(initialStep || 1);
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
+  const notify = (text: string, type: "success" | "error") => {
+    setMessage({ text, type });
+    showToast(text, type);
+  };
   const [pendingDeleteMaterial, setPendingDeleteMaterial] = useState<{
     id: number;
     name: string;
@@ -203,12 +210,12 @@ export default function FormulationRdWorkspaceClient({
         }),
       });
 
-      setMessage({
-        text: `Switched plant to ${pData.commonName} (${pData.scientificName}). Botanical taxonomy and compounds updated.`,
-        type: "success",
-      });
+      notify(
+        `Switched plant to ${pData.commonName} (${pData.scientificName}). Botanical taxonomy and compounds updated.`,
+        "success"
+      );
     } catch (err: any) {
-      setMessage({ text: err.message || "Failed to switch plant", type: "error" });
+      notify(err.message || "Failed to switch plant", "error");
     } finally {
       setIsSaving(false);
     }
@@ -229,9 +236,9 @@ export default function FormulationRdWorkspaceClient({
       if (!res.ok || !data.success) throw new Error(data.error || "Failed to update compound");
 
       setStudyCompoundNames(data.studyCompoundNames || []);
-      setMessage({ text: data.message, type: "success" });
+      notify(data.message, "success");
     } catch (err: any) {
-      setMessage({ text: err.message || "Failed to update study compound", type: "error" });
+      notify(err.message || "Failed to update study compound", "error");
     }
   };
 
@@ -250,9 +257,9 @@ export default function FormulationRdWorkspaceClient({
       if (!res.ok || !data.success) throw new Error(data.error || "Failed to update reference");
 
       setLinkedLiteratureIds(data.linkedLiteratureIds || []);
-      setMessage({ text: data.message, type: "success" });
+      notify(data.message, "success");
     } catch (err: any) {
-      setMessage({ text: err.message || "Failed to update literature link", type: "error" });
+      notify(err.message || "Failed to update literature link", "error");
     }
   };
 
@@ -289,7 +296,7 @@ export default function FormulationRdWorkspaceClient({
   // ---------------------------------------------------------------------------
   // STEP 3: STANDARDIZED EXTRACTION PARAMETERS
   // ---------------------------------------------------------------------------
-  const [extraction, setExtraction] = useState({
+  const [extraction, setExtraction] = useState<ExtractionState>({
     extractionMethod:
       initialPlantData?.extractionMethod || "Ultrasonic-Assisted Hydroethanolic Extraction (UAE)",
     plantMaterialMass: initialPlantData?.plantMaterialMass || "100.0 g (Dry powdered leaves)",
@@ -451,9 +458,9 @@ export default function FormulationRdWorkspaceClient({
         }),
       });
       if (!res.ok) throw new Error("Failed to save plant information");
-      setMessage({ text: "Botanical taxonomy and experimental plant parts saved successfully!", type: "success" });
+      notify("Botanical taxonomy and experimental plant parts saved successfully!", "success");
     } catch (e: any) {
-      setMessage({ text: e.message || "Failed to save", type: "error" });
+      notify(e.message || "Failed to save", "error");
     } finally {
       setIsSaving(false);
     }
@@ -469,9 +476,9 @@ export default function FormulationRdWorkspaceClient({
         body: JSON.stringify(productSelection),
       });
       if (!res.ok) throw new Error("Failed to save product selection");
-      setMessage({ text: "Product specifications saved!", type: "success" });
+      notify("Product specifications saved!", "success");
     } catch (e: any) {
-      setMessage({ text: e.message || "Failed to save", type: "error" });
+      notify(e.message || "Failed to save", "error");
     } finally {
       setIsSaving(false);
     }
@@ -502,10 +509,10 @@ export default function FormulationRdWorkspaceClient({
         }),
       });
       if (!res.ok) throw new Error("Failed to save extraction parameters");
-      setMessage({ text: "Standardized extraction parameters saved!", type: "success" });
+      notify("Standardized extraction parameters saved!", "success");
       return true;
     } catch (e: any) {
-      setMessage({ text: e.message || "Failed to save", type: "error" });
+      notify(e.message || "Failed to save", "error");
       return false;
     } finally {
       setIsSaving(false);
@@ -533,13 +540,13 @@ export default function FormulationRdWorkspaceClient({
       } else {
         setMaterials([...materials, { ...materialPayload, id: data.id }]);
       }
-      setMessage({
-        text: editingId ? "Ingredient updated." : "Ingredient added to My Ingredients.",
-        type: "success",
-      });
+      notify(
+        editingId ? "Ingredient updated." : "Ingredient added to My Ingredients.",
+        "success"
+      );
       return true;
     } catch (e: any) {
-      setMessage({ text: e.message || "Failed to save ingredient", type: "error" });
+      notify(e.message || "Failed to save ingredient", "error");
       return false;
     } finally {
       setIsSaving(false);
@@ -569,9 +576,9 @@ export default function FormulationRdWorkspaceClient({
         throw new Error(data.error || "Failed to remove ingredient");
       }
       setMaterials(materials.filter((m) => m.id !== matId));
-      setMessage({ text: "Ingredient removed from My Ingredients.", type: "success" });
+      notify("Ingredient removed from My Ingredients.", "success");
     } catch (e: any) {
-      setMessage({ text: e.message || "Failed to remove ingredient.", type: "error" });
+      notify(e.message || "Failed to remove ingredient.", "error");
     } finally {
       setIsSaving(false);
     }
@@ -612,10 +619,10 @@ export default function FormulationRdWorkspaceClient({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to save formulation");
-      setMessage({ text: "Formulation recipe saved!", type: "success" });
+      notify("Formulation recipe saved!", "success");
       return true;
     } catch (e: any) {
-      setMessage({ text: e.message || "Failed to save formulation", type: "error" });
+      notify(e.message || "Failed to save formulation", "error");
       return false;
     } finally {
       setIsSaving(false);
@@ -654,10 +661,10 @@ export default function FormulationRdWorkspaceClient({
     setIsSaving(true);
     setMessage(null);
     try {
-      setMessage({ text: "Batch analysis & quality control records saved!", type: "success" });
+      notify("Batch analysis & quality control records saved!", "success");
       return true;
     } catch (e: any) {
-      setMessage({ text: e.message || "Failed to save batch analysis", type: "error" });
+      notify(e.message || "Failed to save batch analysis", "error");
       return false;
     } finally {
       setIsSaving(false);
@@ -675,7 +682,7 @@ export default function FormulationRdWorkspaceClient({
       case 3:
         return await handleSaveStep3();
       case 4:
-        setMessage({ text: "Ingredients saved for formulation.", type: "success" });
+        notify("Ingredients saved for formulation.", "success");
         return true;
       case 5:
         return await handleSaveStep5();
@@ -708,31 +715,6 @@ export default function FormulationRdWorkspaceClient({
           ) : null
         }
       />
-
-      <AnimatePresence>
-        {message && (
-          <motion.div
-            initial={{ opacity: 0, y: -6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-xs font-medium ${
-              message.type === "success"
-                ? "border-emerald-200 bg-emerald-50 text-emerald-900"
-                : "border-rose-200 bg-rose-50 text-rose-900"
-            }`}
-          >
-            <span>{message.text}</span>
-            <button
-              type="button"
-              onClick={() => setMessage(null)}
-              className="rounded-md p-1 text-current/60 hover:bg-black/5 hover:text-current"
-              aria-label="Dismiss"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       <AnimatePresence>
         {pendingDeleteMaterial && (

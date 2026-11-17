@@ -90,8 +90,6 @@ export default function ResearcherRevisionsHubClient() {
   const [filterStatus, setFilterStatus] = useState<string>("ALL");
   const [filterSeverity, setFilterSeverity] = useState<string>("ALL");
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [toastMessage, setToastMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-
   const fetchRevisions = useCallback(async () => {
     try {
       setLoading(true);
@@ -136,11 +134,6 @@ export default function ResearcherRevisionsHubClient() {
       window.removeEventListener("natureaide:revisions-updated", handleSync);
     };
   }, [fetchRevisions]);
-
-  const showToast = (type: "success" | "error", text: string) => {
-    setToastMessage({ type, text });
-    setTimeout(() => setToastMessage(null), 4000);
-  };
 
   // Filtered list based on search and severity
   const filteredRevisions = revisions.filter((item) => {
@@ -219,24 +212,6 @@ export default function ResearcherRevisionsHubClient() {
 
   return (
     <div className="w-full max-w-none space-y-6 pb-12 text-slate-800">
-      {/* Toast Alert */}
-      {toastMessage && (
-        <div
-          className={`fixed top-5 right-5 z-50 px-4 py-3 rounded-xl shadow-lg border flex items-center gap-2.5 text-xs font-bold transition-all ${
-            toastMessage.type === "success"
-              ? "bg-emerald-600 text-white border-emerald-700"
-              : "bg-rose-600 text-white border-rose-700"
-          }`}
-        >
-          {toastMessage.type === "success" ? (
-            <CheckCircle2 className="w-4 h-4 text-white shrink-0" />
-          ) : (
-            <AlertTriangle className="w-4 h-4 text-white shrink-0" />
-          )}
-          <span>{toastMessage.text}</span>
-        </div>
-      )}
-
       {/* 1. TOP HEADER — matches My Research Projects */}
       <motion.div
         initial={{ opacity: 0, y: 8 }}

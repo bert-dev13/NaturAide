@@ -19,6 +19,7 @@ import {
   BookOpen,
   ArrowRight,
 } from "lucide-react";
+import { confirmAction } from "@/lib/toast";
 
 interface ProjectOption {
   id: number;
@@ -303,12 +304,13 @@ export default function ResearcherAssistantClient({
   // Clear chat: wipe local thread + detach paper; delete server conversation when present
   const handleClearChat = async () => {
     if (!canClearChat || clearingChat) return;
-    if (
-      messages.length > 0 &&
-      typeof window !== "undefined" &&
-      !window.confirm("Clear this chat? Message history will be removed.")
-    ) {
-      return;
+    if (messages.length > 0) {
+      const confirmed = await confirmAction({
+        message: "Clear this chat? Message history will be removed.",
+        variant: "destructive",
+        confirmLabel: "Clear",
+      });
+      if (!confirmed) return;
     }
 
     setClearingChat(true);

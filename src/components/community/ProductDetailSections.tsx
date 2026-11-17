@@ -12,6 +12,7 @@ import {
   MedicinePill2DIcon,
   ShieldAlert2DIcon,
 } from "./CommunityIcons2D";
+import { toastSuccess } from "@/lib/toast";
 import {
   ArrowLeft,
   Bot,
@@ -135,8 +136,6 @@ export default function ProductDetailSections({
 }: ProductDetailSectionsProps) {
   const [isSaved, setIsSaved] = useState(initialSaved);
   const [saving, setSaving] = useState(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-
   // Progressive disclosure toggle states
   const [showMoreInfo, setShowMoreInfo] = useState(false);
   const [showAllIngredients, setShowAllIngredients] = useState(false);
@@ -154,8 +153,7 @@ export default function ProductDetailSections({
       const data = await res.json();
       if (data.success) {
         setIsSaved(data.saved);
-        setToastMessage(data.saved ? "Saved to My Guide" : "Removed from Saved");
-        setTimeout(() => setToastMessage(null), 2400);
+        toastSuccess(data.saved ? "Saved to My Guide" : "Removed from Saved");
       }
     } catch (err) {
       console.error("Save error:", err);
@@ -388,11 +386,6 @@ export default function ProductDetailSections({
                 <Bookmark2DIcon size={18} isSaved={isSaved} />
               )}
             </button>
-            {toastMessage && (
-              <div className="absolute right-0 top-11 whitespace-nowrap px-2.5 py-1 rounded-lg bg-[#0f2c20] text-white text-[11px] font-bold shadow-md animate-fade-in pointer-events-none z-50">
-                {toastMessage}
-              </div>
-            )}
           </div>
         </div>
       </header>

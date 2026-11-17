@@ -327,17 +327,17 @@ async function runTests() {
     assert(s1_complete.sectionApprovedPercent === 100, "Section 1 approvedPercent is 100%");
     assert(s1_complete.sectionStatus === "Approved", "Section 1 automatically marked Approved in review_area_coverage & review_assignments");
 
-    // Verify Section 2 (8 steps) bulk approve
-    console.log("  Approving all 8 steps of Section 2 (Bioinformatics)...");
+    // Verify Section 2 (7 steps) bulk approve
+    console.log("  Approving all 7 steps of Section 2 (Bioinformatics)...");
     await approveAllSectionSteps(projectId, "section2", reviewerId, submissionId);
     let checkSteps = await getProjectApprovedSteps(projectId);
-    assert(checkSteps.section2.length === 8, "Section 2 has all 8 steps approved in MySQL");
+    assert(checkSteps.section2.length === 7, "Section 2 has all 7 steps approved in MySQL");
 
-    // Verify Section 3 (2 steps) bulk approve
-    console.log("  Approving all 2 steps of Section 3 (Clinical Pharmacology & Paper Review)...");
+    // Verify Section 3 (3 steps) bulk approve
+    console.log("  Approving all 3 steps of Section 3 (Clinical Pharmacology & Paper Review)...");
     await approveAllSectionSteps(projectId, "section3", reviewerId, submissionId);
     checkSteps = await getProjectApprovedSteps(projectId);
-    assert(checkSteps.section3.length === 2, "Section 3 has both 2 steps approved in MySQL");
+    assert(checkSteps.section3.length === 3, "Section 3 has all 3 steps approved in MySQL");
 
     const [covRows]: any = await pool.query("SELECT areaKey, status, reviewerId FROM review_area_coverage WHERE submissionId = ?", [submissionId]);
     console.log("Coverage rows in MySQL for submissionId:", submissionId, covRows);
@@ -423,8 +423,8 @@ async function runTests() {
     assert(profState.overallApprovalPercent === 100, "overallApprovalPercent is 100%");
     assert(Boolean(profState.approvedStepsBySection), "approvedStepsBySection attached to response");
     assert(profState.approvedStepsBySection?.section1.length === 6, "Section 1: 6 of 6 approved in state");
-    assert(profState.approvedStepsBySection?.section2.length === 8, "Section 2: 8 of 8 approved in state");
-    assert(profState.approvedStepsBySection?.section3.length === 2, "Section 3: 2 of 2 approved in state");
+    assert(profState.approvedStepsBySection?.section2.length === 7, "Section 2: 7 of 7 approved in state");
+    assert(profState.approvedStepsBySection?.section3.length === 3, "Section 3: 3 of 3 approved in state");
 
     // Test completion execution
     console.log("  Completing research project...");

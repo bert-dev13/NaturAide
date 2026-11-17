@@ -46,6 +46,7 @@ import {
   StageTabs,
   StageHelpTooltip,
 } from "@/components/researcher/stage";
+import { confirmAction, showToast } from "@/lib/toast";
 
 export interface FormulationOverviewData {
   id?: number;
@@ -284,15 +285,6 @@ export default function FormulationBuilderClient({
   // UI state
   const [lastSaved, setLastSaved] = useState<string | null>(null);
   const [completingStage, setCompletingStage] = useState(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [toastType, setToastType] = useState<"success" | "error" | "info">("success");
-
-  const showToast = (msg: string, type: "success" | "error" | "info" = "success") => {
-    setToastMessage(msg);
-    setToastType(type);
-    setTimeout(() => setToastMessage(null), 4000);
-  };
-
   // Upload handler
   const handleUploadFile = async (
     e: React.ChangeEvent<HTMLInputElement>,
@@ -418,7 +410,12 @@ export default function FormulationBuilderClient({
 
   // Delete Component
   const handleDeleteComponent = async (componentId: number) => {
-    if (!confirm("Remove this component from the recipe?")) return;
+    const confirmed = await confirmAction({
+      message: "Remove this component from the recipe?",
+      variant: "destructive",
+      confirmLabel: "Remove",
+    });
+    if (!confirmed) return;
 
     try {
       const res = await fetch(
@@ -485,7 +482,12 @@ export default function FormulationBuilderClient({
 
   // Delete Step
   const handleDeleteStep = async (stepId: number) => {
-    if (!confirm("Remove this step from the preparation procedure?")) return;
+    const confirmed = await confirmAction({
+      message: "Remove this step from the preparation procedure?",
+      variant: "destructive",
+      confirmLabel: "Remove",
+    });
+    if (!confirmed) return;
 
     try {
       const res = await fetch(`/api/researcher/projects/${projectId}/formulation/steps?id=${stepId}`, {
@@ -548,7 +550,12 @@ export default function FormulationBuilderClient({
 
   // Delete Batch
   const handleDeleteBatch = async (batchDbId: number) => {
-    if (!confirm("Remove this batch record?")) return;
+    const confirmed = await confirmAction({
+      message: "Remove this batch record?",
+      variant: "destructive",
+      confirmLabel: "Remove",
+    });
+    if (!confirmed) return;
 
     try {
       const res = await fetch(
@@ -741,33 +748,6 @@ export default function FormulationBuilderClient({
         />
       }
     >
-      {/* TOAST FEEDBACK */}
-      <AnimatePresence>
-        {toastMessage && (
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-2xl shadow-xl flex items-center gap-2.5 text-xs font-bold border ${
-              toastType === "error"
-                ? "bg-rose-50 text-rose-800 border-rose-200"
-                : toastType === "info"
-                ? "bg-sky-50 text-sky-800 border-sky-200"
-                : "bg-emerald-50 text-emerald-900 border-emerald-200"
-            }`}
-          >
-            {toastType === "error" ? (
-              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-            ) : toastType === "info" ? (
-              <AlertCircle className="w-4 h-4 text-sky-600 shrink-0" />
-            ) : (
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-            )}
-            <span>{toastMessage}</span>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* 1. UNIVERSAL STAGE HEADER */}
       <StageHeader
         projectId={projectId}

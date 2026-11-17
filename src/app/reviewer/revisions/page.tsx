@@ -79,8 +79,6 @@ export default function ReviewerRevisionsPage() {
   const [statusFilter, setStatusFilter] = useState<"ALL" | "ADDRESSED" | "OPEN" | "RESOLVED">("ALL");
   const [severityFilter, setSeverityFilter] = useState<string>("ALL");
   const [searchQuery, setSearchQuery] = useState("");
-  const [toastMessage, setToastMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-
   const loadRevisions = useCallback(async () => {
     try {
       setLoading(true);
@@ -118,11 +116,6 @@ export default function ReviewerRevisionsPage() {
       window.removeEventListener("natureaide:review-updated", handleSync);
     };
   }, [loadRevisions]);
-
-  const showToast = (text: string, type: "success" | "error" = "success") => {
-    setToastMessage({ text, type });
-    setTimeout(() => setToastMessage(null), 4000);
-  };
 
   // Filtered Revisions List
   const filteredRevisions = useMemo(() => {
@@ -163,24 +156,6 @@ export default function ReviewerRevisionsPage() {
 
   return (
     <div className="w-full max-w-[1440px] mx-auto space-y-4 pb-28">
-      {/* TOAST ALERT */}
-      {toastMessage && (
-        <div
-          className={`fixed bottom-6 right-6 z-50 px-4 py-3 rounded-2xl text-xs font-bold shadow-xl border flex items-center gap-2 animate-in fade-in duration-200 ${
-            toastMessage.type === "success"
-              ? "bg-slate-900 text-white border-slate-700"
-              : "bg-rose-900 text-white border-rose-700"
-          }`}
-        >
-          {toastMessage.type === "success" ? (
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-          ) : (
-            <AlertTriangle className="w-4 h-4 text-rose-400" />
-          )}
-          <span>{toastMessage.text}</span>
-        </div>
-      )}
-
       {/* =================================================================== */}
       {/* 1. COMPREHENSIVE HEADER BANNER (Consistent Scientific Header)       */}
       {/* =================================================================== */}

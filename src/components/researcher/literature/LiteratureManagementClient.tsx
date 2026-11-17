@@ -47,6 +47,7 @@ import {
   StageTabs,
   StageHelpTooltip,
 } from "@/components/researcher/stage";
+import { confirmAction, showToast } from "@/lib/toast";
 
 interface LiteratureReferenceItem {
   id: number;
@@ -187,15 +188,6 @@ export default function LiteratureManagementClient({
   const [savingSynthesis, setSavingSynthesis] = useState(false);
   const [lastSaved, setLastSaved] = useState<string | null>(null);
   const [completingStage, setCompletingStage] = useState(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [toastType, setToastType] = useState<"success" | "error" | "info">("success");
-
-  const showToast = (msg: string, type: "success" | "error" | "info" = "success") => {
-    setToastMessage(msg);
-    setToastType(type);
-    setTimeout(() => setToastMessage(null), 4000);
-  };
-
   // Recalculate dynamic counts
   const recalculateCounts = (items: LiteratureReferenceItem[]) => {
     let human = 0;
@@ -408,9 +400,12 @@ export default function LiteratureManagementClient({
 
   // Remove Reference
   const handleRemoveReference = async (refId: number) => {
-    if (!confirm("Are you sure you want to remove this paper from your literature library?")) {
-      return;
-    }
+    const confirmed = await confirmAction({
+      message: "Are you sure you want to remove this paper from your literature library?",
+      variant: "destructive",
+      confirmLabel: "Remove",
+    });
+    if (!confirmed) return;
 
     try {
       const res = await fetch(`/api/researcher/projects/${projectId}/literature?id=${refId}`, {
@@ -584,33 +579,6 @@ export default function LiteratureManagementClient({
         />
       }
     >
-      {/* TOAST FEEDBACK */}
-      <AnimatePresence>
-        {toastMessage && (
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-2xl shadow-xl flex items-center gap-2.5 text-xs font-bold border ${
-              toastType === "error"
-                ? "bg-rose-50 text-rose-800 border-rose-200"
-                : toastType === "info"
-                ? "bg-sky-50 text-sky-800 border-sky-200"
-                : "bg-emerald-50 text-emerald-900 border-emerald-200"
-            }`}
-          >
-            {toastType === "error" ? (
-              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-            ) : toastType === "info" ? (
-              <AlertCircle className="w-4 h-4 text-sky-600 shrink-0" />
-            ) : (
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-            )}
-            <span>{toastMessage}</span>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* 1. UNIVERSAL STAGE HEADER */}
       <StageHeader
         projectId={projectId}

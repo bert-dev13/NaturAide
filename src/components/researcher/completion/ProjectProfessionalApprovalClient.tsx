@@ -28,6 +28,7 @@ import type {
   SpecialtyApprovalRow,
 } from "@/lib/research-approval-completion-service";
 import ResearchSectionWorkspaceHeader from "@/components/researcher/ResearchSectionWorkspaceHeader";
+import { showToast } from "@/lib/toast";
 
 interface Props {
   project: {
@@ -148,9 +149,6 @@ export default function ProjectProfessionalApprovalClient({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(
-    null
-  );
 
   const isCompletedProject = Boolean(
     project.status === "COMPLETED" || approvalState?.isCompleted
@@ -158,7 +156,6 @@ export default function ProjectProfessionalApprovalClient({
 
   const refreshApprovalStatus = useCallback(async () => {
     setIsRefreshing(true);
-    setMessage(null);
     try {
       const res = await fetch(`/api/researcher/projects/${project.id}/approval-status`);
       if (res.ok) {
@@ -186,7 +183,6 @@ export default function ProjectProfessionalApprovalClient({
 
   const handleCompleteResearch = async () => {
     setIsCompleting(true);
-    setMessage(null);
     try {
       const res = await fetch(`/api/researcher/projects/${project.id}/complete-research`, {
         method: "POST",
@@ -196,7 +192,7 @@ export default function ProjectProfessionalApprovalClient({
       setShowCompleteModal(false);
       router.push(data.redirectUrl || `/researcher/completed/${project.id}`);
     } catch (err: any) {
-      setMessage({ type: "error", text: err.message || "Failed to complete research project." });
+      showToast(err.message || "Failed to complete research project.", "error");
       setIsCompleting(false);
     }
   };
@@ -322,31 +318,6 @@ export default function ProjectProfessionalApprovalClient({
           </div>
         }
       />
-
-      <AnimatePresence>
-        {message && (
-          <motion.div
-            initial={{ opacity: 0, y: -6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-xs font-medium ${
-              message.type === "success"
-                ? "border-emerald-200 bg-emerald-50 text-emerald-900"
-                : "border-rose-200 bg-rose-50 text-rose-900"
-            }`}
-          >
-            <span>{message.text}</span>
-            <button
-              type="button"
-              onClick={() => setMessage(null)}
-              className="rounded-md p-1 text-current/60 hover:bg-black/5"
-              aria-label="Dismiss"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Compact metrics strip */}
       <motion.div

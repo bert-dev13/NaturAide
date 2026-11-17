@@ -148,32 +148,27 @@ async function runTests() {
     );
 
     // =========================================================================
-    // TEST 1: Section 3 displays all four steps in v2-progress-service
+    // TEST 1: Section 3 displays Paper Submission steps in v2-progress-service
     // =========================================================================
     const v2ProgBefore = await calculateV2ProjectProgress(testProjectId);
     assert.equal(v2ProgBefore.section1.status, "COMPLETED", "Section 1 is COMPLETED");
     assert.equal(v2ProgBefore.section2.status, "COMPLETED", "Section 2 is COMPLETED");
-    assert.equal(v2ProgBefore.section3.totalSteps, 4, "Section 3 must have 4 total steps");
+    assert.equal(v2ProgBefore.section3.totalSteps, 3, "Section 3 must have 3 total steps");
     assert.deepEqual(
       v2ProgBefore.section3.steps.map((s) => s.title),
-      [
-        "Research Summary",
-        "Upload Research Paper",
-        "Review & Submit",
-        "Professional Approval & Completion",
-      ],
-      "Section 3 steps must match exact 4 step titles"
+      ["Research Summary", "Laboratory Results", "Upload Research Paper"],
+      "Section 3 steps must match Paper Submission titles"
     );
-    console.log("✓ Test 1 passed: Section 3 displays all four steps");
+    console.log("✓ Test 1 passed: Section 3 displays Paper Submission steps");
 
     // Pre-submission state check: cannot complete before submission
     const preSubState = await getProjectProfessionalApprovalState(testProjectId);
     assert.ok(preSubState, "Approval state returned before submission");
-    assert.equal(preSubState.hasSubmission, false, "hasSubmission is false before Step 3 submit");
+    assert.equal(preSubState.hasSubmission, false, "hasSubmission is false before submit");
     assert.equal(preSubState.canCompleteResearch, false, "Complete Research disabled before submit");
 
     // =========================================================================
-    // TEST 2 & 3: Step 3 submits the research and opens Step 4 with 5 specialties
+    // TEST 2 & 3: Submit research and open Professional Approval with 3 specialties
     // =========================================================================
     const cycle1 = await openExpertReviewCycle({ projectId: testProjectId, researcherId });
     assert.ok(cycle1.submissionId > 0, "Submission v1.0 created");
@@ -181,54 +176,50 @@ async function runTests() {
 
     const stateAfterSubmit = await getProjectProfessionalApprovalState(testProjectId);
     assert.ok(stateAfterSubmit, "State loaded after submission");
-    assert.equal(stateAfterSubmit.hasSubmission, true, "Step 4 is now accessible (hasSubmission=true)");
-    assert.equal(stateAfterSubmit.specialties.length, 5, "All 5 specialties returned in Step 4");
+    assert.equal(stateAfterSubmit.hasSubmission, true, "Professional Approval is accessible (hasSubmission=true)");
+    assert.equal(stateAfterSubmit.specialties.length, 3, "All 3 specialties returned");
     assert.deepEqual(
       stateAfterSubmit.specialties.map((s) => `${s.code} ${s.specialty}`),
       [
-        "01 Pharmacognosy",
-        "02 Bioinformatics",
-        "03 Pharmacology",
-        "04 Formulation Science",
-        "05 Clinical Safety",
+        "01 Formulation Science & Pharmacognosy",
+        "02 Bioinformatics & In-Silico Modeling",
+        "03 Clinical Pharmacology & Paper Review",
       ],
-      "Step 4 lists exact 5 professional specialties"
+      "Professional Approval lists exact 3 professional specialties"
     );
-    assert.equal(stateAfterSubmit.approvedCount, 0, "Initially 0 of 5 Approved");
+    assert.equal(stateAfterSubmit.approvedCount, 0, "Initially 0 of 3 Approved");
     assert.equal(
       stateAfterSubmit.overallReviewStatus,
-      "Under Professional Review — 0/5 Approved",
-      "Overall status shows 0/5 Approved"
+      "Under Professional Review — 0/3 Approved",
+      "Overall status shows 0/3 Approved"
     );
-    console.log("✓ Test 2 & 3 passed: Submission opens Step 4 with all 5 specialties (0 of 5 Approved)");
+    console.log("✓ Test 2 & 3 passed: Submission opens Professional Approval with all 3 specialties (0 of 3 Approved)");
 
     // =========================================================================
     // TEST 4 & 5: Partial approvals + Revision request workflow
     // =========================================================================
-    // Approve Pharmacognosy (01) and Bioinformatics (02)
-    for (const areaKey of ["pharmacognosy", "bioinformatics"]) {
-      await pool.query(
-        `UPDATE review_area_coverage SET status = 'APPROVED', reviewerId = ?, updatedAt = CURRENT_TIMESTAMP(3)
-         WHERE submissionId = ? AND areaKey = ?`,
-        [reviewerId, cycle1.submissionId, areaKey]
-      );
-      await pool.query(
-        `INSERT INTO professional_reviews (submissionId, projectId, reviewerId, areaKey, reviewCycle, assessment, comments, status, submittedAt)
-         VALUES (?, ?, ?, ?, 1, 'ACCEPTABLE', 'Approved in cycle 1.', 'SUBMITTED', CURRENT_TIMESTAMP(3))
-         ON DUPLICATE KEY UPDATE assessment = 'ACCEPTABLE', status = 'SUBMITTED', submittedAt = CURRENT_TIMESTAMP(3)`,
-        [cycle1.submissionId, testProjectId, reviewerId, areaKey]
-      );
-    }
+    // Approve Formulation (01) only first — leave Bioinformatics pending for premature-complete test
+    await pool.query(
+      `UPDATE review_area_coverage SET status = 'APPROVED', reviewerId = ?, updatedAt = CURRENT_TIMESTAMP(3)
+       WHERE submissionId = ? AND areaKey = 'formulation'`,
+      [reviewerId, cycle1.submissionId]
+    );
+    await pool.query(
+      `INSERT INTO professional_reviews (submissionId, projectId, reviewerId, areaKey, reviewCycle, assessment, comments, status, submittedAt)
+       VALUES (?, ?, ?, 'formulation', 1, 'ACCEPTABLE', 'Approved in cycle 1.', 'SUBMITTED', CURRENT_TIMESTAMP(3))
+       ON DUPLICATE KEY UPDATE assessment = 'ACCEPTABLE', status = 'SUBMITTED', submittedAt = CURRENT_TIMESTAMP(3)`,
+      [cycle1.submissionId, testProjectId, reviewerId]
+    );
     await evaluateOverallApproval(cycle1.submissionId, testProjectId);
 
-    const state2of5 = await getProjectProfessionalApprovalState(testProjectId);
-    assert.equal(state2of5?.approvedCount, 2, "2 of 5 Approved calculated from MySQL");
+    const state1of3 = await getProjectProfessionalApprovalState(testProjectId);
+    assert.equal(state1of3?.approvedCount, 1, "1 of 3 Approved calculated from MySQL");
     assert.equal(
-      state2of5?.overallReviewStatus,
-      "Under Professional Review — 2/5 Approved",
-      "Overall status updated to 2/5 Approved"
+      state1of3?.overallReviewStatus,
+      "Under Professional Review — 1/3 Approved",
+      "Overall status updated to 1/3 Approved"
     );
-    assert.equal(state2of5?.canCompleteResearch, false, "Complete Research disabled at 2/5 Approved");
+    assert.equal(state1of3?.canCompleteResearch, false, "Complete Research disabled at 1/3 Approved");
 
     // Pharmacology (03) requests revisions
     await pool.query(
@@ -257,11 +248,11 @@ async function runTests() {
     );
     assert.deepEqual(
       stateRevision?.revisionsRequiredSpecialties,
-      ["Pharmacology"],
-      "Identifies Pharmacology as requesting revisions"
+      ["Clinical Pharmacology & Paper Review"],
+      "Identifies Pharmacology specialty as requesting revisions"
     );
     assert.equal(stateRevision?.canCompleteResearch, false, "Complete Research disabled when Revisions Required");
-    console.log("✓ Test 4 & 5 passed: Live X of 5 count & Revisions Required workflow verified");
+    console.log("✓ Test 4 & 5 passed: Live X of 3 count & Revisions Required workflow verified");
 
     // =========================================================================
     // TEST 6: Resubmitted research updates review status & carries forward valid approvals
@@ -269,38 +260,35 @@ async function runTests() {
     const cycle2 = await openExpertReviewCycle({ projectId: testProjectId, researcherId });
     assert.equal(cycle2.versionTag, "v2.0", "Resubmission creates v2.0");
     assert.ok(
-      cycle2.retainedApprovedAreas.includes("formulation") &&
-        cycle2.retainedApprovedAreas.includes("bioinformatics"),
-      "Unchanged Formulation & Bioinformatics approvals carried forward to v2.0"
+      cycle2.retainedApprovedAreas.includes("formulation"),
+      "Unchanged Formulation approval carried forward to v2.0"
     );
 
-    // Resolve open feedback & approve remaining 2 specialties on v2.0 (leaving Clinical Safety pending -> 4/5)
+    // Resolve open feedback; approve Bioinformatics only → 2/3 (premature complete blocked)
     await pool.query(
       `UPDATE review_feedback SET status = 'RESOLVED' WHERE projectId = ?`,
       [testProjectId]
     );
 
-    for (const areaKey of ["pharmacology", "formulation"]) {
-      await pool.query(
-        `UPDATE review_area_coverage SET status = 'APPROVED', reviewerId = ?, updatedAt = CURRENT_TIMESTAMP(3)
-         WHERE submissionId = ? AND areaKey = ?`,
-        [reviewerId, cycle2.submissionId, areaKey]
-      );
-      await pool.query(
-        `INSERT INTO professional_reviews (submissionId, projectId, reviewerId, areaKey, reviewCycle, assessment, comments, status, submittedAt)
-         VALUES (?, ?, ?, ?, 2, 'ACCEPTABLE', 'Approved in v2.0.', 'SUBMITTED', CURRENT_TIMESTAMP(3))
-         ON DUPLICATE KEY UPDATE assessment = 'ACCEPTABLE', status = 'SUBMITTED', submittedAt = CURRENT_TIMESTAMP(3)`,
-        [cycle2.submissionId, testProjectId, reviewerId, areaKey]
-      );
-    }
+    await pool.query(
+      `UPDATE review_area_coverage SET status = 'APPROVED', reviewerId = ?, updatedAt = CURRENT_TIMESTAMP(3)
+       WHERE submissionId = ? AND areaKey = 'bioinformatics'`,
+      [reviewerId, cycle2.submissionId]
+    );
+    await pool.query(
+      `INSERT INTO professional_reviews (submissionId, projectId, reviewerId, areaKey, reviewCycle, assessment, comments, status, submittedAt)
+       VALUES (?, ?, ?, 'bioinformatics', 2, 'ACCEPTABLE', 'Approved in v2.0.', 'SUBMITTED', CURRENT_TIMESTAMP(3))
+       ON DUPLICATE KEY UPDATE assessment = 'ACCEPTABLE', status = 'SUBMITTED', submittedAt = CURRENT_TIMESTAMP(3)`,
+      [cycle2.submissionId, testProjectId, reviewerId]
+    );
     await evaluateOverallApproval(cycle2.submissionId, testProjectId);
 
     // =========================================================================
-    // TEST 7: Complete Research disabled at 4/5 Approved & server rejects premature call
+    // TEST 7: Complete Research disabled at 2/3 Approved & server rejects premature call
     // =========================================================================
-    const state4of5 = await getProjectProfessionalApprovalState(testProjectId);
-    assert.equal(state4of5?.approvedCount, 4, "4 of 5 Approved");
-    assert.equal(state4of5?.canCompleteResearch, false, "Complete Research disabled at 4/5 Approved");
+    const state2of3 = await getProjectProfessionalApprovalState(testProjectId);
+    assert.equal(state2of3?.approvedCount, 2, "2 of 3 Approved");
+    assert.equal(state2of3?.canCompleteResearch, false, "Complete Research disabled at 2/3 Approved");
 
     let prematureErrorThrown = false;
     try {
@@ -309,35 +297,35 @@ async function runTests() {
       prematureErrorThrown = true;
       assert.equal(err.statusCode, 400, "Server rejects premature completion with 400");
     }
-    assert.ok(prematureErrorThrown, "Server blocked completion when only 4 of 5 approved");
-    console.log("✓ Test 6 & 7 passed: Resubmission v2.0 & server blocks premature completion at 4/5");
+    assert.ok(prematureErrorThrown, "Server blocked completion when only 2 of 3 approved");
+    console.log("✓ Test 6 & 7 passed: Resubmission v2.0 & server blocks premature completion at 2/3");
 
-    // Now approve the 5th specialty (Clinical Safety)
+    // Now approve the 3rd specialty (Pharmacology / Paper Review)
     await pool.query(
       `UPDATE review_area_coverage SET status = 'APPROVED', reviewerId = ?, updatedAt = CURRENT_TIMESTAMP(3)
-       WHERE submissionId = ? AND areaKey = 'clinical_safety'`,
+       WHERE submissionId = ? AND areaKey = 'pharmacology'`,
       [reviewerId, cycle2.submissionId]
     );
     await pool.query(
       `INSERT INTO professional_reviews (submissionId, projectId, reviewerId, areaKey, reviewCycle, assessment, comments, status, submittedAt)
-       VALUES (?, ?, ?, 'clinical_safety', 2, 'ACCEPTABLE', 'Clinical safety profile approved.', 'SUBMITTED', CURRENT_TIMESTAMP(3))
+       VALUES (?, ?, ?, 'pharmacology', 2, 'ACCEPTABLE', 'Paper and clinical pharmacology profile approved.', 'SUBMITTED', CURRENT_TIMESTAMP(3))
        ON DUPLICATE KEY UPDATE assessment = 'ACCEPTABLE', status = 'SUBMITTED', submittedAt = CURRENT_TIMESTAMP(3)`,
       [cycle2.submissionId, testProjectId, reviewerId]
     );
     const overallFinal = await evaluateOverallApproval(cycle2.submissionId, testProjectId);
-    assert.equal(overallFinal.allApproved, true, "All 5 specialties approved");
+    assert.equal(overallFinal.allApproved, true, "All 3 specialties approved");
 
     // Verify project is APPROVED (Fully Approved — Ready to Complete) and NOT auto-completed!
-    const state5of5 = await getProjectProfessionalApprovalState(testProjectId);
-    assert.equal(state5of5?.approvedCount, 5, "5 of 5 Approved");
-    assert.equal(state5of5?.isCompleted, false, "Project is NOT automatically marked Completed");
+    const state3of3 = await getProjectProfessionalApprovalState(testProjectId);
+    assert.equal(state3of3?.approvedCount, 3, "3 of 3 Approved");
+    assert.equal(state3of3?.isCompleted, false, "Project is NOT automatically marked Completed");
     assert.equal(
-      state5of5?.overallReviewStatus,
+      state3of3?.overallReviewStatus,
       "Fully Approved — Ready to Complete",
       "Status is Fully Approved — Ready to Complete"
     );
     assert.equal(
-      state5of5?.canCompleteResearch,
+      state3of3?.canCompleteResearch,
       true,
       "Complete Research button is now enabled (canCompleteResearch=true)"
     );
@@ -372,7 +360,7 @@ async function runTests() {
     const completedList = await getCompletedResearchListForResearcher(researcherId);
     const foundInList = completedList.find((item) => item.projectId === testProjectId);
     assert.ok(foundInList, "Completed project appears on Completed Research page list");
-    assert.equal(foundInList.approvalStatusLabel, "5 of 5 Approved", "Shows 5 of 5 Approved");
+    assert.equal(foundInList.approvalStatusLabel, "3 of 3 Approved", "Shows 3 of 3 Approved");
     assert.equal(foundInList.approvedVersionTag, "v2.0", "Shows approved version v2.0");
 
     const detail = await getCompletedResearchDetail(testProjectId, {
@@ -380,7 +368,7 @@ async function runTests() {
       role: "RESEARCHER",
     });
     assert.ok(detail, "Completed Research Detail retrieved");
-    assert.equal(detail.approvalState.approvedCount, 5, "Detail shows 5 of 5 Approved");
+    assert.equal(detail.approvalState.approvedCount, 3, "Detail shows 3 of 3 Approved");
     assert.ok(detail.executiveSummary.includes("Akapulko"), "Detail includes Research Summary");
     assert.ok(detail.manuscript?.hasFile, "Detail includes uploaded Research Paper");
     assert.equal(

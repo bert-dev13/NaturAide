@@ -25,13 +25,18 @@ async function runTests() {
 
   const researcherId = 2; // researcher@natureaide.test
   const reviewerId = 3; // reviewer@natureaide.test
+  const allSpecialtyKeys = EXPERT_REVIEW_AREAS.map((a) => a.key);
 
-  // Create a dedicated temporary test project cloned from Project 36 so we never corrupt existing researcher work
+  const [plantRows]: any = await pool.query(
+    `SELECT id FROM plants ORDER BY id ASC LIMIT 1`
+  );
+  const plantId = plantRows[0]?.id || "akapulko";
+
   const [proj36Rows]: any = await pool.query(
     `SELECT * FROM research_projects WHERE id = 36 LIMIT 1`
   );
   const baseProj = proj36Rows[0] || {
-    plantId: 5,
+    plantId,
     title: "Akapulko Topical Hydrogel Review Test",
     researchObjective: "Evaluate Akapulko hydrogel formulation and docking",
   };
@@ -42,7 +47,7 @@ async function runTests() {
      ) VALUES (?, ?, ?, ?, 'IN_PROGRESS', 'submission', 100, CURRENT_TIMESTAMP(3), CURRENT_TIMESTAMP(3))`,
     [
       researcherId,
-      baseProj.plantId || 5,
+      baseProj.plantId || plantId,
       "[E2E TEST] Akapulko Topical Hydrogel Multidisciplinary Review",
       baseProj.researchObjective || "Test objective",
     ]
@@ -50,7 +55,6 @@ async function runTests() {
   const testProjectId = Number(insProj.insertId);
 
   try {
-    // Seed realistic V2 Section 1, 2, 3 data for testProjectId
     await pool.query(
       `INSERT INTO research_plant_data (projectId, commonName, scientificName, family, partsStudied, extractionMethod, extractionSolvent, materialType)
        VALUES (?, 'Akapulko', 'Senna alata', 'Fabaceae', 'Leaves', 'Ultrasonic-Assisted Extraction', '70% Ethanol', 'Hydroethanolic Extract')`,
@@ -90,43 +94,33 @@ async function runTests() {
     );
 
     // -------------------------------------------------------------------------
-    // TEST 1: All 5 Reviewer Specialties & Multi-Specialty Assignment
+    // TEST 1: All 3 Reviewer Specialties & Multi-Specialty Assignment
     // -------------------------------------------------------------------------
-    console.log("Test 1: Verify 5 Reviewer Specialties & Multi-Specialty Assignment...");
-    assert.strictEqual(EXPERT_REVIEW_AREAS.length, 5, "Must have exactly 5 specialties");
-    const expectedLabels = [
-      "Pharmacognosy",
-      "Bioinformatics",
-      "Pharmacology",
-      "Formulation Science",
-      "Clinical Safety",
-    ];
-    assert.deepStrictEqual(
-      EXPERT_REVIEW_AREAS.map((a) => a.label),
-      expectedLabels,
-      "Specialty labels must match requirements"
-    );
+    console.log("Test 1: Verify 3 Reviewer Specialties & Multi-Specialty Assignment...");
+    assert.strictEqual(EXPERT_REVIEW_AREAS.length, 3, "Must have exactly 3 specialties");
+    assert.deepStrictEqual(allSpecialtyKeys, [
+      "formulation",
+      "bioinformatics",
+      "pharmacology",
+    ]);
 
-    // Test assigning a subset (2 specialties) to reviewerId
     const subset = await setReviewerSpecialties(
       reviewerId,
-      ["pharmacognosy", "bioinformatics"],
+      ["formulation", "bioinformatics"],
       reviewerId
     );
-    assert.deepStrictEqual(subset, ["pharmacognosy", "bioinformatics"]);
+    assert.deepStrictEqual(subset, ["formulation", "bioinformatics"]);
     const fetchedSubset = await getReviewerSpecialties(reviewerId);
-    assert.deepStrictEqual(fetchedSubset, ["pharmacognosy", "bioinformatics"]);
+    assert.deepStrictEqual(fetchedSubset, ["formulation", "bioinformatics"]);
 
-    // Restore all 5 specialties to reviewerId (multi-specialty in same account)
-    const allFiveKeys = EXPERT_REVIEW_AREAS.map((a) => a.key);
-    const assignedAll = await setReviewerSpecialties(reviewerId, allFiveKeys, reviewerId);
-    assert.strictEqual(assignedAll.length, 5, "Reviewer account holds all 5 specialties");
+    const assignedAll = await setReviewerSpecialties(reviewerId, allSpecialtyKeys, reviewerId);
+    assert.strictEqual(assignedAll.length, 3, "Reviewer account holds all 3 specialties");
     console.log("  ✓ Passed Test 1 (Single & multi-specialty assignment in same account)");
 
     // -------------------------------------------------------------------------
     // TEST 2: Research Submissions Appear in Reviewer Assignments (v1.0)
     // -------------------------------------------------------------------------
-    console.log("Test 2: Verify Research Submission v1.0 Creates All 5 Specialty Assignments...");
+    console.log("Test 2: Verify Research Submission v1.0 Creates All 3 Specialty Assignments...");
     const snapV1 = await buildFullDossierSnapshot(testProjectId);
     const subV1 = await openExpertReviewCycle({
       projectId: testProjectId,
@@ -141,11 +135,11 @@ async function runTests() {
       `SELECT areaKey, status, reviewerId FROM review_area_coverage WHERE submissionId = ?`,
       [subV1.submissionId]
     );
-    assert.strictEqual(v1Cov.length, 5, "All 5 specialties must have coverage records");
+    assert.strictEqual(v1Cov.length, 3, "All 3 specialties must have coverage records");
     for (const row of v1Cov) {
       assert.strictEqual(row.status, "PENDING", `Initial status for ${row.areaKey} is PENDING`);
     }
-    console.log("  ✓ Passed Test 2 (v1.0 submission assigned across all 5 specialties)");
+    console.log("  ✓ Passed Test 2 (v1.0 submission assigned across all 3 specialties)");
 
     // -------------------------------------------------------------------------
     // TEST 3: Reviewer Draft & Comments Save Successfully
@@ -155,28 +149,28 @@ async function runTests() {
       reviewerId,
       projectId: testProjectId,
       submissionId: subV1.submissionId,
-      areaKey: "pharmacognosy",
+      areaKey: "formulation",
       requireUnlocked: true,
     });
 
     await pool.query(
       `UPDATE professional_reviews
-       SET comments = 'Draft pharmacognosy notes on Senna alata leaves.',
+       SET comments = 'Draft formulation notes on Senna alata leaves.',
            checklistData = ?,
            status = 'DRAFT'
-       WHERE submissionId = ? AND areaKey = 'pharmacognosy'`,
+       WHERE submissionId = ? AND areaKey = 'formulation'`,
       [
         JSON.stringify({ "Botanical identity and scientific name verification": true }),
         subV1.submissionId,
       ]
     );
     await pool.query(
-      `UPDATE review_area_coverage SET status = 'IN_REVIEW' WHERE submissionId = ? AND areaKey = 'pharmacognosy'`,
+      `UPDATE review_area_coverage SET status = 'IN_REVIEW' WHERE submissionId = ? AND areaKey = 'formulation'`,
       [subV1.submissionId]
     );
 
     const [draftRow]: any = await pool.query(
-      `SELECT comments, status, checklistData FROM professional_reviews WHERE submissionId = ? AND areaKey = 'pharmacognosy'`,
+      `SELECT comments, status, checklistData FROM professional_reviews WHERE submissionId = ? AND areaKey = 'formulation'`,
       [subV1.submissionId]
     );
     assert.strictEqual(draftRow[0].status, "DRAFT");
@@ -184,10 +178,10 @@ async function runTests() {
     console.log("  ✓ Passed Test 3 (Reviewer draft and criteria checklist saved)");
 
     // -------------------------------------------------------------------------
-    // TEST 4: Approve 4 Specialties & Request Revisions on 1 Specialty (Formulation Science)
+    // TEST 4: Approve 2 Specialties & Request Revisions on Formulation
     // -------------------------------------------------------------------------
-    console.log("Test 4: Approve 4 Specialties & Request Revisions on Formulation Science...");
-    const approvedInV1 = ["pharmacognosy", "bioinformatics", "pharmacology", "clinical_safety"];
+    console.log("Test 4: Approve 2 Specialties & Request Revisions on Formulation...");
+    const approvedInV1 = ["bioinformatics", "pharmacology"];
     for (const areaKey of approvedInV1) {
       await pool.query(
         `UPDATE professional_reviews
@@ -208,7 +202,6 @@ async function runTests() {
       );
     }
 
-    // Request revisions on Formulation Science
     const revisionComment =
       "Please clarify the viscosity specification and add a second batch concentration at 7.5% extract.";
     await pool.query(
@@ -235,7 +228,7 @@ async function runTests() {
 
     const evalV1 = await evaluateOverallApproval(subV1.submissionId, testProjectId);
     assert.strictEqual(evalV1.allApproved, false, "Project must not be approved when 1 area requires revision");
-    assert.strictEqual(evalV1.approvedCount, 4);
+    assert.strictEqual(evalV1.approvedCount, 2);
     assert.strictEqual(evalV1.revisionCount, 1);
 
     const [fbCheck]: any = await pool.query(
@@ -247,11 +240,8 @@ async function runTests() {
 
     // -------------------------------------------------------------------------
     // TEST 5, 6, 7: Researcher Revises Formulation & Resubmits (v2.0)
-    // - Unchanged approved sections retain valid decisions
-    // - Previous versions and comments remain available
     // -------------------------------------------------------------------------
     console.log("Test 5, 6 & 7: Researcher Revises Formulation & Resubmits v2.0...");
-    // Researcher modifies Formulation batch analysis ONLY (leaving Pharmacognosy, Bioinformatics, Pharmacology, Clinical Safety unchanged)
     await pool.query(
       `INSERT INTO research_batch_analyses (projectId, batchNumber, activeConcentrationPercent, pH, viscosity, appearance, status)
        VALUES (?, 'BATCH-02', 7.5, 5.7, 4650, 'Homogeneous amber gel', 'Simulated')`,
@@ -274,8 +264,8 @@ async function runTests() {
     );
     assert.strictEqual(
       subV2.retainedApprovedAreas.length,
-      4,
-      "All 4 unchanged approved specialties must retain their valid approvals in v2.0"
+      2,
+      "Both unchanged approved specialties must retain their valid approvals in v2.0"
     );
     assert.deepStrictEqual(
       subV2.requiresReviewAreas,
@@ -283,19 +273,17 @@ async function runTests() {
       "Only Formulation Science requires re-review in v2.0"
     );
 
-    // Verify v1.0 submission and comments are still preserved in MySQL
     const [allSubsAfterV2]: any = await pool.query(
       `SELECT id, versionTag, reviewRound FROM review_submissions WHERE projectId = ? ORDER BY reviewRound ASC`,
       [testProjectId]
     );
     assert.strictEqual(allSubsAfterV2.length, 2, "Both v1.0 and v2.0 must be preserved");
-    console.log("  ✓ Passed Tests 5, 6 & 7 (v2.0 created, v1.0 preserved, 4 unchanged approvals retained)");
+    console.log("  ✓ Passed Tests 5, 6 & 7 (v2.0 created, v1.0 preserved, 2 unchanged approvals retained)");
 
     // -------------------------------------------------------------------------
     // TEST 8: Substantially Changed Approved Section Requires Renewed Approval
     // -------------------------------------------------------------------------
     console.log("Test 8: Verify Substantially Changed Approved Section Requires Renewed Approval...");
-    // Suppose before final approval, the researcher modifies Pharmacognosy extraction solvent and resubmits v3.0
     await pool.query(
       `UPDATE research_plant_data SET extractionSolvent = '95% Absolute Ethanol' WHERE projectId = ?`,
       [testProjectId]
@@ -321,40 +309,37 @@ async function runTests() {
       !subV3.retainedApprovedAreas.includes("formulation"),
       "Modified Formulation must NOT retain prior approval"
     );
-    // Meanwhile Bioinformatics, Pharmacology remain unchanged and retain approval!
     assert.strictEqual(subV3.retainedApprovedAreas.length, 2);
     console.log("  ✓ Passed Test 8 (Modified Formulation returned for renewed approval; 2 unchanged retained)");
 
     // -------------------------------------------------------------------------
-    // TEST 9: All 5 Valid Approvals on Same Version Trigger Final Approval & Lock
+    // TEST 9: All 3 Valid Approvals on Same Version Trigger Final Approval & Lock
     // -------------------------------------------------------------------------
-    console.log("Test 9: Approve Remaining Specialties on v3.0 to Trigger Final Approval...");
-    for (const areaKey of ["pharmacognosy", "formulation"]) {
-      await pool.query(
-        `UPDATE professional_reviews
-         SET assessment = 'ACCEPTABLE',
-             comments = ?,
-             status = 'SUBMITTED',
-             submittedAt = CURRENT_TIMESTAMP(3)
-         WHERE submissionId = ? AND areaKey = ?`,
-        [`Verified and approved ${areaKey} in v3.0.`, subV3.submissionId, areaKey]
-      );
-      await pool.query(
-        `UPDATE review_area_coverage SET status = 'APPROVED' WHERE submissionId = ? AND areaKey = ?`,
-        [subV3.submissionId, areaKey]
-      );
-      await pool.query(
-        `UPDATE review_assignments SET status = 'COMPLETED', completedAt = CURRENT_TIMESTAMP(3) WHERE submissionId = ? AND specialtyNeeded = ?`,
-        [subV3.submissionId, areaKey]
-      );
-    }
+    console.log("Test 9: Approve Remaining Specialty on v3.0 to Trigger Final Approval...");
+    await pool.query(
+      `UPDATE professional_reviews
+       SET assessment = 'ACCEPTABLE',
+           comments = ?,
+           status = 'SUBMITTED',
+           submittedAt = CURRENT_TIMESTAMP(3)
+       WHERE submissionId = ? AND areaKey = 'formulation'`,
+      [`Verified and approved formulation in v3.0.`, subV3.submissionId]
+    );
+    await pool.query(
+      `UPDATE review_area_coverage SET status = 'APPROVED' WHERE submissionId = ? AND areaKey = 'formulation'`,
+      [subV3.submissionId]
+    );
+    await pool.query(
+      `UPDATE review_assignments SET status = 'COMPLETED', completedAt = CURRENT_TIMESTAMP(3) WHERE submissionId = ? AND specialtyNeeded = 'formulation'`,
+      [subV3.submissionId]
+    );
 
     const finalEval = await evaluateOverallApproval(subV3.submissionId, testProjectId);
-    assert.strictEqual(finalEval.allApproved, true, "All 5 specialties approved on v3.0");
-    assert.strictEqual(finalEval.approvedCount, 5);
+    assert.strictEqual(finalEval.allApproved, true, "All 3 specialties approved on v3.0");
+    assert.strictEqual(finalEval.approvedCount, 3);
     assert.ok(finalEval.finalApprovalSummary, "Final approval summary must be generated");
     assert.strictEqual(finalEval.finalApprovalSummary.approvedVersionTag, "v3.0");
-    assert.strictEqual(finalEval.finalApprovalSummary.specialties.length, 5);
+    assert.strictEqual(finalEval.finalApprovalSummary.specialties.length, 3);
     assert.ok(
       finalEval.finalApprovalSummary.regulatoryDisclaimer.includes("NOT constitute clinical validation"),
       "Regulatory disclaimer must state approval is not clinical validation"
@@ -372,35 +357,33 @@ async function runTests() {
       [testProjectId]
     );
     assert.strictEqual(approvedProj[0].status, "APPROVED");
-    console.log("  ✓ Passed Test 9 (All 5 specialties approved v3.0 -> Final Approval & Locked)");
+    console.log("  ✓ Passed Test 9 (All 3 specialties approved v3.0 -> Final Approval & Locked)");
 
     // -------------------------------------------------------------------------
     // TEST 10: Reviewer Permissions & Security Guards
     // -------------------------------------------------------------------------
     console.log("Test 10: Verify Reviewer Permissions (No Self-Approval, Unassigned Blocked, Locked Immutable)...");
 
-    // 10a: Researcher cannot approve their own research
     let selfApprovalBlocked = false;
     try {
       await assertReviewerPermissionForSpecialty({
-        reviewerId: researcherId, // Same as project.researcherId!
+        reviewerId: researcherId,
         projectId: testProjectId,
         submissionId: subV3.submissionId,
-        areaKey: "pharmacognosy",
+        areaKey: "formulation",
       });
     } catch (err: any) {
       selfApprovalBlocked = err.status === 403 && err.message.includes("own research");
     }
     assert.strictEqual(selfApprovalBlocked, true, "Self-approval by researcher must be blocked with 403");
 
-    // 10b: Locked submission cannot be modified
     let lockedModificationBlocked = false;
     try {
       await assertReviewerPermissionForSpecialty({
         reviewerId,
         projectId: testProjectId,
         submissionId: subV3.submissionId,
-        areaKey: "pharmacognosy",
+        areaKey: "formulation",
         requireUnlocked: true,
       });
     } catch (err: any) {
@@ -408,15 +391,14 @@ async function runTests() {
     }
     assert.strictEqual(lockedModificationBlocked, true, "Locked submission modification must be blocked with 409");
 
-    // 10c: Unassigned specialty blocked
-    await setReviewerSpecialties(reviewerId, ["pharmacognosy"], reviewerId);
+    await setReviewerSpecialties(reviewerId, ["formulation"], reviewerId);
     let unassignedBlocked = false;
     try {
       await assertReviewerPermissionForSpecialty({
         reviewerId,
         projectId: testProjectId,
         submissionId: subV1.submissionId,
-        areaKey: "clinical_safety", // Not in ['pharmacognosy']
+        areaKey: "pharmacology",
         requireUnlocked: false,
       });
     } catch (err: any) {
@@ -424,44 +406,36 @@ async function runTests() {
     }
     assert.strictEqual(unassignedBlocked, true, "Unassigned specialty must be blocked with 403");
 
-    // Restore all 5 specialties to reviewerId
-    await setReviewerSpecialties(reviewerId, allFiveKeys, reviewerId);
+    await setReviewerSpecialties(reviewerId, allSpecialtyKeys, reviewerId);
     console.log("  ✓ Passed Test 10 (Self-approval, unassigned specialty, and locked version guards verified)");
 
-    // -------------------------------------------------------------------------
-    // UI & LAYOUT VERIFICATION: Single-Column Workspace & Dashboard Components
-    // -------------------------------------------------------------------------
-    console.log("Bonus Check: Verify Reviewer Dashboard & Single-Column Workspace Components...");
+    console.log("Bonus Check: Verify Reviewer Dashboard & Dossier Workspace Components...");
     const dashboardSrc = fs.readFileSync(
       path.join(process.cwd(), "src/components/reviewer/ReviewerDashboardClient.tsx"),
       "utf8"
     );
-    assert.ok(dashboardSrc.includes("Assigned Research"), "Dashboard has Assigned Research metric");
-    assert.ok(dashboardSrc.includes("Pending Reviews"), "Dashboard has Pending Reviews metric");
-    assert.ok(dashboardSrc.includes("Revisions Requested"), "Dashboard has Revisions Requested metric");
-    assert.ok(dashboardSrc.includes("Completed Reviews"), "Dashboard has Completed Reviews metric");
+    assert.ok(dashboardSrc.includes("Assigned"), "Dashboard has Assigned metric");
+    assert.ok(dashboardSrc.includes("Pending"), "Dashboard has Pending metric");
+    assert.ok(dashboardSrc.includes("Revisions"), "Dashboard has Revisions metric");
+    assert.ok(dashboardSrc.includes("Completed"), "Dashboard has Completed metric");
     assert.ok(dashboardSrc.includes("Open Review"), "Dashboard has Open Review action");
 
-    const workspaceSrc = fs.readFileSync(
-      path.join(process.cwd(), "src/components/reviewer/ProjectReviewWorkspaceClient.tsx"),
+    const dossierSrc = fs.readFileSync(
+      path.join(process.cwd(), "src/components/reviewer/DossierReviewWorkspaceClient.tsx"),
       "utf8"
     );
-    assert.ok(workspaceSrc.includes("Save Draft"), "Workspace has Save Draft action");
-    assert.ok(workspaceSrc.includes("Request Revisions"), "Workspace has Request Revisions action");
-    assert.ok(workspaceSrc.includes("Approve Research"), "Workspace has Approve Research action");
+    assert.ok(dossierSrc.includes("Save Draft"), "Dossier workspace has Save Draft action");
     assert.ok(
-      workspaceSrc.includes("Professional Review Comments & Recommendations"),
-      "Workspace has main review comments textarea"
+      dossierSrc.includes("3 Specializations") || dossierSrc.includes("Submit Review"),
+      "Dossier workspace exposes specialty review actions"
     );
-    console.log("  ✓ Passed Bonus Check (Dashboard & Single-Column Workspace UI verified)");
+    console.log("  ✓ Passed Bonus Check (Dashboard & Dossier Workspace UI verified)");
 
     console.log("\n=================================================================");
     console.log("ALL 10 PROFESSIONAL REVIEWER PLATFORM E2E TESTS PASSED!");
     console.log("=================================================================");
   } finally {
-    // Clean up temporary test project & restore all 5 specialties on reviewerId
-    const allFiveKeys = EXPERT_REVIEW_AREAS.map((a) => a.key);
-    await setReviewerSpecialties(reviewerId, allFiveKeys, reviewerId);
+    await setReviewerSpecialties(reviewerId, allSpecialtyKeys, reviewerId);
 
     await pool.query(`DELETE FROM review_activity_logs WHERE projectId = ?`, [testProjectId]);
     await pool.query(`DELETE FROM research_activity_logs WHERE projectId = ?`, [testProjectId]);

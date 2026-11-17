@@ -397,7 +397,7 @@ export default function AllProjectsDirectoryClient() {
                           </div>
                         </td>
 
-                        {/* Professional Review Progress (e.g. 2 / 5 complete) */}
+                        {/* Professional Review Progress (e.g. 2 / 3 complete) */}
                         <td className="py-3 px-3 whitespace-nowrap">
                           <div className="flex flex-col gap-1.5 min-w-[130px]">
                             <div className="flex items-center justify-between text-[11px]">

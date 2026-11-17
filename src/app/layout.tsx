@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Manrope, DM_Sans } from "next/font/google";
 import "./globals.css";
+import AppNotificationProvider from "@/components/ui/AppNotificationProvider";
 
 const manrope = Manrope({
   subsets: ["latin"],
@@ -47,7 +48,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning className={`${manrope.variable} ${dmSans.variable}`}>
       <body suppressHydrationWarning className="min-h-screen bg-[#faf9f5] text-[#131b17] antialiased selection:bg-[#ccfbf1] selection:text-[#0f2c20]">
-        {children}
+        <AppNotificationProvider>{children}</AppNotificationProvider>
       </body>
     </html>
   );

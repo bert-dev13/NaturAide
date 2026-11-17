@@ -28,6 +28,7 @@ import {
   FileText,
 } from "lucide-react";
 import { getStageUrl } from "@/lib/workflow-stages";
+import { showToast } from "@/lib/toast";
 import NewResearchModal from "./NewResearchModal";
 
 export interface ProjectItem {
@@ -171,7 +172,6 @@ export default function ResearchProjectsManager() {
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Completion Success Dialog State
   const [completedProject, setCompletedProject] = useState<{ id: string; plantName: string } | null>(null);
@@ -193,13 +193,6 @@ export default function ResearchProjectsManager() {
       }
     }
   }, [searchParams]);
-
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => {
-      setToastMessage((curr) => (curr === msg ? null : curr));
-    }, 4000);
-  };
 
   // Close dropdown menu on outside click
   useEffect(() => {
@@ -257,7 +250,7 @@ export default function ResearchProjectsManager() {
       // Close modal & reset fields
       setProjectToDelete(null);
       setDeleteConfirmText("");
-      showToast("Research project deleted successfully");
+      showToast("Research project deleted successfully", "success");
     } catch (err: any) {
       console.error("Delete project error:", err);
       setDeleteError(err.message || "Failed to delete project. Please try again.");
@@ -1047,14 +1040,6 @@ export default function ResearchProjectsManager() {
           </div>
         )}
       </AnimatePresence>
-
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 p-3.5 rounded-lg bg-slate-900 text-white text-xs font-medium shadow-lg flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
 
       {/* 7. RESEARCH COMPLETED SUCCESS MODAL */}
       <AnimatePresence>

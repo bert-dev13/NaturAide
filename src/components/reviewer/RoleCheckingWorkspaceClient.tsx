@@ -14,10 +14,8 @@ import {
   AlertTriangle,
   FileText,
   Dna,
-  Leaf,
   Pill,
   FlaskConical,
-  Stethoscope,
   ExternalLink,
   Plus,
   Trash2,
@@ -38,6 +36,7 @@ import {
   getAreaDefinition,
   type ExpertReviewAreaKey,
 } from "@/lib/expert-review-areas";
+import { showToast } from "@/lib/toast";
 import ConsolidatedProfessionalReviewForm, {
   type ReviewRecommendation,
   type RecommendationType,
@@ -63,69 +62,47 @@ const STAGE_CONFIGS: Record<
     sections: Array<{ id: string; number: string; title: string }>;
   }
 > = {
-  pharmacognosy: {
+  formulation: {
     stageNumber: 1,
-    stageTitle: "Plant & Literature Research",
-    discipline: "Pharmacognosy",
-    professionTitle: "Pharmacist / Pharmacognosist",
-    icon: Leaf,
+    stageTitle: "Formulation R&D",
+    discipline: "Formulation Science & Pharmacognosy",
+    professionTitle: "Formulation Scientist / Pharmacognosist",
+    icon: FlaskConical,
     sections: [
-      { id: "sec-identity", number: "01", title: "Plant Identity" },
-      { id: "sec-material", number: "02", title: "Research Material" },
+      { id: "sec-identity", number: "01", title: "Plant Information" },
+      { id: "sec-product", number: "02", title: "Product Selection" },
       { id: "sec-extraction", number: "03", title: "Extraction" },
-      { id: "sec-literature", number: "04", title: "Literature" },
-      { id: "sec-synthesis", number: "05", title: "Synthesis" },
+      { id: "sec-ingredients", number: "04", title: "Materials & Excipients" },
+      { id: "sec-formulation", number: "05", title: "Formulation Development" },
+      { id: "sec-batch", number: "06", title: "Batch Analysis" },
     ],
   },
   bioinformatics: {
     stageNumber: 2,
-    stageTitle: "In-Silico Analysis",
-    discipline: "Bioinformatics",
+    stageTitle: "In-Silico Molecular Docking",
+    discipline: "Bioinformatics & In-Silico Modeling",
     professionTitle: "Bioinformatician / Computational Scientist",
     icon: Dna,
     sections: [
-      { id: "sec-compounds", number: "01", title: "Screened Compounds" },
-      { id: "sec-screening", number: "02", title: "Screening & ADMET" },
-      { id: "sec-targets", number: "03", title: "Target Selection & PDB" },
-      { id: "sec-docking-prep", number: "04", title: "Docking Setup" },
-      { id: "sec-synthesis", number: "05", title: "Computational Synthesis" },
+      { id: "sec-targets", number: "01", title: "Target Protein Selection" },
+      { id: "sec-screening", number: "02", title: "In-Silico Screening" },
+      { id: "sec-docking", number: "03", title: "Molecular Docking Execution" },
+      { id: "sec-affinity", number: "04", title: "Binding Affinity Results" },
+      { id: "sec-2d", number: "05", title: "2D Interaction Visualization" },
+      { id: "sec-3d", number: "06", title: "3D Molecular Visualization" },
+      { id: "sec-interpretation", number: "07", title: "Results & Interpretation" },
     ],
   },
   pharmacology: {
     stageNumber: 3,
-    stageTitle: "Molecular Docking",
-    discipline: "Pharmacology",
-    professionTitle: "Pharmacologist",
+    stageTitle: "Paper Submission & Evidence",
+    discipline: "Pharmacology & Evidence Review",
+    professionTitle: "Pharmacologist / Evidence Reviewer",
     icon: Pill,
     sections: [
-      { id: "sec-setup", number: "01", title: "Docking Setup & Grid" },
-      { id: "sec-results", number: "02", title: "Docking Runs & Energetics" },
-      { id: "sec-interpretation", number: "03", title: "Pharmacological Interpretation" },
-    ],
-  },
-  formulation: {
-    stageNumber: 4,
-    stageTitle: "Formulation Development",
-    discipline: "Formulation",
-    professionTitle: "Pharmacist / Pharmaceutical Scientist",
-    icon: FlaskConical,
-    sections: [
-      { id: "sec-design", number: "01", title: "Formulation Prototype" },
-      { id: "sec-protocol", number: "02", title: "Maceration Protocol" },
-      { id: "sec-stability", number: "03", title: "Dosage Form & Stability" },
-    ],
-  },
-  clinical_safety: {
-    // Researcher Safety / Clinical page removed — specialty reviews Knowledge Integration context
-    stageNumber: 5,
-    stageTitle: "Knowledge Integration",
-    discipline: "Clinical Safety",
-    professionTitle: "Physician / Clinical Pharmacist",
-    icon: Stethoscope,
-    sections: [
-      { id: "sec-safety-evidence", number: "01", title: "Pre-assembled Evidence" },
-      { id: "sec-safety-assessment", number: "02", title: "Toxicological Assessment" },
-      { id: "sec-safety-summary", number: "03", title: "Clinical Safety Synthesis" },
+      { id: "sec-summary", number: "01", title: "Research Summary" },
+      { id: "sec-lab", number: "02", title: "Laboratory Results" },
+      { id: "sec-paper", number: "03", title: "Uploaded Research Paper" },
     ],
   },
 };
@@ -137,7 +114,7 @@ export default function RoleCheckingWorkspaceClient({
 }: Props) {
   const router = useRouter();
   const roleKey = normalizeReviewAreaKey(role);
-  const stageConfig = STAGE_CONFIGS[roleKey] || STAGE_CONFIGS.pharmacognosy;
+  const stageConfig = STAGE_CONFIGS[roleKey] || STAGE_CONFIGS.formulation;
 
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>(null);
@@ -148,8 +125,6 @@ export default function RoleCheckingWorkspaceClient({
   const [recommendations, setRecommendations] = useState<ReviewRecommendation[]>([]);
   const [aiSuggestions, setAiSuggestions] = useState<AiSuggestion[]>([]);
   const [submitting, setSubmitting] = useState(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-
   const [successModal, setSuccessModal] = useState<{
     isOpen: boolean;
     decision: "APPROVED" | "REVISION_REQUIRED";
@@ -165,11 +140,6 @@ export default function RoleCheckingWorkspaceClient({
     data?.activeAssignment?.assignmentStatus === "COMPLETED" ||
     data?.activeAssignment?.assignmentStatus === "APPROVED";
   const isResubmitted = data?.activeAssignment?.assignmentStatus === "RESUBMITTED";
-
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 4000);
-  };
 
   const loadWorkspace = async (assignmentId?: number | null) => {
     try {
@@ -267,7 +237,7 @@ export default function RoleCheckingWorkspaceClient({
   // Inline comment helper
   const handleAddInlineComment = (sectionTitle: string, fieldName: string) => {
     if (isApproved) {
-      showToast("This stage is already approved and finalized in read-only mode.");
+      showToast("This stage is already approved and finalized in read-only mode.", "info");
       return;
     }
 
@@ -311,7 +281,7 @@ export default function RoleCheckingWorkspaceClient({
 
     const cleanComments = overallAssessment.trim();
     if (!cleanComments || cleanComments.length < 10) {
-      showToast("Overall professional review assessment is required (minimum 10 characters).");
+      showToast("Overall professional review assessment is required (minimum 10 characters).", "warning");
       const el =
         document.getElementById("reviewer-overall-assessment") ||
         document.getElementById("sec-professional-review");
@@ -323,7 +293,10 @@ export default function RoleCheckingWorkspaceClient({
     }
 
     if (recommendations.length === 0) {
-      showToast("Please add at least one specific recommendation/correction before requesting revisions.");
+      showToast(
+        "Please add at least one specific recommendation/correction before requesting revisions.",
+        "warning"
+      );
       const el = document.getElementById("sec-professional-review");
       if (el) el.scrollIntoView({ behavior: "smooth" });
       return;
@@ -346,11 +319,11 @@ export default function RoleCheckingWorkspaceClient({
 
       const json = await res.json();
       if (!res.ok) {
-        showToast(json.error || "Failed to submit revision request.");
+        showToast(json.error || "Failed to submit revision request.", "error");
         return;
       }
 
-      showToast("Revision request successfully submitted. Researcher has been notified.");
+      showToast("Revision request successfully submitted. Researcher has been notified.", "success");
 
       if (typeof window !== "undefined") {
         window.dispatchEvent(
@@ -373,7 +346,7 @@ export default function RoleCheckingWorkspaceClient({
       await loadWorkspace(data.activeAssignment.assignmentId);
     } catch (err: any) {
       console.error("Request revision error:", err);
-      showToast(err.message || "Failed to submit revision request.");
+      showToast(err.message || "Failed to submit revision request.", "error");
     } finally {
       setSubmitting(false);
     }
@@ -388,7 +361,7 @@ export default function RoleCheckingWorkspaceClient({
       `${stageConfig.discipline} evidence verified and acceptable.`;
 
     if (!cleanComments || cleanComments.length < 10) {
-      showToast("Overall professional review assessment is required (minimum 10 characters).");
+      showToast("Overall professional review assessment is required (minimum 10 characters).", "warning");
       const el =
         document.getElementById("reviewer-overall-assessment") ||
         document.getElementById("sec-professional-review");
@@ -416,11 +389,11 @@ export default function RoleCheckingWorkspaceClient({
 
       const json = await res.json();
       if (!res.ok) {
-        showToast(json.error || "Failed to approve stage.");
+        showToast(json.error || "Failed to approve stage.", "error");
         return;
       }
 
-      showToast(`${stageConfig.discipline} approved successfully! Researcher notified.`);
+      showToast(`${stageConfig.discipline} approved successfully! Researcher notified.`, "success");
 
       if (typeof window !== "undefined") {
         window.dispatchEvent(
@@ -443,7 +416,7 @@ export default function RoleCheckingWorkspaceClient({
       await loadWorkspace(data.activeAssignment.assignmentId);
     } catch (err: any) {
       console.error("Approve stage error:", err);
-      showToast(err.message || "Failed to approve stage.");
+      showToast(err.message || "Failed to approve stage.", "error");
     } finally {
       setSubmitting(false);
     }
@@ -477,14 +450,6 @@ export default function RoleCheckingWorkspaceClient({
 
   return (
     <div className="w-full max-w-none space-y-6 pb-16 font-sans text-slate-800">
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed top-20 right-8 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-xl border border-slate-700 text-xs font-semibold animate-in fade-in slide-in-from-top-2 flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
-
       {/* ============================================================== */}
       {/* 1. TOP HEADER BANNER (NAVY BLUE THEME)                          */}
       {/* ============================================================== */}
